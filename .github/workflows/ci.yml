@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # TODO(Remy): 确认 Node 版本锁定策略后调整（建议跟 package.json engines 字段对齐）
       - name: Setup Node.js
