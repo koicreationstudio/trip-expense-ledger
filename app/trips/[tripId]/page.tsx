@@ -1,5 +1,4 @@
 import { and, desc, eq } from 'drizzle-orm';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db/client';
 import { expenses, participants, trips } from '@/lib/db/schema';
@@ -38,35 +37,6 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         <p className="mt-1 text-sm text-slate-500">
           本位币 {trip.baseCurrency} · {STATUS_LABEL[trip.status] ?? trip.status}
         </p>
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <Link
-          href={`/trips/${trip.id}/expenses/new`}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-        >
-          记一笔
-        </Link>
-        <Link
-          href={`/trips/${trip.id}/settlement`}
-          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-100"
-        >
-          查看结算
-        </Link>
-        <Link
-          href={`/trips/${trip.id}/payment-methods`}
-          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-100"
-        >
-          支付方式设置
-        </Link>
-        {identity.isOwner && (
-          <Link
-            href={`/trips/${trip.id}/invites`}
-            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-100"
-          >
-            邀请管理
-          </Link>
-        )}
       </div>
 
       <section className="flex flex-col gap-2">

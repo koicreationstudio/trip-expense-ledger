@@ -61,3 +61,28 @@ export const fxRecommendationSchema = z.object({
   amount: z.number().int().positive(),
   expenseCurrency: currencyCode,
 });
+
+const email = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1)
+  .max(200)
+  .email();
+
+const password = z.string().min(8).max(200);
+
+export const signupSchema = z.object({
+  email,
+  password,
+  displayName: z.string().trim().min(1).max(100),
+});
+
+export const loginSchema = z.object({
+  email,
+  password: z.string().min(1).max(200),
+});
+
+export const switchTripSchema = z.object({
+  tripId: z.string().min(1),
+});

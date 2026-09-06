@@ -3,12 +3,13 @@
  * 这样新加一个数据库列不会自动被响应体带出去，尤其是 expense 的 note/receiptPath
  * 这类只有本人能看的字段，必须每个响应形状自己决定要不要包含。
  */
-import type { participants, trips, expenses, paymentMethods } from '../db/schema';
+import type { participants, trips, expenses, paymentMethods, users } from '../db/schema';
 
 type ParticipantRow = typeof participants.$inferSelect;
 type TripRow = typeof trips.$inferSelect;
 type ExpenseRow = typeof expenses.$inferSelect;
 type PaymentMethodRow = typeof paymentMethods.$inferSelect;
+type UserRow = typeof users.$inferSelect;
 
 export function toParticipantSummaryDto(row: ParticipantRow) {
   return {
@@ -48,6 +49,15 @@ export function toExpenseDto(row: ExpenseRow) {
     expenseDate: row.expenseDate.toISOString(),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** 绝不带 passwordHash，账号响应只暴露这三个字段。 */
+export function toUserDto(row: UserRow) {
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.displayName,
   };
 }
 

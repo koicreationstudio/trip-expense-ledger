@@ -28,7 +28,28 @@ export const trips = sqliteTable('trip', {
 });
 
 // ---------------------------------------------------------------------------
+// user：Layer 2 账号系统，邮箱+密码，只负责「记住这个人建过/认领过哪些行程」，
+// 完全不参与 Layer 1（session/participant）的任何权限判断。
+// ---------------------------------------------------------------------------
+export const users = sqliteTable(
+  'user',
+  {
+    id: id(),
+    // 存小写去空格后的邮箱，查重/登录都按这个规范化形式比对
+    email: text('email').notNull(),
+    passwordHash: text('password_hash').notNull(),
+    displayName: text('display_name').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => ({
+    emailIdx: uniqueIndex('user_email_idx').on(table.email),
+  })
+);
+
+// ---------------------------------------------------------------------------
 // participant：trip 下的一个身份占位/成员，未被邀请链接认领时 claimedAt 为 null。
+// userId 是 Layer 2（账号系统）打通 Layer 1（session/participant）的唯一桥梁，
+// 可空——不是每个 participant 都绑了账号，同行人 guest 认领照旧不需要。
 // ---------------------------------------------------------------------------
 export const participants = sqliteTable(
   'participant',
@@ -41,10 +62,13 @@ export const participants = sqliteTable(
     isOwner: integer('is_owner', { mode: 'boolean' }).notNull().default(false),
     // null = 尚未被邀请链接认领的占位名字
     claimedAt: integer('claimed_at', { mode: 'timestamp_ms' }),
+    // 账号没了不该连带删掉行程数据，只是这个 participant 不再关联任何账号
+    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
   },
   (table) => ({
     tripIdx: index('participant_trip_idx').on(table.tripId),
+    userIdx: index('participant_user_idx').on(table.userId),
   })
 );
 
@@ -67,6 +91,29 @@ export const sessions = sqliteTable(
   (table) => ({
     tokenHashIdx: uniqueIndex('session_token_hash_idx').on(table.tokenHash),
     participantIdx: index('session_participant_idx').on(table.participantId),
+  })
+);
+
+// ---------------------------------------------------------------------------
+// user_session：Layer 2 账号登录态，形状完全照抄 session（Layer 1）。
+// cookie 里只放明文 token，DB 只存 hash。跟 session 表相互独立，
+// 一个人可以同时有一个 user_session（记账号）+ 若干 session（当前激活的 trip 身份）。
+// ---------------------------------------------------------------------------
+export const userSessions = sqliteTable(
+  'user_session',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    userAgent: text('user_agent'),
+    createdAt: createdAt(),
+    lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }),
+  },
+  (table) => ({
+    tokenHashIdx: uniqueIndex('user_session_token_hash_idx').on(table.tokenHash),
+    userIdx: index('user_session_user_idx').on(table.userId),
   })
 );
 
@@ -241,6 +288,7 @@ export const tripsRelations = relations(trips, ({ many }) => ({
 
 export const participantsRelations = relations(participants, ({ one, many }) => ({
   trip: one(trips, { fields: [participants.tripId], references: [trips.id] }),
+  user: one(users, { fields: [participants.userId], references: [users.id] }),
   sessions: many(sessions),
   paymentMethods: many(paymentMethods),
   enteredExpenses: many(expenses, { relationName: 'enteredBy' }),
@@ -249,6 +297,15 @@ export const participantsRelations = relations(participants, ({ one, many }) => 
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
   participant: one(participants, { fields: [sessions.participantId], references: [participants.id] }),
+}));
+
+export const usersRelations = relations(users, ({ many }) => ({
+  participants: many(participants),
+  userSessions: many(userSessions),
+}));
+
+export const userSessionsRelations = relations(userSessions, ({ one }) => ({
+  user: one(users, { fields: [userSessions.userId], references: [users.id] }),
 }));
 
 export const invitesRelations = relations(invites, ({ one }) => ({

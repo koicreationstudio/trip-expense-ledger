@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 interface UnclaimedParticipant {
@@ -21,6 +22,8 @@ export function ClaimForm({
   const [participantId, setParticipantId] = useState(unclaimedParticipants[0]?.id ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 认领成功后不强制注册，先展示"要不要顺手注册"的软提示，不点也能直接进去记账。
+  const [claimed, setClaimed] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,10 +40,36 @@ export function ClaimForm({
         setError('认领失败，这个名字可能刚被别人认领了，刷新页面看看还剩谁');
         return;
       }
-      router.push(`/trips/${tripId}`);
+      setClaimed(true);
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (claimed) {
+    const nextParam = encodeURIComponent(`/trips/${tripId}`);
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-slate-600">认领成功，可以直接开始记账了。</p>
+        <p className="text-sm text-slate-500">
+          要不要顺手注册账号，这样以后能在任何设备找到这个行程？
+          <Link href={`/login?next=${nextParam}`} className="ml-1 underline">
+            登录
+          </Link>
+          {' / '}
+          <Link href={`/signup?next=${nextParam}`} className="underline">
+            注册
+          </Link>
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push(`/trips/${tripId}`)}
+          className="w-fit rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+        >
+          现在就去记账
+        </button>
+      </div>
+    );
   }
 
   return (

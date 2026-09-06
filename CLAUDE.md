@@ -18,8 +18,10 @@
 
 ## 数据模型核心表
 - `trip`：一次出差行程
-- `participant`：行程参与者（含未认领的占位名字）
+- `participant`：行程参与者（含未认领的占位名字），`user_id` 可空，是打通账号系统的桥梁
 - `session`：认领后签发的登录态（token 只存 hash，不存明文）
+- `user`：账号系统（邮箱 + 密码），只负责「记住这个人建过/认领过哪些行程」
+- `user_session`：账号登录态，形状照抄 `session`，跟它平行存在、互不干扰
 - `invite`：邀请链接（code → trip，认领后对该身份失效）
 - `expense`：一笔消费，关键字段：
   - `entered_by_participant_id`：谁录入的，决定隐私归属，是私密查询的唯一合法过滤键
@@ -39,6 +41,18 @@
 6. 创建者可以撤销 / 重置某个人的认领状态
 
 这套机制的定位是**给互相信任的同行人提供低摩擦协作**，不是金融级身份鉴权。别指望它防蓄意攻击者，威胁模型详见 `SECURITY.md`。
+
+## 账号系统：两层身份，互不干扰
+
+只有创建行程的人需要账号，同行人扫邀请链接认领照旧不用注册——这是保低摩擦协作的差异化卖点，不能丢。
+
+**Layer 1（`session` + `participant`，`tel_session` cookie）**：跟今天完全一样，`withSession`/`withTripOwner`/`assertSameTrip`（`lib/auth/require-session.ts`）和全部现有 API 路由的权限判断都建立在这上面，账号系统一个字节都不碰它。
+
+**Layer 2（`user` + `user_session`，`tel_user_session` cookie）**：跟 Layer 1 平行存在，唯一职责是「记住这个人建过/认领过哪些行程」，服务首页的行程列表，**不参与任何一条现有 API 的权限判断**。
+
+**打通两层**：`participant.user_id`（可空）记录哪个账号对应这个 participant。首页点一张「我的行程」卡片时，不是直接拿 Layer 2 身份去访问 trip 页面（那些页面只认 `tel_session`），而是先打 `POST /api/account/switch-trip`：查「这个 user 在这个 trip 里对应哪个 participant」，查到了就用 Layer 1 现成的 `createSession()` 给这个 participant 现铸一个新 `tel_session` 覆盖 cookie，再跳进 `/trips/{tripId}`。这样现有路由完全不用改，它们看到的永远是「当前激活的那一个 trip 的 tel_session」，只是这个 cookie 现在可以被 Layer 2 按需重新指向不同的 trip。
+
+密码哈希用 Node 内置 `crypto.scryptSync`（`lib/auth/password.ts`），没装 bcrypt/argon2 这类原生依赖——`better-sqlite3` 已经是这个项目唯一的原生依赖，够呛了，别再加一个。
 
 ## API 权限边界（硬性要求，Code Review 必查）
 - 任何查询「消费明细」的函数，内部必须**硬编码** `WHERE entered_by_participant_id = <session 解出的 id>`
@@ -62,8 +76,9 @@
 ## 目录结构
 ```
 app/                    # Next.js App Router：页面 + app/api/**/route.ts
+app/api/account/        # Layer 2 账号系统：signup/login/logout/switch-trip/link-current-trip
 lib/db/                 # Drizzle schema + migrations
-lib/auth/               # session + invite 认领逻辑
+lib/auth/               # session(Layer1) + user-session(Layer2) + invite 认领逻辑 + password 哈希
 lib/domain/             # 核心纯函数：settlement.ts / fx-recommendation.ts
 docker/                 # Dockerfile + 相关配置
 ```
@@ -76,6 +91,7 @@ docker/                 # Dockerfile + 相关配置
 ## 测试哲学
 - `settlement.ts` 和 `fx-recommendation.ts` 是纯函数，**必须有单元测试**，是 v0.1 单测覆盖率要求最高的两个模块，涉及钱的计算逻辑，没测试不能合并
 - API 权限边界（参与者 A 看不到 B 的明细）**必须有自动化测试覆盖**，不能只靠代码审查：写一个测试，A 登录后请求 B 的消费明细，断言返回 404
+- `switch-trip` 是账号系统唯一新增的跨 trip 权限边界：`userId` 没有关联到目标 trip 的 participant，一律 404，必须有测试跟现有「越权 404」原则一样严格覆盖
 - 一般 UI 组件测试覆盖率不做硬性要求，但涉及金额展示/换算的组件要测
 
 ## CI / 提交前检查
@@ -89,10 +105,10 @@ docker/                 # Dockerfile + 相关配置
 - [ ] 多币种录入 + 手动/拉取当日汇率，算「这笔用哪张卡/现金最划算」
 - [ ] 轻量邀请链接分享行程给同行人协作记账（无账号密码，认领机制）
 - [ ] 权限模型：净额结算公开，逐笔明细默认私密
+- [ ] 账号系统（仅创建者需要）+ 首页我的行程列表 + 顶部导航
 
 **明确排到 v0.1 之后（Roadmap，现在不做）**：
 - 银行卡实时汇率 API 自动对接
-- 正式账号系统（邮箱 / OAuth 登录）
 - 推送通知
 - 多语言 i18n
 

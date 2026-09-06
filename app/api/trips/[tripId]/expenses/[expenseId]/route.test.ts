@@ -19,15 +19,26 @@ let tmpDbPath: string;
 let db: typeof import('@/lib/db/client').db;
 let createSession: typeof import('@/lib/auth/session').createSession;
 let SESSION_COOKIE_NAME: string;
+let USER_SESSION_COOKIE_NAME: string;
+let signupHandler: typeof import('@/app/api/account/signup/route').POST;
 let tripsPostHandler: typeof import('@/app/api/trips/route').POST;
 let expensesPostHandler: typeof import('@/app/api/trips/[tripId]/expenses/route').POST;
 let expenseGetHandler: typeof import('@/app/api/trips/[tripId]/expenses/[expenseId]/route').GET;
 let expensePatchHandler: typeof import('@/app/api/trips/[tripId]/expenses/[expenseId]/route').PATCH;
 let expenseDeleteHandler: typeof import('@/app/api/trips/[tripId]/expenses/[expenseId]/route').DELETE;
 
-function jsonRequest(url: string, method: string, token: string | undefined, body?: unknown) {
+function jsonRequest(
+  url: string,
+  method: string,
+  token: string | undefined,
+  body?: unknown,
+  userToken?: string
+) {
   const headers = new Headers({ 'content-type': 'application/json' });
-  if (token) headers.set('cookie', `${SESSION_COOKIE_NAME}=${token}`);
+  const cookieParts: string[] = [];
+  if (token) cookieParts.push(`${SESSION_COOKIE_NAME}=${token}`);
+  if (userToken) cookieParts.push(`${USER_SESSION_COOKIE_NAME}=${userToken}`);
+  if (cookieParts.length > 0) headers.set('cookie', cookieParts.join('; '));
   return new NextRequest(url, {
     method,
     headers,
@@ -44,6 +55,8 @@ beforeAll(async () => {
   migrate(db, { migrationsFolder: './lib/db/migrations' });
 
   ({ createSession, SESSION_COOKIE_NAME } = await import('@/lib/auth/session'));
+  ({ USER_SESSION_COOKIE_NAME } = await import('@/lib/auth/user-session'));
+  ({ POST: signupHandler } = await import('@/app/api/account/signup/route'));
   ({ POST: tripsPostHandler } = await import('@/app/api/trips/route'));
   ({ POST: expensesPostHandler } = await import('@/app/api/trips/[tripId]/expenses/route'));
   ({
@@ -61,13 +74,31 @@ afterAll(() => {
 
 describe('expense 权限边界：entered_by 之外一律 404', () => {
   it('B 看不到 A 录入的消费，A 自己能看，DELETE/PATCH 同样对 B 返回 404', async () => {
-    const createTripResponse = await tripsPostHandler(
-      jsonRequest('http://localhost/api/trips', 'POST', undefined, {
-        name: '东京出差',
-        baseCurrency: 'MYR',
-        ownerDisplayName: 'A',
-        participantNames: ['B'],
+    // 建行程现在要求先登录（Layer 2 账号），先给 A 注册一个账号拿 tel_user_session。
+    const signupResponse = await signupHandler(
+      jsonRequest('http://localhost/api/account/signup', 'POST', undefined, {
+        email: 'a-expense-boundary@example.com',
+        password: 'correct-horse-battery',
+        displayName: 'A',
       })
+    );
+    expect(signupResponse.status).toBe(201);
+    const aUserToken = signupResponse.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    expect(aUserToken).toBeTruthy();
+
+    const createTripResponse = await tripsPostHandler(
+      jsonRequest(
+        'http://localhost/api/trips',
+        'POST',
+        undefined,
+        {
+          name: '东京出差',
+          baseCurrency: 'MYR',
+          ownerDisplayName: 'A',
+          participantNames: ['B'],
+        },
+        aUserToken
+      )
     );
     expect(createTripResponse.status).toBe(201);
     const tripBody = await createTripResponse.json();
