@@ -1,0 +1,247 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { COMMON_CURRENCIES } from '@/lib/currencies';
+import { yuanToCents, formatMoney } from '@/lib/money';
+
+interface PaymentMethod {
+  id: string;
+  label: string;
+  kind: 'card' | 'cash';
+  settlementCurrency: string;
+  fxMarkupPercent: number;
+  foreignTxnFeePercent: number;
+  fixedFee: number;
+  cashbackPercent: number;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+const emptyForm = {
+  label: '',
+  kind: 'card' as 'card' | 'cash',
+  settlementCurrency: COMMON_CURRENCIES[0] as string,
+  fxMarkupPercent: '0',
+  foreignTxnFeePercent: '0',
+  fixedFeeYuan: '0',
+  cashbackPercent: '0',
+};
+
+export function PaymentMethodsManager() {
+  const [methods, setMethods] = useState<PaymentMethod[] | null>(null);
+  const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadMethods() {
+    const res = await fetch('/api/payment-methods');
+    if (res.ok) {
+      const data = await res.json();
+      setMethods(data.paymentMethods);
+    }
+  }
+
+  useEffect(() => {
+    loadMethods();
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!form.label.trim()) {
+      setError('名称不能空着');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/payment-methods', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          label: form.label.trim(),
+          kind: form.kind,
+          settlementCurrency: form.settlementCurrency,
+          fxMarkupPercent: Number(form.fxMarkupPercent) || 0,
+          foreignTxnFeePercent: Number(form.foreignTxnFeePercent) || 0,
+          fixedFee: yuanToCents(Number(form.fixedFeeYuan) || 0),
+          cashbackPercent: Number(form.cashbackPercent) || 0,
+        }),
+      });
+      if (!res.ok) {
+        setError('添加失败，检查一下表单内容');
+        return;
+      }
+      setForm(emptyForm);
+      await loadMethods();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('确定要删除这个支付方式吗？')) return;
+    await fetch(`/api/payment-methods/${id}`, { method: 'DELETE' });
+    await loadMethods();
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-slate-700">已配置的支付方式</h2>
+        {methods === null ? (
+          <p className="text-sm text-slate-500">载入中…</p>
+        ) : methods.length === 0 ? (
+          <p className="text-sm text-slate-500">还没配置任何支付方式。</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {methods.map((m) => (
+              <li
+                key={m.id}
+                className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+              >
+                <div className="flex flex-col">
+                  <span className="font-medium">
+                    {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    汇率加点 {m.fxMarkupPercent}% · 境外手续费 {m.foreignTxnFeePercent}% · 返现 {m.cashbackPercent}%
+                    {m.fixedFee > 0 && ` · 固定费 ${formatMoney(m.fixedFee, m.settlementCurrency)}`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(m.id)}
+                  className="rounded-md border border-slate-300 px-3 py-1 text-xs text-slate-500 hover:bg-slate-100"
+                >
+                  删除
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold text-slate-700">新增支付方式</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium" htmlFor="pm-label">
+                名称
+              </label>
+              <input
+                id="pm-label"
+                required
+                value={form.label}
+                onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+                placeholder="例如：HSBC 万事达卡"
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium" htmlFor="pm-kind">
+                类型
+              </label>
+              <select
+                id="pm-kind"
+                value={form.kind}
+                onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as 'card' | 'cash' }))}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              >
+                <option value="card">卡</option>
+                <option value="cash">现金</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium" htmlFor="pm-currency">
+              结算币种
+            </label>
+            <select
+              id="pm-currency"
+              value={form.settlementCurrency}
+              onChange={(e) => setForm((f) => ({ ...f, settlementCurrency: e.target.value }))}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              {COMMON_CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium" htmlFor="pm-fx-markup">
+                汇率加点 %
+              </label>
+              <input
+                id="pm-fx-markup"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.fxMarkupPercent}
+                onChange={(e) => setForm((f) => ({ ...f, fxMarkupPercent: e.target.value }))}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium" htmlFor="pm-foreign-fee">
+                境外手续费 %
+              </label>
+              <input
+                id="pm-foreign-fee"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.foreignTxnFeePercent}
+                onChange={(e) => setForm((f) => ({ ...f, foreignTxnFeePercent: e.target.value }))}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium" htmlFor="pm-fixed-fee">
+                固定费（结算币种，元）
+              </label>
+              <input
+                id="pm-fixed-fee"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.fixedFeeYuan}
+                onChange={(e) => setForm((f) => ({ ...f, fixedFeeYuan: e.target.value }))}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium" htmlFor="pm-cashback">
+                返现 %
+              </label>
+              <input
+                id="pm-cashback"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.cashbackPercent}
+                onChange={(e) => setForm((f) => ({ ...f, cashbackPercent: e.target.value }))}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-fit rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          >
+            {submitting ? '添加中…' : '添加支付方式'}
+          </button>
+        </form>
+      </section>
+    </div>
+  );
+}
