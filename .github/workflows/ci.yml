@@ -35,3 +35,10 @@ jobs:
 
       - name: Build (next build)
         run: npm run build
+
+      # 2026-09-06 补：实测 docker compose up 时踩过两个只有真 build 才会暴露的坑
+      # （缺 .dockerignore 导致宿主机编译的 better-sqlite3 原生绑定覆盖容器内版本、
+      # 缺 public/ 目录导致 COPY 失败），当时 CI 没有这一步，两个坑都是手动跑
+      # docker build 才发现的。补上这步防止同类问题再悄悄潜伏到发布时才暴露。
+      - name: Docker image build
+        run: docker build -f docker/Dockerfile -t trip-expense-ledger:ci .
