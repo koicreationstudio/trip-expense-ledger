@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { equalSplit, rescaleSplitToBaseCurrency } from '@/lib/domain/split';
+import type { SplitShare } from '@/lib/domain/split';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
 
 const COMMON_CATEGORIES = ['餐饮', '交通', '住宿', '门票', '购物', '其他'];
@@ -15,25 +16,86 @@ interface Participant {
   displayName: string;
 }
 
+export interface InitialExpense {
+  id: string;
+  amount: number; // 原始币种最小货币单位
+  currency: string;
+  payerParticipantId: string;
+  category: string;
+  note: string | null;
+  expenseDate: string; // ISO
+  fxRateUsed: number;
+  amountBaseCurrency: number;
+  hasReceipt: boolean;
+  splits: SplitShare[];
+}
+
+/**
+ * 编辑一笔已有消费时，从数据库存的 splits（本位币金额）反推表单要用的原生币种
+ * 分摊金额和是否为「自定义分摊」——DB 只存本位币份额，不存用户当初输入的原生
+ * 币种拆法，这里按这笔消费自己的 amount/amountBaseCurrency 比例换算回去，只作
+ * 初始展示值，可能有几分钱的舍入误差；真正提交时会用 rescaleSplitToBaseCurrency
+ * 重新精确换算，不依赖这里的结果。
+ */
+function deriveInitialSplitState(initialExpense: InitialExpense, participants: Participant[]) {
+  const allIds = participants.map((p) => p.id);
+  const equalShares = equalSplit(initialExpense.amountBaseCurrency, allIds);
+  const equalMap = new Map(equalShares.map((s) => [s.participantId, s.shareAmountBaseCurrency]));
+  const isDefaultEqualSplit =
+    initialExpense.splits.length === allIds.length &&
+    initialExpense.splits.every((s) => equalMap.get(s.participantId) === s.shareAmountBaseCurrency);
+
+  if (isDefaultEqualSplit) {
+    return {
+      customSplit: false,
+      splitIncluded: Object.fromEntries(allIds.map((id) => [id, true])),
+      splitAmounts: {} as Record<string, string>,
+    };
+  }
+
+  const splitByParticipant = new Map(initialExpense.splits.map((s) => [s.participantId, s.shareAmountBaseCurrency]));
+  const splitIncluded = Object.fromEntries(allIds.map((id) => [id, splitByParticipant.has(id)]));
+  const splitAmounts = Object.fromEntries(
+    initialExpense.splits.map((s) => {
+      const nativeCents =
+        initialExpense.amountBaseCurrency === 0
+          ? 0
+          : Math.round((s.shareAmountBaseCurrency * initialExpense.amount) / initialExpense.amountBaseCurrency);
+      return [s.participantId, String(centsToYuan(nativeCents))];
+    })
+  );
+
+  return { customSplit: true, splitIncluded, splitAmounts };
+}
+
 export function ExpenseForm({
   tripId,
   baseCurrency,
   myParticipantId,
   participants,
+  initialExpense,
 }: {
   tripId: string;
   baseCurrency: string;
   myParticipantId: string;
   participants: Participant[];
+  initialExpense?: InitialExpense;
 }) {
   const router = useRouter();
-  const [amountYuan, setAmountYuan] = useState('');
-  const [currency, setCurrency] = useState(baseCurrency);
-  const [payerParticipantId, setPayerParticipantId] = useState(myParticipantId);
-  const [category, setCategory] = useState('');
-  const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [note, setNote] = useState('');
-  const [fxRateUsed, setFxRateUsed] = useState('');
+  const isEdit = initialExpense !== undefined;
+  const initialSplitState = initialExpense ? deriveInitialSplitState(initialExpense, participants) : null;
+
+  const [amountYuan, setAmountYuan] = useState(initialExpense ? String(centsToYuan(initialExpense.amount)) : '');
+  const [currency, setCurrency] = useState(initialExpense?.currency ?? baseCurrency);
+  const [payerParticipantId, setPayerParticipantId] = useState(initialExpense?.payerParticipantId ?? myParticipantId);
+  const [category, setCategory] = useState(initialExpense?.category ?? '');
+  const [expenseDate, setExpenseDate] = useState(
+    initialExpense ? initialExpense.expenseDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
+  );
+  const [note, setNote] = useState(initialExpense?.note ?? '');
+  const [fxRateUsed, setFxRateUsed] = useState(
+    initialExpense && initialExpense.fxRateUsed !== 1 ? String(initialExpense.fxRateUsed) : ''
+  );
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,11 +104,11 @@ export function ExpenseForm({
   const [recommendations, setRecommendations] = useState<FxRecommendationResult[] | null>(null);
   const [compareError, setCompareError] = useState<string | null>(null);
 
-  const [customSplit, setCustomSplit] = useState(false);
-  const [splitIncluded, setSplitIncluded] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(participants.map((p) => [p.id, true]))
+  const [customSplit, setCustomSplit] = useState(initialSplitState?.customSplit ?? false);
+  const [splitIncluded, setSplitIncluded] = useState<Record<string, boolean>>(
+    initialSplitState?.splitIncluded ?? Object.fromEntries(participants.map((p) => [p.id, true]))
   );
-  const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({});
+  const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>(initialSplitState?.splitAmounts ?? {});
 
   const needsManualFxRate = currency !== baseCurrency;
 
@@ -124,7 +186,9 @@ export function ExpenseForm({
     }
 
     const amountCents = yuanToCents(amount);
-    let splits: { participantId: string; shareAmountBaseCurrency: number }[] | undefined;
+    const amountBaseCurrency = needsManualFxRate ? Math.round(amountCents * Number(fxRateUsed)) : amountCents;
+
+    let splits: SplitShare[] | undefined;
 
     if (customSplit) {
       const included = participants.filter((p) => splitIncluded[p.id]);
@@ -141,16 +205,21 @@ export function ExpenseForm({
         setError('自定义分摊金额总和要等于消费总金额');
         return;
       }
-      const amountBaseCurrency = needsManualFxRate
-        ? Math.round(amountCents * Number(fxRateUsed))
-        : amountCents;
       splits = rescaleSplitToBaseCurrency(nativeShares, amountBaseCurrency);
+    } else if (isEdit) {
+      // 编辑时金额/币种字段一定会被重传，PATCH 要求「金额一变就必须同时带 splits」，
+      // 这里补上默认等分，跟创建时后端自己算的默认行为保持一致。
+      splits = equalSplit(amountBaseCurrency, participants.map((p) => p.id));
     }
 
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/trips/${tripId}/expenses`, {
-        method: 'POST',
+      const endpoint = isEdit
+        ? `/api/trips/${tripId}/expenses/${initialExpense.id}`
+        : `/api/trips/${tripId}/expenses`;
+
+      const res = await fetch(endpoint, {
+        method: isEdit ? 'PATCH' : 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           payerParticipantId,
@@ -169,12 +238,12 @@ export function ExpenseForm({
         return;
       }
 
-      const data = await res.json();
+      const expenseId = isEdit ? initialExpense.id : (await res.json()).expense.id;
 
       if (receiptFile) {
         const form = new FormData();
         form.append('file', receiptFile);
-        await fetch(`/api/expenses/${data.expense.id}/receipt`, { method: 'POST', body: form });
+        await fetch(`/api/expenses/${expenseId}/receipt`, { method: 'POST', body: form });
       }
 
       router.push(`/trips/${tripId}`);
@@ -357,7 +426,7 @@ export function ExpenseForm({
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium" htmlFor="receipt">
-          收据（可选）
+          收据（可选{isEdit && initialExpense.hasReceipt ? '，已有收据，上传新文件会替换' : ''}）
         </label>
         <input
           id="receipt"
@@ -430,13 +499,20 @@ export function ExpenseForm({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <button
-        type="submit"
-        disabled={submitting || splitMismatch}
-        className="w-fit rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-      >
-        {submitting ? '提交中…' : '记这笔账'}
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={submitting || splitMismatch}
+          className="w-fit rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+        >
+          {submitting ? '保存中…' : isEdit ? '保存修改' : '记这笔账'}
+        </button>
+        {isEdit && (
+          <Link href={`/trips/${tripId}`} className="text-sm text-slate-500 underline">
+            取消
+          </Link>
+        )}
+      </div>
     </form>
   );
 }

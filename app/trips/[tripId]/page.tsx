@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { db } from '@/lib/db/client';
 import { expenses, participants, trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
-import { formatMoney } from '@/lib/money';
+import { ExpenseList } from './expense-list';
 
 const STATUS_LABEL: Record<string, string> = {
   active: '记账中',
@@ -58,27 +58,17 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-700">我的消费记录</h2>
-        {myExpenses.length === 0 ? (
-          <p className="text-sm text-slate-500">还没记过账，点上面「记一笔」开始。</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {myExpenses.map((e) => (
-              <li
-                key={e.id}
-                className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-              >
-                <div className="flex flex-col">
-                  <span className="font-medium">{e.category}</span>
-                  <span className="text-xs text-slate-500">
-                    {e.expenseDate.toISOString().slice(0, 10)}
-                    {e.receiptPath && ' · 有收据'}
-                  </span>
-                </div>
-                <span>{formatMoney(e.amount, e.currency)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ExpenseList
+          tripId={trip.id}
+          expenses={myExpenses.map((e) => ({
+            id: e.id,
+            category: e.category,
+            amount: e.amount,
+            currency: e.currency,
+            expenseDate: e.expenseDate.toISOString(),
+            hasReceipt: e.receiptPath !== null,
+          }))}
+        />
       </section>
     </main>
   );

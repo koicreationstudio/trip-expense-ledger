@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { db } from '@/lib/db/client';
 import { participants, trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
-import { ExpenseForm } from './expense-form';
+import { ExpenseForm } from '../expense-form';
 
 export default async function NewExpensePage({ params }: { params: { tripId: string } }) {
   const identity = await getCurrentIdentity();
