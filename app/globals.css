@@ -10,3 +10,28 @@ body {
   background-color: #f8fafc;
   color: #0f172a;
 }
+
+@layer components {
+  /* 主操作按钮：整站唯一强调色；min-h 44px 是 Apple HIG 最小触控热区 */
+  .btn-primary {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-md bg-accent-700 px-4 text-base font-medium text-white transition-colors hover:bg-accent-800 disabled:opacity-50;
+  }
+
+  /* 次要操作按钮：比价/平均分摊/移除这类不需要抢主按钮风头的动作 */
+  .btn-secondary {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50;
+  }
+
+  /* 行内文字链接型操作（编辑/删除/撤销/复制）：撑够点击高度，不强行做成按钮盒子 */
+  .tap-link {
+    @apply inline-flex min-h-[44px] items-center px-1 underline underline-offset-2;
+  }
+
+  .field-label {
+    @apply text-base font-medium text-slate-700;
+  }
+
+  .field-input {
+    @apply rounded-md border border-slate-300 px-3 py-3 text-base focus:border-accent-700 focus:outline-none focus:ring-1 focus:ring-accent-700 disabled:bg-slate-100;
+  }
+}

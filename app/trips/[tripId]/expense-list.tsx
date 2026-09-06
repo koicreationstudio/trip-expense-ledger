@@ -40,17 +40,17 @@ export function ExpenseList({ tripId, expenses }: { tripId: string; expenses: Ex
   }
 
   if (expenses.length === 0) {
-    return <p className="text-sm text-slate-500">还没记过账，点上面「记一笔」开始。</p>;
+    return <p className="text-sm text-slate-500">还没记过账，点下面「记一笔消费」开始。</p>;
   }
 
   return (
     <div className="flex flex-col gap-2">
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-base text-red-600">{error}</p>}
       <ul className="flex flex-col gap-2">
         {expenses.map((e) => (
           <li
             key={e.id}
-            className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+            className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-base"
           >
             <div className="flex flex-col">
               <span className="font-medium">{e.category}</span>
@@ -60,15 +60,15 @@ export function ExpenseList({ tripId, expenses }: { tripId: string; expenses: Ex
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <span>{formatMoney(e.amount, e.currency)}</span>
-              <Link href={`/trips/${tripId}/expenses/${e.id}/edit`} className="text-xs text-slate-500 underline">
+              <span className="tabular-nums">{formatMoney(e.amount, e.currency)}</span>
+              <Link href={`/trips/${tripId}/expenses/${e.id}/edit`} className="tap-link text-sm text-slate-500">
                 编辑
               </Link>
               <button
                 type="button"
                 onClick={() => handleDelete(e.id)}
                 disabled={deletingId === e.id}
-                className="text-xs text-red-600 underline disabled:opacity-50"
+                className="tap-link text-base text-red-600 disabled:opacity-50"
               >
                 {deletingId === e.id ? '删除中…' : '删除'}
               </button>

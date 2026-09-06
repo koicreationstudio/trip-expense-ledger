@@ -53,18 +53,18 @@ export function ClaimForm({
         <p className="text-sm text-slate-600">认领成功，可以直接开始记账了。</p>
         <p className="text-sm text-slate-500">
           要不要顺手注册账号，这样以后能在任何设备找到这个行程？
-          <Link href={`/login?next=${nextParam}`} className="ml-1 underline">
+          <Link href={`/login?next=${nextParam}`} className="tap-link ml-1">
             登录
           </Link>
           {' / '}
-          <Link href={`/signup?next=${nextParam}`} className="underline">
+          <Link href={`/signup?next=${nextParam}`} className="tap-link">
             注册
           </Link>
         </p>
         <button
           type="button"
           onClick={() => router.push(`/trips/${tripId}`)}
-          className="w-fit rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          className="btn-primary"
         >
           现在就去记账
         </button>
@@ -75,14 +75,14 @@ export function ClaimForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium" htmlFor="participant">
+        <label className="field-label" htmlFor="participant">
           我是
         </label>
         <select
           id="participant"
           value={participantId}
           onChange={(e) => setParticipantId(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="field-input"
         >
           {unclaimedParticipants.map((p) => (
             <option key={p.id} value={p.id}>
@@ -92,12 +92,12 @@ export function ClaimForm({
         </select>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-base text-red-600">{error}</p>}
 
       <button
         type="submit"
         disabled={submitting}
-        className="w-fit rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+        className="btn-primary"
       >
         {submitting ? '认领中…' : '认领这个身份'}
       </button>

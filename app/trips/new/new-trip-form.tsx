@@ -50,7 +50,7 @@ export function NewTripForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium" htmlFor="trip-name">
+        <label className="field-label" htmlFor="trip-name">
           行程名称
         </label>
         <input
@@ -59,19 +59,19 @@ export function NewTripForm() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="例如：2026 曼谷出差"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="field-input"
         />
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium" htmlFor="base-currency">
+        <label className="field-label" htmlFor="base-currency">
           本位币（结算/比较用的币种）
         </label>
         <select
           id="base-currency"
           value={baseCurrency}
           onChange={(e) => setBaseCurrency(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="field-input"
         >
           {COMMON_CURRENCIES.map((c) => (
             <option key={c} value={c}>
@@ -82,7 +82,7 @@ export function NewTripForm() {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium" htmlFor="owner-name">
+        <label className="field-label" htmlFor="owner-name">
           你的称呼
         </label>
         <input
@@ -91,24 +91,24 @@ export function NewTripForm() {
           value={ownerDisplayName}
           onChange={(e) => setOwnerDisplayName(e.target.value)}
           placeholder="例如：Remy"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="field-input"
         />
       </div>
 
       <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium">同行人（先占位，之后发邀请链接给他们各自认领）</span>
+        <span className="field-label">同行人（先占位，之后发邀请链接给他们各自认领）</span>
         {participantNames.map((p, index) => (
           <div key={index} className="flex gap-2">
             <input
               value={p}
               onChange={(e) => updateParticipantName(index, e.target.value)}
               placeholder="同行人名字"
-              className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="field-input flex-1"
             />
             <button
               type="button"
               onClick={() => removeParticipantRow(index)}
-              className="rounded-md border border-slate-300 px-3 text-sm text-slate-500 hover:bg-slate-100"
+              className="btn-secondary"
             >
               移除
             </button>
@@ -117,18 +117,18 @@ export function NewTripForm() {
         <button
           type="button"
           onClick={() => setParticipantNames((prev) => [...prev, ''])}
-          className="w-fit text-sm text-slate-600 underline"
+          className="tap-link text-slate-600"
         >
           + 加一位同行人
         </button>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-base text-red-600">{error}</p>}
 
       <button
         type="submit"
         disabled={submitting}
-        className="w-fit rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+        className="btn-primary"
       >
         {submitting ? '创建中…' : '创建行程'}
       </button>

@@ -53,7 +53,7 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-base text-red-600">{error}</p>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {trips.map((trip) => (
           <button
@@ -61,14 +61,14 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
             type="button"
             onClick={() => handleOpen(trip.id)}
             disabled={switchingId === trip.id}
-            className="flex flex-col gap-1 rounded-md border border-slate-200 bg-white p-4 text-left text-sm hover:border-slate-400 disabled:opacity-50"
+            className="flex flex-col gap-1 rounded-md border border-slate-200 bg-white p-4 text-left text-base hover:border-slate-400 disabled:opacity-50"
           >
             <span className="font-medium">{trip.name}</span>
             <span className="text-xs text-slate-500">
               本位币 {trip.baseCurrency} · {trip.isOwner ? '创建者' : '同行人'} ·{' '}
               {STATUS_LABEL[trip.status] ?? trip.status}
             </span>
-            {switchingId === trip.id && <span className="text-xs text-slate-400">打开中…</span>}
+            {switchingId === trip.id && <span className="text-xs text-slate-500">打开中…</span>}
           </button>
         ))}
       </div>

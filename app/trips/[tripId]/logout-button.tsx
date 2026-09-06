@@ -23,7 +23,7 @@ export function LogoutButton() {
       type="button"
       onClick={handleClick}
       disabled={submitting}
-      className="text-sm text-slate-500 hover:text-slate-900 disabled:opacity-50"
+      className="inline-flex min-h-[44px] items-center text-sm text-slate-500 hover:text-slate-900 disabled:opacity-50"
     >
       {submitting ? '退出中…' : '退出登录'}
     </button>

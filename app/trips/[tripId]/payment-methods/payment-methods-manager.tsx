@@ -97,7 +97,7 @@ export function PaymentMethodsManager() {
             {methods.map((m) => (
               <li
                 key={m.id}
-                className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-base"
               >
                 <div className="flex flex-col">
                   <span className="font-medium">
@@ -111,7 +111,7 @@ export function PaymentMethodsManager() {
                 <button
                   type="button"
                   onClick={() => handleDelete(m.id)}
-                  className="rounded-md border border-slate-300 px-3 py-1 text-xs text-slate-500 hover:bg-slate-100"
+                  className="btn-secondary"
                 >
                   删除
                 </button>
@@ -126,7 +126,7 @@ export function PaymentMethodsManager() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium" htmlFor="pm-label">
+              <label className="field-label" htmlFor="pm-label">
                 名称
               </label>
               <input
@@ -135,18 +135,18 @@ export function PaymentMethodsManager() {
                 value={form.label}
                 onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
                 placeholder="例如：HSBC 万事达卡"
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="field-input"
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium" htmlFor="pm-kind">
+              <label className="field-label" htmlFor="pm-kind">
                 类型
               </label>
               <select
                 id="pm-kind"
                 value={form.kind}
                 onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as 'card' | 'cash' }))}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="field-input"
               >
                 <option value="card">卡</option>
                 <option value="cash">现金</option>
@@ -155,14 +155,14 @@ export function PaymentMethodsManager() {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium" htmlFor="pm-currency">
+            <label className="field-label" htmlFor="pm-currency">
               结算币种
             </label>
             <select
               id="pm-currency"
               value={form.settlementCurrency}
               onChange={(e) => setForm((f) => ({ ...f, settlementCurrency: e.target.value }))}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="field-input"
             >
               {COMMON_CURRENCIES.map((c) => (
                 <option key={c} value={c}>
@@ -174,7 +174,7 @@ export function PaymentMethodsManager() {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium" htmlFor="pm-fx-markup">
+              <label className="field-label" htmlFor="pm-fx-markup">
                 汇率加点 %
               </label>
               <input
@@ -184,11 +184,11 @@ export function PaymentMethodsManager() {
                 min="0"
                 value={form.fxMarkupPercent}
                 onChange={(e) => setForm((f) => ({ ...f, fxMarkupPercent: e.target.value }))}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="field-input"
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium" htmlFor="pm-foreign-fee">
+              <label className="field-label" htmlFor="pm-foreign-fee">
                 境外手续费 %
               </label>
               <input
@@ -198,11 +198,11 @@ export function PaymentMethodsManager() {
                 min="0"
                 value={form.foreignTxnFeePercent}
                 onChange={(e) => setForm((f) => ({ ...f, foreignTxnFeePercent: e.target.value }))}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="field-input"
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium" htmlFor="pm-fixed-fee">
+              <label className="field-label" htmlFor="pm-fixed-fee">
                 固定费（结算币种，元）
               </label>
               <input
@@ -212,11 +212,11 @@ export function PaymentMethodsManager() {
                 min="0"
                 value={form.fixedFeeYuan}
                 onChange={(e) => setForm((f) => ({ ...f, fixedFeeYuan: e.target.value }))}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="field-input"
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium" htmlFor="pm-cashback">
+              <label className="field-label" htmlFor="pm-cashback">
                 返现 %
               </label>
               <input
@@ -226,17 +226,17 @@ export function PaymentMethodsManager() {
                 min="0"
                 value={form.cashbackPercent}
                 onChange={(e) => setForm((f) => ({ ...f, cashbackPercent: e.target.value }))}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="field-input"
               />
             </div>
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-base text-red-600">{error}</p>}
 
           <button
             type="submit"
             disabled={submitting}
-            className="w-fit rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            className="btn-primary"
           >
             {submitting ? '添加中…' : '添加支付方式'}
           </button>

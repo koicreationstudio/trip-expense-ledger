@@ -257,7 +257,7 @@ export function ExpenseForm({
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium" htmlFor="amount">
+          <label className="field-label" htmlFor="amount">
             金额
           </label>
           <input
@@ -268,11 +268,12 @@ export function ExpenseForm({
             required
             value={amountYuan}
             onChange={(e) => setAmountYuan(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            placeholder="0.00"
+            className="field-input text-lg font-semibold tabular-nums"
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium" htmlFor="currency">
+          <label className="field-label" htmlFor="currency">
             币种
           </label>
           <select
@@ -282,7 +283,7 @@ export function ExpenseForm({
               setCurrency(e.target.value);
               setRecommendations(null);
             }}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="field-input"
           >
             {Array.from(new Set([baseCurrency, ...COMMON_CURRENCIES])).map((c) => (
               <option key={c} value={c}>
@@ -295,7 +296,7 @@ export function ExpenseForm({
 
       {needsManualFxRate && (
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium" htmlFor="fx-rate">
+          <label className="field-label" htmlFor="fx-rate">
             汇率（1 {currency} = 多少 {baseCurrency}）
           </label>
           <input
@@ -306,41 +307,41 @@ export function ExpenseForm({
             value={fxRateUsed}
             onChange={(e) => setFxRateUsed(e.target.value)}
             placeholder="手动输入，比价拉不到当日汇率也不影响记账"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="field-input"
           />
         </div>
       )}
 
       <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">这笔用哪张卡最划算？</span>
+          <span className="field-label">这笔用哪张卡最划算？</span>
           <button
             type="button"
             onClick={handleCompare}
             disabled={comparing}
-            className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
+            className="btn-secondary"
           >
             {comparing ? '比价中…' : '比价'}
           </button>
         </div>
         {compareError === 'no_payment_methods' && (
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-slate-500">
             还没配置支付方式，先去{' '}
-            <Link href={`/trips/${tripId}/payment-methods`} className="underline">
+            <Link href={`/trips/${tripId}/payment-methods`} className="tap-link">
               支付方式设置
             </Link>{' '}
             配一下。
           </p>
         )}
         {compareError && compareError !== 'no_payment_methods' && (
-          <p className="text-xs text-red-600">{compareError}</p>
+          <p className="text-base text-red-600">{compareError}</p>
         )}
         {recommendations && (
           <ul className="flex flex-col gap-1">
             {recommendations.map((r, index) => (
               <li
                 key={r.paymentMethodId}
-                className={`flex items-center justify-between rounded px-2 py-1 text-sm ${
+                className={`flex items-center justify-between rounded px-2 py-1 text-base ${
                   index === 0 && !r.unavailable ? 'bg-emerald-50 text-emerald-800' : ''
                 }`}
               >
@@ -348,7 +349,7 @@ export function ExpenseForm({
                   {r.label}
                   {index === 0 && !r.unavailable && <span className="ml-2 text-xs">最划算</span>}
                 </span>
-                <span>
+                <span className="tabular-nums">
                   {r.unavailable || r.costInCompareCurrency === null
                     ? '汇率缺失，建议手动核对'
                     : formatMoney(r.costInCompareCurrency, baseCurrency)}
@@ -360,14 +361,14 @@ export function ExpenseForm({
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium" htmlFor="payer">
+        <label className="field-label" htmlFor="payer">
           谁代垫的
         </label>
         <select
           id="payer"
           value={payerParticipantId}
           onChange={(e) => setPayerParticipantId(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="field-input"
         >
           {participants.map((p) => (
             <option key={p.id} value={p.id}>
@@ -378,7 +379,7 @@ export function ExpenseForm({
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium" htmlFor="category">
+        <label className="field-label" htmlFor="category">
           分类
         </label>
         <input
@@ -388,7 +389,7 @@ export function ExpenseForm({
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           placeholder="例如：餐饮"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="field-input"
         />
         <datalist id="category-options">
           {COMMON_CATEGORIES.map((c) => (
@@ -398,7 +399,7 @@ export function ExpenseForm({
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium" htmlFor="expense-date">
+        <label className="field-label" htmlFor="expense-date">
           日期
         </label>
         <input
@@ -407,25 +408,25 @@ export function ExpenseForm({
           required
           value={expenseDate}
           onChange={(e) => setExpenseDate(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="field-input"
         />
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium" htmlFor="note">
+        <label className="field-label" htmlFor="note">
           备注（可选）
         </label>
         <textarea
           id="note"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="field-input"
           rows={2}
         />
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium" htmlFor="receipt">
+        <label className="field-label" htmlFor="receipt">
           收据（可选{isEdit && initialExpense.hasReceipt ? '，已有收据，上传新文件会替换' : ''}）
         </label>
         <input
@@ -438,7 +439,7 @@ export function ExpenseForm({
       </div>
 
       <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-3">
-        <label className="flex items-center gap-2 text-sm font-medium">
+        <label className="flex items-center gap-2 text-base font-medium">
           <input
             type="checkbox"
             checked={customSplit}
@@ -461,7 +462,7 @@ export function ExpenseForm({
                       setSplitIncluded((prev) => ({ ...prev, [p.id]: e.target.checked }))
                     }
                   />
-                  <span className="w-24 shrink-0 text-sm">{p.displayName}</span>
+                  <span className="w-24 shrink-0 text-base">{p.displayName}</span>
                   <input
                     type="number"
                     min="0"
@@ -472,43 +473,43 @@ export function ExpenseForm({
                       setSplitAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))
                     }
                     placeholder="0.00"
-                    className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm disabled:bg-slate-100"
+                    className="field-input w-28"
                   />
-                  <span className="text-xs text-slate-400">{currency}</span>
+                  <span className="text-xs text-slate-500">{currency}</span>
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={handleEqualizeSplit}
-                className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-100"
+                className="btn-secondary shrink-0 whitespace-nowrap"
               >
                 平均分给已勾选的人
               </button>
-              <span className={`text-xs ${splitMismatch ? 'text-red-600' : 'text-emerald-700'}`}>
+              <span className={`text-sm tabular-nums ${splitMismatch ? 'text-red-600' : 'text-emerald-700'}`}>
                 已分配 {formatMoney(splitCentsTotal, currency)} / 共 {formatMoney(amountCentsTotal, currency)}
               </span>
             </div>
             {splitMismatch && (
-              <p className="text-xs text-red-600">分摊总和要跟消费总金额完全一致才能提交。</p>
+              <p className="text-base text-red-600">分摊总和要跟消费总金额完全一致才能提交。</p>
             )}
           </div>
         )}
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-base text-red-600">{error}</p>}
 
       <div className="flex items-center gap-3">
         <button
           type="submit"
           disabled={submitting || splitMismatch}
-          className="w-fit rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          className="btn-primary"
         >
           {submitting ? '保存中…' : isEdit ? '保存修改' : '记这笔账'}
         </button>
         {isEdit && (
-          <Link href={`/trips/${tripId}`} className="text-sm text-slate-500 underline">
+          <Link href={`/trips/${tripId}`} className="tap-link text-slate-500">
             取消
           </Link>
         )}

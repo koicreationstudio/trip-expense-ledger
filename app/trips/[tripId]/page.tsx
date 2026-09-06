@@ -43,12 +43,12 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         <h2 className="text-sm font-semibold text-slate-700">参与者</h2>
         <ul className="flex flex-col gap-1 rounded-md border border-slate-200 bg-white p-3">
           {tripParticipants.map((p) => (
-            <li key={p.id} className="flex items-center justify-between text-sm">
+            <li key={p.id} className="flex items-center justify-between text-base">
               <span>
                 {p.displayName}
-                {p.isOwner && <span className="ml-2 text-xs text-slate-400">创建者</span>}
+                {p.isOwner && <span className="ml-2 text-xs text-slate-500">创建者</span>}
               </span>
-              <span className={p.claimedAt ? 'text-emerald-600' : 'text-slate-400'}>
+              <span className={p.claimedAt ? 'text-emerald-600' : 'text-slate-500'}>
                 {p.claimedAt ? '已认领' : '未认领'}
               </span>
             </li>

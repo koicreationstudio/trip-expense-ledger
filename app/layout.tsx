@@ -1,5 +1,10 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
+
+// 构建时把字体打包进产物，不在运行时连 Google 服务器——跟这个项目自己标榜的
+// "数据自托管、不外流"这条调性一致，不能换成 <link> 外部 CDN 引入。
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 
 export const metadata: Metadata = {
   title: '消费记录 · trip-expense-ledger',
@@ -8,8 +13,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh">
-      <body className="min-h-screen bg-slate-50 text-slate-900">
+    <html lang="zh" className={inter.variable}>
+      <body className="min-h-screen bg-slate-50 font-sans text-slate-900">
         <div className="mx-auto max-w-3xl px-4 py-8">{children}</div>
       </body>
     </html>

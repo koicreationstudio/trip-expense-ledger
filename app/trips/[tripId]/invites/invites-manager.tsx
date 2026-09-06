@@ -97,9 +97,9 @@ export function InvitesManager({ tripId }: { tripId: string }) {
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-slate-700">生成新邀请链接</h2>
-        <form onSubmit={handleCreateInvite} className="flex items-end gap-3">
+        <form onSubmit={handleCreateInvite} className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium" htmlFor="expires-in-days">
+            <label className="field-label" htmlFor="expires-in-days">
               有效期（天，留空=不设有效期）
             </label>
             <input
@@ -108,18 +108,18 @@ export function InvitesManager({ tripId }: { tripId: string }) {
               min="1"
               value={expiresInDays}
               onChange={(e) => setExpiresInDays(e.target.value)}
-              className="w-40 rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="field-input w-40"
             />
           </div>
           <button
             type="submit"
             disabled={creating}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            className="btn-primary shrink-0 whitespace-nowrap"
           >
             {creating ? '生成中…' : '生成邀请链接'}
           </button>
         </form>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-base text-red-600">{error}</p>}
       </section>
 
       <section className="flex flex-col gap-2">
@@ -141,11 +141,11 @@ export function InvitesManager({ tripId }: { tripId: string }) {
                       {isRevoked ? '已撤销' : isExpired ? '已过期' : '有效'}
                       {invite.expiresAt && !isRevoked ? ` · 到期 ${new Date(invite.expiresAt).toLocaleDateString()}` : ''}
                     </span>
-                    <button type="button" onClick={() => handleCopy(invite.code)} className="underline">
+                    <button type="button" onClick={() => handleCopy(invite.code)} className="tap-link">
                       {copiedCode === invite.code ? '已复制' : '复制链接'}
                     </button>
                     {!isRevoked && (
-                      <button type="button" onClick={() => handleRevoke(invite.id)} className="text-red-600 underline">
+                      <button type="button" onClick={() => handleRevoke(invite.id)} className="tap-link text-red-600">
                         撤销
                       </button>
                     )}
@@ -167,17 +167,17 @@ export function InvitesManager({ tripId }: { tripId: string }) {
             {participants.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-base"
               >
                 <span>
                   {p.displayName}
-                  {p.isOwner && <span className="ml-2 text-xs text-slate-400">创建者</span>}
-                  <span className={`ml-2 text-xs ${p.claimed ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {p.isOwner && <span className="ml-2 text-xs text-slate-500">创建者</span>}
+                  <span className={`ml-2 text-xs ${p.claimed ? 'text-emerald-600' : 'text-slate-500'}`}>
                     {p.claimed ? '已认领' : '未认领'}
                   </span>
                 </span>
                 {p.claimed && !p.isOwner && (
-                  <button type="button" onClick={() => handleResetClaim(p.id)} className="text-xs text-slate-500 underline">
+                  <button type="button" onClick={() => handleResetClaim(p.id)} className="tap-link text-sm text-slate-500">
                     重置认领
                   </button>
                 )}

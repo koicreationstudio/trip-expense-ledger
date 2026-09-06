@@ -38,7 +38,7 @@ export default async function HomePage() {
           </div>
           <Link
             href="/trips/new"
-            className="inline-flex w-fit items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+            className="btn-primary"
           >
             创建新行程
           </Link>
@@ -59,13 +59,13 @@ export default async function HomePage() {
       </div>
       <Link
         href="/login?next=/trips/new"
-        className="inline-flex w-fit items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+        className="btn-primary"
       >
         创建新行程
       </Link>
       <p className="text-sm text-slate-500">
         已经有账号？
-        <Link href="/login" className="ml-1 underline">
+        <Link href="/login" className="tap-link ml-1">
           登录
         </Link>
       </p>

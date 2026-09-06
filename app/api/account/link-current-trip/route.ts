@@ -23,7 +23,10 @@ export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const identity = await resolveIdentity(db, sessionToken);
   if (!identity) {
-    return NextResponse.json({ error: 'no_active_trip_session' }, { status: 400 });
+    // 没有活跃 tel_session 是"顺手注册"场景里完全正常的一种结果（比如直接从首页登录，
+    // 不是刚认领完邀请/建完行程），不是请求出错，用 200+ok:false 表达，避免每次常规登录都在
+    // 浏览器 console 打一条红色 400，误导人以为哪里坏了。
+    return NextResponse.json({ ok: false, reason: 'no_active_trip_session' }, { status: 200 });
   }
 
   await db.update(participants).set({ userId: user.userId }).where(eq(participants.id, identity.participantId));

@@ -5,6 +5,7 @@ import { db } from '@/lib/db/client';
 import { trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { LogoutButton } from './logout-button';
+import { RecordExpenseFab } from './record-expense-fab';
 
 /**
  * 共享布局：顶部导航栏（行程名+本位币、记一笔/行程主页/结算/支付方式几个链接，
@@ -29,15 +30,16 @@ export default async function TripLayout({
     redirect('/');
   }
 
+  // "记一笔消费"是全站最高频动作，不跟其它次要链接混排在这条导航里——
+  // 挪到下面固定在屏幕底部的常驻按钮，单手持机时拇指自然落点就能点到。
   const navLinks = [
     { href: `/trips/${trip.id}`, label: '行程主页' },
-    { href: `/trips/${trip.id}/expenses/new`, label: '记一笔' },
     { href: `/trips/${trip.id}/settlement`, label: '结算' },
     { href: `/trips/${trip.id}/payment-methods`, label: '支付方式' },
   ];
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 pb-24">
       <header className="flex flex-col gap-4 border-b border-slate-200 pb-4">
         <div className="flex items-center justify-between">
           <div>
@@ -48,14 +50,18 @@ export default async function TripLayout({
         </div>
         <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
           {navLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="text-slate-600 hover:text-slate-900 hover:underline">
+            <Link
+              key={link.href}
+              href={link.href}
+              className="inline-flex min-h-[44px] items-center text-slate-600 hover:text-slate-900 hover:underline"
+            >
               {link.label}
             </Link>
           ))}
           {identity.isOwner && (
             <Link
               href={`/trips/${trip.id}/invites`}
-              className="text-slate-600 hover:text-slate-900 hover:underline"
+              className="inline-flex min-h-[44px] items-center text-slate-600 hover:text-slate-900 hover:underline"
             >
               邀请管理
             </Link>
@@ -63,6 +69,7 @@ export default async function TripLayout({
         </nav>
       </header>
       {children}
+      <RecordExpenseFab tripId={trip.id} />
     </div>
   );
 }
