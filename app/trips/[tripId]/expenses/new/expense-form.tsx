@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
-import { yuanToCents, formatMoney } from '@/lib/money';
+import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
+import { equalSplit, rescaleSplitToBaseCurrency } from '@/lib/domain/split';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
 
 const COMMON_CATEGORIES = ['餐饮', '交通', '住宿', '门票', '购物', '其他'];
@@ -41,7 +42,33 @@ export function ExpenseForm({
   const [recommendations, setRecommendations] = useState<FxRecommendationResult[] | null>(null);
   const [compareError, setCompareError] = useState<string | null>(null);
 
+  const [customSplit, setCustomSplit] = useState(false);
+  const [splitIncluded, setSplitIncluded] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(participants.map((p) => [p.id, true]))
+  );
+  const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({});
+
   const needsManualFxRate = currency !== baseCurrency;
+
+  const amountCentsTotal = yuanToCents(Number(amountYuan) || 0);
+  const includedParticipants = participants.filter((p) => splitIncluded[p.id]);
+  const splitCentsTotal = includedParticipants.reduce(
+    (sum, p) => sum + yuanToCents(Number(splitAmounts[p.id]) || 0),
+    0
+  );
+  const splitMismatch = customSplit && splitCentsTotal !== amountCentsTotal;
+
+  function handleEqualizeSplit() {
+    if (includedParticipants.length === 0) return;
+    const shares = equalSplit(amountCentsTotal, includedParticipants.map((p) => p.id));
+    setSplitAmounts((prev) => {
+      const next = { ...prev };
+      for (const s of shares) {
+        next[s.participantId] = String(centsToYuan(s.shareAmountBaseCurrency));
+      }
+      return next;
+    });
+  }
 
   async function handleCompare() {
     setCompareError(null);
@@ -96,6 +123,30 @@ export function ExpenseForm({
       return;
     }
 
+    const amountCents = yuanToCents(amount);
+    let splits: { participantId: string; shareAmountBaseCurrency: number }[] | undefined;
+
+    if (customSplit) {
+      const included = participants.filter((p) => splitIncluded[p.id]);
+      if (included.length === 0) {
+        setError('自定义分摊至少要选一个人');
+        return;
+      }
+      const nativeShares = included.map((p) => ({
+        participantId: p.id,
+        amountNativeCents: yuanToCents(Number(splitAmounts[p.id]) || 0),
+      }));
+      const nativeSum = nativeShares.reduce((sum, s) => sum + s.amountNativeCents, 0);
+      if (nativeSum !== amountCents) {
+        setError('自定义分摊金额总和要等于消费总金额');
+        return;
+      }
+      const amountBaseCurrency = needsManualFxRate
+        ? Math.round(amountCents * Number(fxRateUsed))
+        : amountCents;
+      splits = rescaleSplitToBaseCurrency(nativeShares, amountBaseCurrency);
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch(`/api/trips/${tripId}/expenses`, {
@@ -103,12 +154,13 @@ export function ExpenseForm({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           payerParticipantId,
-          amount: yuanToCents(amount),
+          amount: amountCents,
           currency,
           fxRateUsed: needsManualFxRate ? Number(fxRateUsed) : undefined,
           category: category.trim(),
           note: note.trim() || undefined,
           expenseDate: new Date(expenseDate).toISOString(),
+          splits,
         }),
       });
 
@@ -315,13 +367,71 @@ export function ExpenseForm({
         />
       </div>
 
-      <p className="text-xs text-slate-500">默认所有参与者平均分摊这笔消费。</p>
+      <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-3">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={customSplit}
+            onChange={(e) => setCustomSplit(e.target.checked)}
+          />
+          自定义分摊（不勾选默认全员等分）
+        </label>
+
+        {!customSplit && <p className="text-xs text-slate-500">默认所有参与者平均分摊这笔消费。</p>}
+
+        {customSplit && (
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1">
+              {participants.map((p) => (
+                <div key={p.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={splitIncluded[p.id] ?? true}
+                    onChange={(e) =>
+                      setSplitIncluded((prev) => ({ ...prev, [p.id]: e.target.checked }))
+                    }
+                  />
+                  <span className="w-24 shrink-0 text-sm">{p.displayName}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    disabled={!(splitIncluded[p.id] ?? true)}
+                    value={splitAmounts[p.id] ?? ''}
+                    onChange={(e) =>
+                      setSplitAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))
+                    }
+                    placeholder="0.00"
+                    className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm disabled:bg-slate-100"
+                  />
+                  <span className="text-xs text-slate-400">{currency}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleEqualizeSplit}
+                className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-100"
+              >
+                平均分给已勾选的人
+              </button>
+              <span className={`text-xs ${splitMismatch ? 'text-red-600' : 'text-emerald-700'}`}>
+                已分配 {formatMoney(splitCentsTotal, currency)} / 共 {formatMoney(amountCentsTotal, currency)}
+              </span>
+            </div>
+            {splitMismatch && (
+              <p className="text-xs text-red-600">分摊总和要跟消费总金额完全一致才能提交。</p>
+            )}
+          </div>
+        )}
+      </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <button
         type="submit"
-        disabled={submitting}
+        disabled={submitting || splitMismatch}
         className="w-fit rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
       >
         {submitting ? '提交中…' : '记这笔账'}
