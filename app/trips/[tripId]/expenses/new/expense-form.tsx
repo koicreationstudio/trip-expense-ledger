@@ -178,6 +178,7 @@ export function ExpenseForm({
       }
 
       router.push(`/trips/${tripId}`);
+      router.refresh();
     } finally {
       setSubmitting(false);
     }
