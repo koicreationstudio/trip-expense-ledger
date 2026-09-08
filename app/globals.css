@@ -12,14 +12,15 @@ body {
 }
 
 @layer components {
-  /* 主操作按钮：DESIGN-BRIEF 第三版圆角尺度改 pill；min-h 44px 是 Apple HIG 最小触控热区 */
+  /* 主操作按钮：DESIGN-BRIEF 第三版圆角尺度改 pill；min-h 44px 是 Apple HIG 最小触控热区（触控热区不算视觉密度，不跟着字号收）。
+     字号 2026-09-08 从 text-sm(14px) 收到 12.5px：这个 class 从建库起就没跟上其它模块历轮的紧凑化，是全站字号不一致的公共 chokepoint 之一。 */
   .btn-primary {
-    @apply inline-flex min-h-[44px] items-center justify-center rounded-full bg-accent-700 px-[14px] text-sm font-medium text-white transition-colors hover:bg-accent-800 disabled:opacity-50;
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-full bg-accent-700 px-[14px] text-[12.5px] font-medium text-white transition-colors hover:bg-accent-800 disabled:opacity-50;
   }
 
   /* 次要操作按钮：比价/平均分摊/移除这类不需要抢主按钮风头的动作，触控高度跟主 CTA/FAB 拉开一级 */
   .btn-secondary {
-    @apply inline-flex min-h-[36px] items-center justify-center rounded-full border border-sand bg-white px-3 text-sm font-medium text-ink transition-colors hover:bg-slate-50 disabled:opacity-50;
+    @apply inline-flex min-h-[36px] items-center justify-center rounded-full border border-sand bg-white px-3 text-[12.5px] font-medium text-ink transition-colors hover:bg-slate-50 disabled:opacity-50;
   }
 
   /* 行内文字链接型操作（编辑/删除/撤销/复制）：纯文字链接不需要 44px 按钮级触控热区 */
@@ -27,12 +28,15 @@ body {
     @apply inline-flex min-h-[32px] items-center px-1 underline underline-offset-2;
   }
 
+  /* 字段标签：跟表单说明性文字（如"汇率加点 X%"caption）同一档 10px，比 field-input 里的实际内容矮一档，
+     跟其它模块"标签比内容小"的惯例对齐（原为 text-sm，同上 chokepoint）。 */
   .field-label {
-    @apply text-sm font-medium text-ink;
+    @apply text-[10px] font-medium text-ink;
   }
 
+  /* 输入内容字号对齐全站"主要内容"档 12.5px（跟 expense-list/exchange-record-list 等列表主文字同一档，原为 text-sm）。 */
   .field-input {
-    @apply rounded-xl border border-sand px-[9px] py-2 text-sm focus:border-accent-700 focus:outline-none focus:ring-1 focus:ring-accent-700 disabled:bg-slate-100;
+    @apply rounded-xl border border-sand px-[9px] py-2 text-[12.5px] focus:border-accent-700 focus:outline-none focus:ring-1 focus:ring-accent-700 disabled:bg-slate-100;
   }
 
   /* 标准卡片容器：钱包卡/交易行/汇率卡通用同一档圆角+sand边，
