@@ -21,7 +21,13 @@ export const POST = withTripOwner<Context>(async (_request, { params }) => {
   }
 
   await revokeAllSessions(db, params.participantId);
-  await db.update(participants).set({ claimedAt: null }).where(eq(participants.id, params.participantId));
+  // 连 userId 一起清掉：不清的话，重置后换一个人认领这个占位，会在对方不知情的
+  // 情况下继承前一个人账号名下的 payment_method（同一个 participant 行留着旧
+  // userId，下一次身份解析照样按这个 userId 查）。
+  await db
+    .update(participants)
+    .set({ claimedAt: null, userId: null })
+    .where(eq(participants.id, params.participantId));
 
   return NextResponse.json({ ok: true });
 });
