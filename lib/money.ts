@@ -17,3 +17,15 @@ export function formatMoney(cents: number, currency: string): string {
     currencyDisplay: 'narrowSymbol',
   }).format(centsToYuan(cents));
 }
+
+// Hero 卡水印用：只取货币符号本身（跟 formatMoney 同一套 Intl 格式化逻辑，不是另起一份符号表）。
+export function getCurrencySymbol(currency: string): string {
+  const part = new Intl.NumberFormat('zh-CN', {
+    style: 'currency',
+    currency,
+    currencyDisplay: 'narrowSymbol',
+  })
+    .formatToParts(0)
+    .find((p) => p.type === 'currency');
+  return part?.value ?? currency;
+}

@@ -47,6 +47,15 @@ const config: Config = {
       borderRadius: {
         hero: '22px',
       },
+      backgroundImage: {
+        // 第六版：Hero 卡质感重做，同一色相（H≈240°，跟 ink 一致）三段式渐变，
+        // 只在明度分层，不引入新色相。跟 rounded-hero 同一套「Hero 卡专属具名 token」惯例。
+        'hero-gradient': 'linear-gradient(165deg, #2A2A38 0%, #23232E 45%, #1B1B24 100%)',
+      },
+      boxShadow: {
+        // 外层两组阴影让卡片浮起来，inset 高光模拟顶部打光——银行卡/钱包类 UI 常见手法。
+        hero: '0 10px 24px -6px rgba(20,20,30,.35), 0 4px 10px rgba(20,20,30,.18), inset 0 1px 0 rgba(255,255,255,.08)',
+      },
     },
   },
   plugins: [],

@@ -94,7 +94,7 @@ export function WalletGrid({
               <span aria-hidden="true">{w.emoji}</span>
               <span className="truncate">{w.label}</span>
             </div>
-            <div className="mt-1 font-serif text-base font-medium tabular-nums">
+            <div className="mt-1 font-serif text-sm font-medium tabular-nums">
               {formatMoney(w.currentBalance, w.currency)}
             </div>
             <div className="font-mono text-[10px] text-muted">{w.currency}</div>

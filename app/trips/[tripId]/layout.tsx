@@ -41,20 +41,20 @@ export default async function TripLayout({
 
   return (
     <div className="flex flex-col gap-8 pb-28">
-      <header className="flex flex-col gap-4 border-b border-slate-200 pb-4">
+      <header className="flex flex-col gap-4 border-b border-sand pb-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold">{trip.name}</p>
-            <p className="text-xs text-slate-500">本位币 {trip.baseCurrency}</p>
+            <p className="text-[12.5px] font-semibold text-gold-dk">{trip.name}</p>
+            <p className="text-[10px] text-muted">本位币 {trip.baseCurrency}</p>
           </div>
           <LogoutButton />
         </div>
-        <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+        <nav className="flex flex-wrap gap-x-4 gap-y-2 text-[12.5px]">
           {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="inline-flex min-h-[44px] items-center text-slate-600 hover:text-slate-900 hover:underline"
+              className="inline-flex min-h-[44px] items-center text-muted hover:text-ink hover:underline"
             >
               {link.label}
             </Link>
@@ -62,7 +62,7 @@ export default async function TripLayout({
           {identity.isOwner && (
             <Link
               href={`/trips/${trip.id}/invites`}
-              className="inline-flex min-h-[44px] items-center text-slate-600 hover:text-slate-900 hover:underline"
+              className="inline-flex min-h-[44px] items-center text-muted hover:text-ink hover:underline"
             >
               邀请管理
             </Link>

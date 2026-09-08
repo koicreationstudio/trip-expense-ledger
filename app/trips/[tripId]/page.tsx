@@ -6,7 +6,7 @@ import { exchangeRecords, expenses, participants, paymentMethods, trips, wallets
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadSettlementInput } from '@/lib/db/settlement-query';
 import { computeNetBalances } from '@/lib/domain/settlement';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, getCurrencySymbol } from '@/lib/money';
 import { Avatar } from '@/components/avatar';
 import { ExpenseList } from './expense-list';
 import { WalletGrid } from './wallet-grid';
@@ -77,16 +77,22 @@ export default async function TripPage({ params }: { params: { tripId: string } 
   return (
     <main className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-gold-dk">{trip.name}</h1>
+        <h1 className="text-base font-semibold text-gold-dk">{trip.name}</h1>
         <p className="mt-0.5 text-[10px] text-muted">
           本位币 {trip.baseCurrency} · {STATUS_LABEL[trip.status] ?? trip.status}
         </p>
       </div>
 
-      <section className="flex flex-col gap-2 rounded-hero bg-ink p-4 text-white">
-        <span className="text-xs uppercase tracking-wide text-slate-400">我的净额</span>
+      <section className="relative flex flex-col gap-2 overflow-hidden rounded-hero bg-hero-gradient p-4 text-white shadow-hero">
         <span
-          className={`font-serif text-3xl font-medium tabular-nums tracking-tight ${
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-4 -right-2 select-none font-serif text-[140px] italic leading-none text-white/[.05]"
+        >
+          {getCurrencySymbol(trip.baseCurrency)}
+        </span>
+        <span className="text-[10px] uppercase tracking-wide text-slate-400">我的净额</span>
+        <span
+          className={`font-serif text-2xl font-medium tabular-nums tracking-tight ${
             myNet >= 0 ? 'text-emerald-400' : 'text-red-400'
           }`}
         >
@@ -96,7 +102,10 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         <span className="text-xs text-slate-400">
           {myNet >= 0 ? '该收回' : '该付出'} · {unsettledCount} 笔消费
         </span>
-        <Link href={`/trips/${trip.id}/settlement`} className="tap-link mt-1 text-xs text-slate-300">
+        <Link
+          href={`/trips/${trip.id}/settlement`}
+          className="relative mt-1 inline-flex min-h-[32px] w-fit items-center gap-1 rounded-full bg-white/10 px-[9px] py-[3px] text-[10px] text-slate-200"
+        >
           查看结算明细 →
         </Link>
       </section>
