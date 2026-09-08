@@ -75,10 +75,10 @@ export function FxRateCard({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-[22px] border border-sand bg-paper p-4 sm:p-5">
+    <section className="flex flex-col gap-3 rounded-[22px] border border-sand bg-paper p-4">
       <button type="button" onClick={handleToggle} className="flex items-center justify-between text-left">
-        <span className="text-sm font-semibold text-slate-700">💱 当前汇率比价</span>
-        <span className="text-xs text-muted">{expanded ? '收起 ▲' : '展开 ▼'}</span>
+        <span className="text-[12.5px] font-semibold text-slate-700">💱 当前汇率比价</span>
+        <span className="text-[10px] text-muted">{expanded ? '收起 ▲' : '展开 ▼'}</span>
       </button>
 
       {expanded && (
@@ -89,7 +89,7 @@ export function FxRateCard({
                 key={c}
                 type="button"
                 onClick={() => handleSelectCurrency(c)}
-                className={`rounded-full px-3 py-1 text-sm font-medium ${
+                className={`rounded-full px-[9px] py-[3px] text-[11.5px] font-medium ${
                   currency === c ? 'bg-ink text-white' : 'bg-paper text-slate-600'
                 }`}
               >
@@ -125,7 +125,7 @@ export function FxRateCard({
           </div>
 
           {!hasPaymentMethods && (
-            <p className="text-sm text-muted">
+            <p className="text-xs text-muted">
               先去{' '}
               <Link href={`/trips/${tripId}/payment-methods`} className="tap-link">
                 支付方式设置
@@ -134,7 +134,7 @@ export function FxRateCard({
             </p>
           )}
 
-          {error && <p className="text-base text-coral">{error}</p>}
+          {error && <p className="text-sm text-coral">{error}</p>}
 
           {hasPaymentMethods && recommendations && (
             <FxCompareList recommendations={recommendations} compareCurrency={baseCurrency} />

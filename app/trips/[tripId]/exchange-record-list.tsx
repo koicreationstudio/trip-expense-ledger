@@ -31,21 +31,21 @@ export function ExchangeRecordList({ records }: { records: ExchangeRecordItem[] 
         return (
           <li key={r.id} className="tx-item">
             <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold-lt text-base"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-lt text-sm"
               aria-hidden="true"
             >
               🔁
             </span>
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="font-medium">
+              <span className="text-[12.5px] font-medium">
                 {r.fromLabel ?? '充值'} → {r.toLabel}
               </span>
-              <span className="truncate text-xs text-muted">
+              <span className="truncate text-[10px] text-muted">
                 {rateLabel ?? r.exchangeDate.slice(5, 10)}
                 {r.note && ` · ${r.note}`}
               </span>
             </div>
-            <span className="shrink-0 font-serif text-base font-medium tabular-nums">
+            <span className="shrink-0 font-serif text-[12.5px] font-medium tabular-nums">
               {formatMoney(r.toAmount, r.toCurrency)}
             </span>
           </li>

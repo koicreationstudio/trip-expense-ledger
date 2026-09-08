@@ -12,6 +12,7 @@ import { ExpenseList } from './expense-list';
 import { WalletGrid } from './wallet-grid';
 import { ExchangeRecordList } from './exchange-record-list';
 import { FxRateCard } from './fx-rate-card';
+import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 
 const STATUS_LABEL: Record<string, string> = {
   active: '记账中',
@@ -70,32 +71,32 @@ export default async function TripPage({ params }: { params: { tripId: string } 
   const myPaymentMethods = await db
     .select()
     .from(paymentMethods)
-    .where(eq(paymentMethods.participantId, identity.participantId));
+    .where(paymentMethodOwnerFilter(identity));
   const paymentMethodLabelById = new Map(myPaymentMethods.map((m) => [m.id, m.label]));
 
   return (
     <main className="flex flex-col gap-6">
       <div>
-        <h1 className="text-3xl font-semibold text-gold-dk">{trip.name}</h1>
-        <p className="mt-1 text-sm text-muted">
+        <h1 className="text-xl font-semibold text-gold-dk">{trip.name}</h1>
+        <p className="mt-0.5 text-[10px] text-muted">
           本位币 {trip.baseCurrency} · {STATUS_LABEL[trip.status] ?? trip.status}
         </p>
       </div>
 
-      <section className="flex flex-col gap-3 rounded-hero bg-ink p-5 text-white">
+      <section className="flex flex-col gap-2 rounded-hero bg-ink p-4 text-white">
         <span className="text-xs uppercase tracking-wide text-slate-400">我的净额</span>
         <span
-          className={`font-serif text-5xl font-medium tabular-nums tracking-tight sm:text-6xl ${
+          className={`font-serif text-3xl font-medium tabular-nums tracking-tight ${
             myNet >= 0 ? 'text-emerald-400' : 'text-red-400'
           }`}
         >
           {myNet >= 0 ? '+' : '-'}
           {formatMoney(Math.abs(myNet), trip.baseCurrency)}
         </span>
-        <span className="text-sm text-slate-400">
+        <span className="text-xs text-slate-400">
           {myNet >= 0 ? '该收回' : '该付出'} · {unsettledCount} 笔消费
         </span>
-        <Link href={`/trips/${trip.id}/settlement`} className="tap-link mt-1 text-sm text-slate-300">
+        <Link href={`/trips/${trip.id}/settlement`} className="tap-link mt-1 text-xs text-slate-300">
           查看结算明细 →
         </Link>
       </section>
@@ -104,7 +105,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold text-slate-700">我的钱包</h2>
+          <h2 className="text-[12.5px] font-semibold text-slate-700">我的钱包</h2>
           <span className="text-[10px] text-muted">仅自己可见</span>
         </div>
         <WalletGrid
@@ -130,26 +131,26 @@ export default async function TripPage({ params }: { params: { tripId: string } 
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-slate-700">参与者</h2>
-        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-paper p-3">
+        <h2 className="text-[12.5px] font-semibold text-slate-700">参与者</h2>
+        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-paper px-[9px] py-[5px]">
           {tripParticipants.map((p) => {
             const net = netBalances.get(p.id) ?? 0;
             const isMe = p.id === identity.participantId;
             return (
-              <li key={p.id} className="flex items-center gap-3 py-1">
-                <Avatar name={p.displayName} />
+              <li key={p.id} className="flex items-center gap-2 py-1">
+                <Avatar name={p.displayName} size={24} />
                 <div className="flex flex-1 flex-col">
-                  <span className="text-base">
+                  <span className="text-[12.5px] font-medium">
                     {p.displayName}
-                    {p.isOwner && <span className="ml-2 text-xs text-muted">创建者</span>}
+                    {p.isOwner && <span className="ml-2 text-[10px] text-muted">创建者</span>}
                   </span>
-                  <span className="text-xs text-muted">{p.claimedAt ? '已认领' : '邀请待认领'}</span>
+                  <span className="text-[10px] text-muted">{p.claimedAt ? '已认领' : '邀请待认领'}</span>
                 </div>
                 {isMe ? (
-                  <span className="text-sm text-muted">我自己</span>
+                  <span className="text-[12.5px] text-muted">我自己</span>
                 ) : (
                   <span
-                    className={`font-serif tabular-nums text-base ${net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                    className={`font-serif tabular-nums text-[12.5px] font-medium ${net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
                   >
                     {net >= 0 ? '该收' : '该付'} {formatMoney(Math.abs(net), trip.baseCurrency)}
                   </span>
@@ -161,7 +162,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-slate-700">活动流</h2>
+        <h2 className="text-[12.5px] font-semibold text-slate-700">活动流</h2>
         <ExpenseList
           tripId={trip.id}
           myParticipantId={identity.participantId}
@@ -180,7 +181,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold text-slate-700">换汇 · EXCHANGE</h2>
+          <h2 className="text-[12.5px] font-semibold text-slate-700">换汇 · EXCHANGE</h2>
           <span className="text-[10px] text-muted">仅自己可见</span>
         </div>
         <ExchangeRecordList

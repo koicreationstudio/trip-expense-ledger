@@ -14,30 +14,31 @@ body {
 @layer components {
   /* 主操作按钮：DESIGN-BRIEF 第三版圆角尺度改 pill；min-h 44px 是 Apple HIG 最小触控热区 */
   .btn-primary {
-    @apply inline-flex min-h-[44px] items-center justify-center rounded-full bg-accent-700 px-4 text-base font-medium text-white transition-colors hover:bg-accent-800 disabled:opacity-50;
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-full bg-accent-700 px-[14px] text-sm font-medium text-white transition-colors hover:bg-accent-800 disabled:opacity-50;
   }
 
-  /* 次要操作按钮：比价/平均分摊/移除这类不需要抢主按钮风头的动作 */
+  /* 次要操作按钮：比价/平均分摊/移除这类不需要抢主按钮风头的动作，触控高度跟主 CTA/FAB 拉开一级 */
   .btn-secondary {
-    @apply inline-flex min-h-[44px] items-center justify-center rounded-full border border-sand bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50;
+    @apply inline-flex min-h-[36px] items-center justify-center rounded-full border border-sand bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50;
   }
 
-  /* 行内文字链接型操作（编辑/删除/撤销/复制）：撑够点击高度，不强行做成按钮盒子 */
+  /* 行内文字链接型操作（编辑/删除/撤销/复制）：纯文字链接不需要 44px 按钮级触控热区 */
   .tap-link {
-    @apply inline-flex min-h-[44px] items-center px-1 underline underline-offset-2;
+    @apply inline-flex min-h-[32px] items-center px-1 underline underline-offset-2;
   }
 
   .field-label {
-    @apply text-base font-medium text-slate-700;
+    @apply text-sm font-medium text-slate-700;
   }
 
   .field-input {
-    @apply rounded-xl border border-sand px-3 py-3 text-base focus:border-accent-700 focus:outline-none focus:ring-1 focus:ring-accent-700 disabled:bg-slate-100;
+    @apply rounded-xl border border-sand px-[9px] py-2 text-sm focus:border-accent-700 focus:outline-none focus:ring-1 focus:ring-accent-700 disabled:bg-slate-100;
   }
 
   /* 标准卡片容器：钱包卡/交易行/汇率卡通用同一档圆角+sand边+paper底，
-     层级靠内容（icon/颜色/字号反差）不靠盒子形状——remy-thailand 证明容器统一没问题。 */
+     层级靠内容（icon/颜色/字号反差）不靠盒子形状——remy-thailand 证明容器统一没问题。
+     容器级字号不再统一撑大，由每个子元素各自定字号（见各组件）。 */
   .tx-item {
-    @apply flex items-center gap-3 rounded-xl border border-sand bg-paper px-3 py-2 text-base;
+    @apply flex items-center gap-2 rounded-xl border border-sand bg-paper px-[9px] py-[5px];
   }
 }

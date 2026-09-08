@@ -89,12 +89,12 @@ export function WalletGrid({
     <div className="flex flex-col gap-2">
       <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1">
         {wallets.map((w) => (
-          <div key={w.id} className="w-[136px] shrink-0 rounded-xl border border-sand bg-paper p-3">
+          <div key={w.id} className="w-[120px] shrink-0 rounded-xl border border-sand bg-paper px-[9px] py-2">
             <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-muted">
               <span aria-hidden="true">{w.emoji}</span>
               <span className="truncate">{w.label}</span>
             </div>
-            <div className="mt-1 font-serif text-lg font-medium tabular-nums">
+            <div className="mt-1 font-serif text-base font-medium tabular-nums">
               {formatMoney(w.currentBalance, w.currency)}
             </div>
             <div className="text-[10px] text-muted">{w.currency}</div>
@@ -108,7 +108,7 @@ export function WalletGrid({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="flex w-[136px] shrink-0 items-center justify-center rounded-xl border border-dashed border-sand text-2xl text-muted"
+            className="flex w-[120px] shrink-0 items-center justify-center rounded-xl border border-dashed border-sand text-xl text-muted"
             aria-label="新建钱包"
           >
             ＋
@@ -170,7 +170,7 @@ export function WalletGrid({
                   key={em}
                   type="button"
                   onClick={() => setEmoji(em)}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-base ${
+                  className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${
                     emoji === em ? 'bg-ink text-paper' : 'bg-white'
                   }`}
                   aria-label={`选 ${em} 图标`}

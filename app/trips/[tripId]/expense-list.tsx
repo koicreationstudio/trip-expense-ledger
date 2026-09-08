@@ -65,7 +65,7 @@ export function ExpenseList({
           return (
             <li key={e.id} className="tx-item justify-between">
 
-              <Avatar name={e.payerName} size={28} />
+              <Avatar name={e.payerName} size={24} />
               {/* 编辑/删除放在头像右边（不是行尾）：常驻 FAB 固定贴在屏幕右下角，
                   行尾贴边的图标只要行数够多、总高度接近一屏，就会被 FAB 盖住
                   （压缩过上面区块间距也没用，总会有某一行凑巧落进 FAB 的固定区域）。
@@ -75,7 +75,7 @@ export function ExpenseList({
                   <Link
                     href={`/trips/${tripId}/expenses/${e.id}/edit`}
                     aria-label="编辑这笔消费"
-                    className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-slate-500"
+                    className="inline-flex min-h-[28px] min-w-[28px] items-center justify-center text-slate-500"
                   >
                     <Pencil className="h-4 w-4" aria-hidden="true" />
                   </Link>
@@ -84,7 +84,7 @@ export function ExpenseList({
                     onClick={() => handleDelete(e.id)}
                     disabled={deletingId === e.id}
                     aria-label="删除这笔消费"
-                    className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-red-600 disabled:opacity-50"
+                    className="inline-flex min-h-[28px] min-w-[28px] items-center justify-center text-red-600 disabled:opacity-50"
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>
@@ -95,15 +95,17 @@ export function ExpenseList({
                   统一单行（不换行）是为了不同卡片之间高度一致，避免有的卡片单行、
                   有的因为名字长换成两行，看起来参差不齐（ui-auditor 走查点名过这个）。 */}
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="font-medium">{e.category}</span>
-                <span className="truncate text-xs text-muted">
+                <span className="text-[12.5px] font-medium">{e.category}</span>
+                <span className="truncate text-[10px] text-muted">
                   {e.payerName} · {e.expenseDate.slice(5, 10)}
                   {e.hasReceipt && ' · 有收据'}
                 </span>
               </div>
               {/* 金额继续钉死在行最右侧（DESIGN-BRIEF 第一版就定的规矩：金额一律放最右侧、
                   等宽数字对齐），不因为这次挪了编辑/删除就跟着松动。 */}
-              <span className="shrink-0 font-serif tabular-nums">{formatMoney(e.amount, e.currency)}</span>
+              <span className="shrink-0 font-serif text-[12.5px] font-medium tabular-nums">
+                {formatMoney(e.amount, e.currency)}
+              </span>
             </li>
           );
         })}

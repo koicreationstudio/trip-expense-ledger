@@ -6,20 +6,22 @@ import { withSession } from '@/lib/auth/require-session';
 import { toPaymentMethodDto } from '@/lib/http/dto';
 import { parseJsonBody } from '@/lib/http/validate';
 import { updatePaymentMethodSchema } from '@/lib/validation/schemas';
+import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
+import type { AuthenticatedIdentity } from '@/lib/auth/session';
 
 interface Context {
   params: { paymentMethodId: string };
 }
 
-async function loadOwn(db: Db, id: string, participantId: string) {
+async function loadOwn(db: Db, id: string, identity: AuthenticatedIdentity) {
   return db.query.paymentMethods.findFirst({
-    where: and(eq(paymentMethods.id, id), eq(paymentMethods.participantId, participantId)),
+    where: and(eq(paymentMethods.id, id), paymentMethodOwnerFilter(identity)),
   });
 }
 
 export const PATCH = withSession<Context>(async (request, { params }, identity) => {
   const db = await getDb();
-  const existing = await loadOwn(db, params.paymentMethodId, identity.participantId);
+  const existing = await loadOwn(db, params.paymentMethodId, identity);
   if (!existing) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   const parsed = await parseJsonBody(request, updatePaymentMethodSchema);
@@ -47,7 +49,7 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
 
 export const DELETE = withSession<Context>(async (_request, { params }, identity) => {
   const db = await getDb();
-  const existing = await loadOwn(db, params.paymentMethodId, identity.participantId);
+  const existing = await loadOwn(db, params.paymentMethodId, identity);
   if (!existing) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   await db.delete(paymentMethods).where(eq(paymentMethods.id, params.paymentMethodId));

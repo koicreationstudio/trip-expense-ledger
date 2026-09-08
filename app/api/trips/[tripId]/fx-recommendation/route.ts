@@ -8,6 +8,7 @@ import { fxRecommendationSchema } from '@/lib/validation/schemas';
 import { recommendPaymentMethods } from '@/lib/domain/fx-recommendation';
 import type { FxRateLookup } from '@/lib/domain/fx-recommendation';
 import { fetchMyrRates, FX_NEEDED_QUOTE_CURRENCIES } from '@/lib/fx/fetch-rates';
+import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 
 interface Context {
   params: { tripId: string };
@@ -75,7 +76,7 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
   const methods = await db
     .select()
     .from(paymentMethods)
-    .where(and(eq(paymentMethods.participantId, identity.participantId), eq(paymentMethods.isActive, true)));
+    .where(and(paymentMethodOwnerFilter(identity), eq(paymentMethods.isActive, true)));
 
   if (methods.length === 0) {
     return NextResponse.json({ error: 'no_payment_methods' }, { status: 400 });

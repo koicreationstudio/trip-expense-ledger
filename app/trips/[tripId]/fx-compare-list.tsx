@@ -30,29 +30,29 @@ export function FxCompareList({
             type="button"
             disabled={r.unavailable || !onSelect}
             onClick={() => onSelect?.(r.paymentMethodId)}
-            className={`flex flex-col gap-1 rounded-xl border p-3 text-left disabled:cursor-not-allowed ${
+            className={`flex flex-col gap-1 rounded-xl border px-[9px] py-2 text-left disabled:cursor-not-allowed ${
               !onSelect ? '' : 'disabled:opacity-60'
             } ${isBest ? 'border-seafoam bg-sf-lt' : 'border-sand bg-paper'} ${
               isSelected ? 'ring-2 ring-ink' : ''
             }`}
           >
             <span className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-sm font-semibold">
+              <span className="flex items-center gap-2 text-[12.5px] font-semibold">
                 {r.label}
                 {isBest && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-seafoam px-2 py-0.5 text-xs font-medium text-white">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-seafoam px-[9px] py-[3px] text-[9.5px] font-medium text-white">
                     <Check className="h-3 w-3" aria-hidden="true" />
                     最划算
                   </span>
                 )}
               </span>
-              <span className="font-serif text-lg font-medium tabular-nums">
+              <span className="font-serif text-base font-medium tabular-nums">
                 {r.unavailable || r.costInCompareCurrency === null
                   ? '缺汇率'
                   : formatMoney(r.costInCompareCurrency, compareCurrency)}
               </span>
             </span>
-            <span className="text-xs text-muted">
+            <span className="text-[10px] text-muted">
               {r.unavailable || r.costInCompareCurrency === null
                 ? '汇率缺失，建议手动核对'
                 : r.requiresConversion

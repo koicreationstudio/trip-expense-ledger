@@ -6,6 +6,7 @@ import { assertSameTrip, withSession } from '@/lib/auth/require-session';
 import { toWalletDto } from '@/lib/http/dto';
 import { parseJsonBody } from '@/lib/http/validate';
 import { updateWalletSchema } from '@/lib/validation/schemas';
+import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 
 interface Context {
   params: { tripId: string; walletId: string };
@@ -31,7 +32,7 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
 
   if (body.paymentMethodId) {
     const owns = await db.query.paymentMethods.findFirst({
-      where: and(eq(paymentMethods.id, body.paymentMethodId), eq(paymentMethods.participantId, identity.participantId)),
+      where: and(eq(paymentMethods.id, body.paymentMethodId), paymentMethodOwnerFilter(identity)),
     });
     if (!owns) return NextResponse.json({ error: 'invalid_payment_method' }, { status: 400 });
   }

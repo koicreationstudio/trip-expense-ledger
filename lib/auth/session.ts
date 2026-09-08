@@ -33,6 +33,10 @@ export interface AuthenticatedIdentity {
   participantId: string;
   tripId: string;
   isOwner: boolean;
+  // Layer 2 账号 id，guest（认领链接进来没注册）为 null。
+  // 决定 payment_method 该按 userId 查还是按 participantId 查，
+  // 别自己重新判断，走 lib/domain/payment-method-scope.ts 的 helper。
+  userId: string | null;
 }
 
 /**
@@ -49,6 +53,7 @@ export async function resolveIdentity(db: Db, token: string | undefined): Promis
       participantId: participants.id,
       tripId: participants.tripId,
       isOwner: participants.isOwner,
+      userId: participants.userId,
     })
     .from(sessions)
     .innerJoin(participants, eq(sessions.participantId, participants.id))

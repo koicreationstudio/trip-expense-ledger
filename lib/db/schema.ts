@@ -210,16 +210,20 @@ export const expenseSplits = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
-// payment_method：挂在 participant 身上（卡跟人走，不跟行程走）。
+// payment_method：双轨归属。有账号的人（userId 非空）挂 user_id，跨行程终身
+// 可见——建过账号的人不用每趟行程重填一次。guest（认领链接进来、没注册账号）
+// 没有跨行程身份可以挂，退回 participant_id，只在这一趟行程内有效，这是
+// 现实限制不是缺陷。两个外键都可空，读写时该用哪个由
+// lib/domain/payment-method-scope.ts 的 chokepoint helper 统一判断，
+// 不要在业务代码里重新写一遍「有 userId 就……否则……」。
 // 用于「这笔该用哪张卡最划算」的比价计算，费率由用户自己手动配置。
 // ---------------------------------------------------------------------------
 export const paymentMethods = sqliteTable(
   'payment_method',
   {
     id: id(),
-    participantId: text('participant_id')
-      .notNull()
-      .references(() => participants.id, { onDelete: 'cascade' }),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    participantId: text('participant_id').references(() => participants.id, { onDelete: 'cascade' }),
     label: text('label').notNull(),
     kind: text('kind', { enum: ['card', 'cash'] }).notNull(),
     settlementCurrency: text('settlement_currency').notNull(),
@@ -231,6 +235,7 @@ export const paymentMethods = sqliteTable(
     sortOrder: integer('sort_order').notNull().default(0),
   },
   (table) => ({
+    userIdx: index('payment_method_user_idx').on(table.userId),
     participantIdx: index('payment_method_participant_idx').on(table.participantId),
   })
 );
@@ -408,6 +413,7 @@ export const expenseSplitsRelations = relations(expenseSplits, ({ one }) => ({
 }));
 
 export const paymentMethodsRelations = relations(paymentMethods, ({ one, many }) => ({
+  user: one(users, { fields: [paymentMethods.userId], references: [users.id] }),
   participant: one(participants, { fields: [paymentMethods.participantId], references: [participants.id] }),
   wallets: many(wallets),
 }));
