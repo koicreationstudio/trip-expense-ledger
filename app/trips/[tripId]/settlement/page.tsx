@@ -33,9 +33,12 @@ export default async function SettlementPage({ params }: { params: { tripId: str
       <h1 className="text-xl font-semibold">结算</h1>
 
       {trip.status === 'settled' ? (
-        <span className="inline-flex w-fit items-center rounded-full bg-ok-bg px-[9px] py-[3px] text-[12.5px] font-medium text-ok">
-          这个行程已标记结算，数字已冻结。
-        </span>
+        <div className="flex w-fit items-center gap-2">
+          <span className="inline-flex items-center rounded-full bg-ok-bg px-[9px] py-[3px] text-[9.5px] font-medium text-ok">
+            已结算
+          </span>
+          <span className="text-[12.5px] text-muted">数字已冻结</span>
+        </div>
       ) : (
         identity.isOwner && <MarkSettledButton tripId={trip.id} />
       )}
