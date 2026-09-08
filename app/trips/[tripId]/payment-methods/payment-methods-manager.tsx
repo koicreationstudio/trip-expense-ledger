@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { COMMON_CURRENCIES } from '@/lib/currencies';
+import { PAYMENT_METHOD_SETTLEMENT_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, formatMoney } from '@/lib/money';
 
 interface PaymentMethod {
@@ -20,7 +20,7 @@ interface PaymentMethod {
 const emptyForm = {
   label: '',
   kind: 'card' as 'card' | 'cash',
-  settlementCurrency: COMMON_CURRENCIES[0] as string,
+  settlementCurrency: PAYMENT_METHOD_SETTLEMENT_CURRENCIES[0] as string,
   fxMarkupPercent: '0',
   foreignTxnFeePercent: '0',
   fixedFeeYuan: '0',
@@ -164,7 +164,7 @@ export function PaymentMethodsManager() {
               onChange={(e) => setForm((f) => ({ ...f, settlementCurrency: e.target.value }))}
               className="field-input"
             >
-              {COMMON_CURRENCIES.map((c) => (
+              {PAYMENT_METHOD_SETTLEMENT_CURRENCIES.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>

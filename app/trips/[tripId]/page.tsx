@@ -11,6 +11,7 @@ import { Avatar } from '@/components/avatar';
 import { ExpenseList } from './expense-list';
 import { WalletGrid } from './wallet-grid';
 import { ExchangeRecordList } from './exchange-record-list';
+import { FxRateCard } from './fx-rate-card';
 
 const STATUS_LABEL: Record<string, string> = {
   active: '记账中',
@@ -98,6 +99,8 @@ export default async function TripPage({ params }: { params: { tripId: string } 
           查看结算明细 →
         </Link>
       </section>
+
+      <FxRateCard tripId={trip.id} baseCurrency={trip.baseCurrency} hasPaymentMethods={myPaymentMethods.length > 0} />
 
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">

@@ -3,12 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Check } from 'lucide-react';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { equalSplit, rescaleSplitToBaseCurrency } from '@/lib/domain/split';
 import type { SplitShare } from '@/lib/domain/split';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
+import { FxCompareList } from '../fx-compare-list';
 
 const COMMON_CATEGORIES = ['餐饮', '交通', '住宿', '门票', '购物', '其他'];
 
@@ -346,45 +346,12 @@ export function ExpenseForm({
         )}
         {recommendations && (
           <div className="flex flex-col gap-2">
-            {recommendations.map((r, index) => {
-              const isBest = index === 0 && !r.unavailable;
-              const isSelected = selectedPaymentMethodId === r.paymentMethodId;
-              return (
-                <button
-                  key={r.paymentMethodId}
-                  type="button"
-                  disabled={r.unavailable}
-                  onClick={() => setSelectedPaymentMethodId(r.paymentMethodId)}
-                  className={`flex flex-col gap-1 rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-60 ${
-                    isBest ? 'border-seafoam bg-sf-lt' : 'border-sand bg-white'
-                  } ${isSelected ? 'ring-2 ring-ink' : ''}`}
-                >
-                  <span className="flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-sm font-semibold">
-                      {r.label}
-                      {isBest && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-seafoam px-2 py-0.5 text-xs font-medium text-white">
-                          <Check className="h-3 w-3" aria-hidden="true" />
-                          最划算
-                        </span>
-                      )}
-                    </span>
-                    <span className="font-serif text-lg font-medium tabular-nums">
-                      {r.unavailable || r.costInCompareCurrency === null
-                        ? '缺汇率'
-                        : formatMoney(r.costInCompareCurrency, baseCurrency)}
-                    </span>
-                  </span>
-                  <span className="text-xs text-muted">
-                    {r.unavailable || r.costInCompareCurrency === null
-                      ? '汇率缺失，建议手动核对'
-                      : r.requiresConversion
-                        ? `汇率 ${r.effectiveRate?.toFixed(4) ?? '—'}`
-                        : '同币种，无需换汇'}
-                  </span>
-                </button>
-              );
-            })}
+            <FxCompareList
+              recommendations={recommendations}
+              compareCurrency={baseCurrency}
+              selectedPaymentMethodId={selectedPaymentMethodId}
+              onSelect={setSelectedPaymentMethodId}
+            />
             <p className="text-xs text-muted">点一张卡标记「这笔实际用它」，记账时会自动扣对应钱包余额。</p>
           </div>
         )}

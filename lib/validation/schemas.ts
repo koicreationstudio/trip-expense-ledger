@@ -62,6 +62,8 @@ export const createInviteSchema = z.object({
 export const fxRecommendationSchema = z.object({
   amount: z.number().int().positive(),
   expenseCurrency: currencyCode,
+  // true = 不管缓存新不新鲜都立刻现抓一次(独立汇率卡片的「刷新」按钮用)
+  forceRefresh: z.boolean().optional(),
 });
 
 const email = z
