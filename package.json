@@ -11,6 +11,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "cf-typegen": "wrangler types",
+    "pretypecheck": "npm run cf-typegen",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
