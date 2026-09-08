@@ -5,6 +5,8 @@ import { getDb } from '@/lib/db/client';
 import { participants, trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { getCurrentUser } from '@/lib/auth/current-user';
+import { loadSettlementInput } from '@/lib/db/settlement-query';
+import { computeNetBalances } from '@/lib/domain/settlement';
 import { MyTrips } from './my-trips';
 
 export default async function HomePage() {
@@ -25,10 +27,21 @@ export default async function HomePage() {
         baseCurrency: trips.baseCurrency,
         status: trips.status,
         isOwner: participants.isOwner,
+        participantId: participants.id,
       })
       .from(participants)
       .innerJoin(trips, eq(participants.tripId, trips.id))
       .where(eq(participants.userId, user.userId));
+
+    // 余额优先原则延伸到列表页：每张行程卡片顺手标一下当前用户在这个行程里的净额，
+    // 让"要不要点进去看"提前到列表页就能判断，不用逐个点进去才知道。
+    const tripsWithBalance = await Promise.all(
+      rows.map(async (row) => {
+        const settlementInput = await loadSettlementInput(db, row.id);
+        const netBalance = computeNetBalances(settlementInput).get(row.participantId) ?? 0;
+        return { ...row, netBalance };
+      })
+    );
 
     return (
       <main className="flex flex-col gap-6">
@@ -44,7 +57,7 @@ export default async function HomePage() {
             创建新行程
           </Link>
         </div>
-        <MyTrips trips={rows} />
+        <MyTrips trips={tripsWithBalance} />
       </main>
     );
   }

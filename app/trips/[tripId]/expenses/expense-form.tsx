@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Check } from 'lucide-react';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { equalSplit, rescaleSplitToBaseCurrency } from '@/lib/domain/split';
@@ -345,9 +346,14 @@ export function ExpenseForm({
                   index === 0 && !r.unavailable ? 'bg-emerald-50 text-emerald-800' : ''
                 }`}
               >
-                <span>
+                <span className="flex items-center gap-2">
                   {r.label}
-                  {index === 0 && !r.unavailable && <span className="ml-2 text-xs">最划算</span>}
+                  {index === 0 && !r.unavailable && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white">
+                      <Check className="h-3 w-3" aria-hidden="true" />
+                      最划算
+                    </span>
+                  )}
                 </span>
                 <span className="tabular-nums">
                   {r.unavailable || r.costInCompareCurrency === null

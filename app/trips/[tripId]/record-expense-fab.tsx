@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Plus } from 'lucide-react';
 
 /**
  * 全站最高频动作的常驻入口，固定在屏幕底部方便单手拇指点到。
@@ -15,12 +16,17 @@ export function RecordExpenseFab({ tripId }: { tripId: string }) {
   if (onExpenseForm) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white/95 px-4 pt-3 backdrop-blur [padding-bottom:calc(0.75rem+env(safe-area-inset-bottom))]">
-      <div className="mx-auto max-w-3xl">
-        <Link href={`/trips/${tripId}/expenses/new`} className="btn-primary w-full">
-          + 记一笔消费
-        </Link>
-      </div>
+    <div
+      className="fixed right-4 z-10"
+      style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+    >
+      <Link
+        href={`/trips/${tripId}/expenses/new`}
+        className="inline-flex min-h-[52px] items-center gap-2 rounded-full bg-accent-700 px-5 text-base font-medium text-white shadow-lg transition-colors hover:bg-accent-800"
+      >
+        <Plus className="h-5 w-5" aria-hidden="true" />
+        记一笔消费
+      </Link>
     </div>
   );
 }

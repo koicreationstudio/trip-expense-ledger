@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { formatMoney } from '@/lib/money';
 
 export interface MyTripCard {
   id: string;
@@ -9,6 +10,7 @@ export interface MyTripCard {
   baseCurrency: string;
   status: string;
   isOwner: boolean;
+  netBalance: number;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -67,6 +69,13 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
             <span className="text-xs text-slate-500">
               本位币 {trip.baseCurrency} · {trip.isOwner ? '创建者' : '同行人'} ·{' '}
               {STATUS_LABEL[trip.status] ?? trip.status}
+            </span>
+            <span
+              className={`tabular-nums text-sm font-medium ${
+                trip.netBalance >= 0 ? 'text-emerald-600' : 'text-red-600'
+              }`}
+            >
+              {trip.netBalance >= 0 ? '该收' : '该付'} {formatMoney(Math.abs(trip.netBalance), trip.baseCurrency)}
             </span>
             {switchingId === trip.id && <span className="text-xs text-slate-500">打开中…</span>}
           </button>

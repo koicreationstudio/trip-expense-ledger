@@ -15,7 +15,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh" className={inter.variable}>
       <body className="min-h-screen bg-slate-50 font-sans text-slate-900">
-        <div className="mx-auto max-w-3xl px-4 py-8">{children}</div>
+        {/* pb-24：给右下角浮动 FAB 留出安全间距，避免遮住页面最后一块内容 */}
+        <div className="mx-auto max-w-3xl px-4 pb-24 pt-8">{children}</div>
       </body>
     </html>
   );
