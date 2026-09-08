@@ -4,8 +4,11 @@ import { redirect } from 'next/navigation';
 import { getDb } from '@/lib/db/client';
 import { trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
+import { getCurrentUser } from '@/lib/auth/current-user';
+import { loadUserTripsWithBalance } from '@/lib/db/user-trips-query';
 import { LogoutButton } from './logout-button';
 import { RecordExpenseFab } from './record-expense-fab';
+import { TripSwitcher } from './trip-switcher';
 
 /**
  * 共享布局：顶部导航栏（行程名+本位币、记一笔/行程主页/结算/支付方式几个链接，
@@ -31,6 +34,14 @@ export default async function TripLayout({
     redirect('/');
   }
 
+  // 行程切换入口：只有登录了账号（Layer 2）的人才可能名下有不止一个行程，
+  // 单纯扫邀请链接认领的同行人没有账号，otherTrips 会是空数组，TripSwitcher
+  // 自己判断空数组时退回纯文字，不渲染下拉。
+  const user = await getCurrentUser();
+  const otherTrips = user
+    ? (await loadUserTripsWithBalance(db, user.userId)).filter((t) => t.id !== trip.id)
+    : [];
+
   // "记一笔消费"是全站最高频动作，不跟其它次要链接混排在这条导航里——
   // 挪到下面固定在屏幕底部的常驻按钮，单手持机时拇指自然落点就能点到。
   const navLinks = [
@@ -44,7 +55,7 @@ export default async function TripLayout({
       <header className="flex flex-col gap-4 border-b border-sand pb-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[12.5px] font-semibold text-gold-dk">{trip.name}</p>
+            <TripSwitcher currentTripId={trip.id} currentTripName={trip.name} otherTrips={otherTrips} />
             <p className="text-[10px] text-muted">本位币 {trip.baseCurrency}</p>
           </div>
           <LogoutButton />
