@@ -13,11 +13,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # TODO(Remy): 确认 Node 版本锁定策略后调整（建议跟 package.json engines 字段对齐）
+      # wrangler 4.x 要求 Node >=22.0.0（跑起来会直接报错拒绝执行），
+      # 这里跟 package.json engines 字段对齐钉 22。
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
 
       - name: Install dependencies
