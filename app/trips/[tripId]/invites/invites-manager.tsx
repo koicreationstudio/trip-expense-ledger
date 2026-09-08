@@ -96,7 +96,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-slate-700">生成新邀请链接</h2>
+        <h2 className="text-[12.5px] font-semibold text-slate-700">生成新邀请链接</h2>
         <form onSubmit={handleCreateInvite} className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="field-label" htmlFor="expires-in-days">
@@ -119,28 +119,37 @@ export function InvitesManager({ tripId }: { tripId: string }) {
             {creating ? '生成中…' : '生成邀请链接'}
           </button>
         </form>
-        {error && <p className="text-base text-coral">{error}</p>}
+        {error && <p className="text-sm text-coral">{error}</p>}
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-slate-700">现有邀请链接</h2>
+        <h2 className="text-[12.5px] font-semibold text-slate-700">现有邀请链接</h2>
         {invites === null ? (
-          <p className="text-sm text-muted">载入中…</p>
+          <p className="text-xs text-muted">载入中…</p>
         ) : invites.length === 0 ? (
-          <p className="text-sm text-muted">还没生成过邀请链接。</p>
+          <p className="text-xs text-muted">还没生成过邀请链接。</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {invites.map((invite) => {
               const isRevoked = invite.revokedAt !== null;
               const isExpired = invite.expiresAt !== null && new Date(invite.expiresAt).getTime() < Date.now();
               return (
-                <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-paper px-3 py-2 text-sm">
+                <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] text-sm">
                   <code className="break-all text-xs text-slate-600">{inviteUrl(invite.code)}</code>
-                  <div className="flex items-center gap-3 text-xs text-muted">
-                    <span>
-                      {isRevoked ? '已撤销' : isExpired ? '已过期' : '有效'}
-                      {invite.expiresAt && !isRevoked ? ` · 到期 ${new Date(invite.expiresAt).toLocaleDateString()}` : ''}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
+                    {isRevoked || isExpired ? (
+                      <span>
+                        {isRevoked ? '已撤销' : '已过期'}
+                        {invite.expiresAt && !isRevoked ? ` · 到期 ${new Date(invite.expiresAt).toLocaleDateString()}` : ''}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="rounded-full bg-live-bg px-[9px] py-[3px] text-[9.5px] font-medium text-live">有效</span>
+                        {invite.expiresAt && (
+                          <span>{`到期 ${new Date(invite.expiresAt).toLocaleDateString()}`}</span>
+                        )}
+                      </span>
+                    )}
                     <button type="button" onClick={() => handleCopy(invite.code)} className="tap-link">
                       {copiedCode === invite.code ? '已复制' : '复制链接'}
                     </button>
@@ -158,21 +167,25 @@ export function InvitesManager({ tripId }: { tripId: string }) {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-slate-700">参与者认领状态</h2>
+        <h2 className="text-[12.5px] font-semibold text-slate-700">参与者认领状态</h2>
         <p className="text-xs text-muted">认领错人、换手机号了，可以把某个人重置回未认领状态，让他重新用邀请链接认领。</p>
         {participants === null ? (
-          <p className="text-sm text-muted">载入中…</p>
+          <p className="text-xs text-muted">载入中…</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {participants.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between rounded-xl border border-sand bg-paper px-3 py-2 text-base"
+                className="flex items-center justify-between rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px]"
               >
-                <span>
+                <span className="text-[12.5px]">
                   {p.displayName}
-                  {p.isOwner && <span className="ml-2 text-xs text-muted">创建者</span>}
-                  <span className={`ml-2 text-xs ${p.claimed ? 'text-emerald-600' : 'text-muted'}`}>
+                  {p.isOwner && <span className="ml-2 text-[10px] text-muted">创建者</span>}
+                  <span
+                    className={`ml-2 inline-flex items-center rounded-full px-[9px] py-[3px] text-[9.5px] font-medium ${
+                      p.claimed ? 'bg-ok-bg text-ok' : 'bg-gold-lt text-gold-dk'
+                    }`}
+                  >
                     {p.claimed ? '已认领' : '未认领'}
                   </span>
                 </span>

@@ -32,7 +32,7 @@ export function FxCompareList({
             onClick={() => onSelect?.(r.paymentMethodId)}
             className={`flex flex-col gap-1 rounded-xl border px-[9px] py-2 text-left disabled:cursor-not-allowed ${
               !onSelect ? '' : 'disabled:opacity-60'
-            } ${isBest ? 'border-seafoam bg-sf-lt' : 'border-sand bg-paper'} ${
+            } ${isBest ? 'border-seafoam bg-sf-lt' : 'border-sand bg-[#EDE8DA]/35'} ${
               isSelected ? 'ring-2 ring-ink' : ''
             }`}
           >
@@ -52,7 +52,7 @@ export function FxCompareList({
                   : formatMoney(r.costInCompareCurrency, compareCurrency)}
               </span>
             </span>
-            <span className="text-[10px] text-muted">
+            <span className="border-t border-dashed border-sand pt-1 text-[10px] text-muted">
               {r.unavailable || r.costInCompareCurrency === null
                 ? '汇率缺失，建议手动核对'
                 : r.requiresConversion

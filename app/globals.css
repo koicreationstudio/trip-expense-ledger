@@ -35,10 +35,13 @@ body {
     @apply rounded-xl border border-sand px-[9px] py-2 text-sm focus:border-accent-700 focus:outline-none focus:ring-1 focus:ring-accent-700 disabled:bg-slate-100;
   }
 
-  /* 标准卡片容器：钱包卡/交易行/汇率卡通用同一档圆角+sand边+paper底，
+  /* 标准卡片容器：钱包卡/交易行/汇率卡通用同一档圆角+sand边，
      层级靠内容（icon/颜色/字号反差）不靠盒子形状——remy-thailand 证明容器统一没问题。
-     容器级字号不再统一撑大，由每个子元素各自定字号（见各组件）。 */
+     容器级字号不再统一撑大，由每个子元素各自定字号（见各组件）。
+     第五版补丁：填充从跟页面同色的 bg-paper 改成 sand 低透明度叠加，做出
+     "卡片比页面深一档"的双层背景层次（吸收 brand-pm paper/paper-raised 分层
+     思路，但取值继续用本系统已验证的 sand，不引入未验证的新 hex）。 */
   .tx-item {
-    @apply flex items-center gap-2 rounded-xl border border-sand bg-paper px-[9px] py-[5px];
+    @apply flex items-center gap-2 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px];
   }
 }

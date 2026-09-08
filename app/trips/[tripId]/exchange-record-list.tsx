@@ -40,7 +40,7 @@ export function ExchangeRecordList({ records }: { records: ExchangeRecordItem[] 
               <span className="text-[12.5px] font-medium">
                 {r.fromLabel ?? '充值'} → {r.toLabel}
               </span>
-              <span className="truncate text-[10px] text-muted">
+              <span className="mt-0.5 truncate border-t border-dashed border-sand pt-0.5 text-[10px] text-muted">
                 {rateLabel ?? r.exchangeDate.slice(5, 10)}
                 {r.note && ` · ${r.note}`}
               </span>

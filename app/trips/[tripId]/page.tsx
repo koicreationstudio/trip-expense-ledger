@@ -132,7 +132,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-slate-700">参与者</h2>
-        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-paper px-[9px] py-[5px]">
+        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px]">
           {tripParticipants.map((p) => {
             const net = netBalances.get(p.id) ?? 0;
             const isMe = p.id === identity.participantId;
@@ -144,7 +144,13 @@ export default async function TripPage({ params }: { params: { tripId: string } 
                     {p.displayName}
                     {p.isOwner && <span className="ml-2 text-[10px] text-muted">创建者</span>}
                   </span>
-                  <span className="text-[10px] text-muted">{p.claimedAt ? '已认领' : '邀请待认领'}</span>
+                  <span
+                    className={`inline-flex w-fit items-center rounded-full px-[9px] py-[3px] text-[9.5px] font-medium ${
+                      p.claimedAt ? 'bg-ok-bg text-ok' : 'bg-gold-lt text-gold-dk'
+                    }`}
+                  >
+                    {p.claimedAt ? '已认领' : '邀请待认领'}
+                  </span>
                 </div>
                 {isMe ? (
                   <span className="text-[12.5px] text-muted">我自己</span>
@@ -181,7 +187,9 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-[12.5px] font-semibold text-slate-700">换汇 · EXCHANGE</h2>
+          <h2 className="text-[12.5px] font-semibold text-slate-700">
+            换汇 · <span className="font-mono text-[10px] uppercase tracking-wide">EXCHANGE</span>
+          </h2>
           <span className="text-[10px] text-muted">仅自己可见</span>
         </div>
         <ExchangeRecordList

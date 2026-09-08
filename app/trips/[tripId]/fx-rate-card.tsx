@@ -89,7 +89,7 @@ export function FxRateCard({
                 key={c}
                 type="button"
                 onClick={() => handleSelectCurrency(c)}
-                className={`rounded-full px-[9px] py-[3px] text-[11.5px] font-medium ${
+                className={`rounded-full px-[9px] py-[3px] font-mono text-[11.5px] font-medium ${
                   currency === c ? 'bg-ink text-white' : 'bg-paper text-slate-600'
                 }`}
               >

@@ -89,7 +89,7 @@ export function WalletGrid({
     <div className="flex flex-col gap-2">
       <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1">
         {wallets.map((w) => (
-          <div key={w.id} className="w-[120px] shrink-0 rounded-xl border border-sand bg-paper px-[9px] py-2">
+          <div key={w.id} className="w-[120px] shrink-0 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-2">
             <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-muted">
               <span aria-hidden="true">{w.emoji}</span>
               <span className="truncate">{w.label}</span>
@@ -97,7 +97,7 @@ export function WalletGrid({
             <div className="mt-1 font-serif text-base font-medium tabular-nums">
               {formatMoney(w.currentBalance, w.currency)}
             </div>
-            <div className="text-[10px] text-muted">{w.currency}</div>
+            <div className="font-mono text-[10px] text-muted">{w.currency}</div>
             {w.linkedPaymentMethodLabel && (
               <div className="mt-1 truncate text-[10px] text-gold-dk">🔗 {w.linkedPaymentMethodLabel}</div>
             )}
@@ -117,7 +117,7 @@ export function WalletGrid({
       </div>
 
       {creating && (
-        <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-paper p-3">
+        <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[#EDE8DA]/35 p-3">
           <div className="grid grid-cols-2 gap-2">
             <input
               className="field-input"
