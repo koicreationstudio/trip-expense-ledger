@@ -1,22 +1,19 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import { NextRequest } from 'next/server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { getDb, type Db } from '@/lib/db/client';
+import { setupTestDb, teardownTestDb } from '@/lib/db/test-client';
 
 /**
  * Layer 2 账号系统的路由测试，照抄
  * app/api/trips/[tripId]/expenses/[expenseId]/route.test.ts 的写法：
- * 独立临时 SQLite 文件，DATABASE_PATH 在第一次 import lib/db/client 之前设好，
- * 所有牵到 db/client 的模块都用 beforeAll 里的动态 import。
+ * 每个测试文件用 getPlatformProxy() 换一套独立的本地 miniflare D1 binding
+ * （persist: false，全新空库），迁移在 beforeAll 里跑一次。
  *
  * switch-trip 是这次新增的唯一一条跨 trip 权限边界：userId 没有关联到目标 trip
  * 的 participant，一律 404，测试要求跟现有"越权 404"原则一样严格。
  */
 
-let tmpDbPath: string;
-
-let db: typeof import('@/lib/db/client').db;
+let db: Db;
 let SESSION_COOKIE_NAME: string;
 let USER_SESSION_COOKIE_NAME: string;
 let resolveIdentity: typeof import('@/lib/auth/session').resolveIdentity;
@@ -44,12 +41,8 @@ function jsonRequest(
 }
 
 beforeAll(async () => {
-  tmpDbPath = path.join(os.tmpdir(), `tel-account-test-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite`);
-  process.env.DATABASE_PATH = tmpDbPath;
-
-  ({ db } = await import('@/lib/db/client'));
-  const { migrate } = await import('drizzle-orm/better-sqlite3/migrator');
-  migrate(db, { migrationsFolder: './lib/db/migrations' });
+  await setupTestDb();
+  db = await getDb();
 
   ({ SESSION_COOKIE_NAME, resolveIdentity } = await import('@/lib/auth/session'));
   ({ USER_SESSION_COOKIE_NAME } = await import('@/lib/auth/user-session'));
@@ -59,10 +52,8 @@ beforeAll(async () => {
   ({ POST: tripsPostHandler } = await import('@/app/api/trips/route'));
 });
 
-afterAll(() => {
-  for (const suffix of ['', '-wal', '-shm']) {
-    fs.rmSync(`${tmpDbPath}${suffix}`, { force: true });
-  }
+afterAll(async () => {
+  await teardownTestDb();
 });
 
 describe('signup', () => {
@@ -77,7 +68,7 @@ describe('signup', () => {
     expect(res.status).toBe(201);
     expect(res.cookies.get(USER_SESSION_COOKIE_NAME)?.value).toBeTruthy();
 
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.user.email).toBe('signup-ok@example.com');
     expect(body.user.displayName).toBe('Remy');
     expect(body.user.passwordHash).toBeUndefined();
@@ -120,7 +111,7 @@ describe('login', () => {
       })
     );
     expect(wrongPassword.status).toBe(401);
-    const wrongPasswordBody = await wrongPassword.json();
+    const wrongPasswordBody = (await wrongPassword.json()) as any;
 
     const unknownEmail = await loginHandler(
       jsonRequest('http://localhost/api/account/login', 'POST', {
@@ -129,7 +120,7 @@ describe('login', () => {
       })
     );
     expect(unknownEmail.status).toBe(401);
-    const unknownEmailBody = await unknownEmail.json();
+    const unknownEmailBody = (await unknownEmail.json()) as any;
 
     expect(unknownEmailBody.error).toBe(wrongPasswordBody.error);
   });
@@ -167,7 +158,7 @@ describe('switch-trip：账号系统唯一新增的跨 trip 权限边界', () =>
       )
     );
     expect(t1Response.status).toBe(201);
-    const t1Id: string = (await t1Response.json()).trip.id;
+    const t1Id: string = ((await t1Response.json()) as any).trip.id;
 
     // U2 建 trip T2，跟 U1 完全无关
     const u2Signup = await signupHandler(
@@ -188,7 +179,7 @@ describe('switch-trip：账号系统唯一新增的跨 trip 权限边界', () =>
       )
     );
     expect(t2Response.status).toBe(201);
-    const t2Id: string = (await t2Response.json()).trip.id;
+    const t2Id: string = ((await t2Response.json()) as any).trip.id;
 
     // U1 切进自己的 T1：成功，拿到一个新的 tel_session 指向 T1
     const switchToOwn = await switchTripHandler(
@@ -206,7 +197,7 @@ describe('switch-trip：账号系统唯一新增的跨 trip 权限边界', () =>
       jsonRequest('http://localhost/api/account/switch-trip', 'POST', { tripId: t2Id }, { userToken: u1Token })
     );
     expect(switchToForeign.status).toBe(404);
-    expect((await switchToForeign.json()).error).toBe('not_found');
+    expect(((await switchToForeign.json()) as any).error).toBe('not_found');
   });
 
   it('没有 tel_user_session 一律 401', async () => {

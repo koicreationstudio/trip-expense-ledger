@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { invites } from '@/lib/db/schema';
 import { withTripOwner } from '@/lib/auth/require-session';
 
@@ -9,6 +9,7 @@ interface Context {
 }
 
 export const DELETE = withTripOwner<Context>(async (_request, { params }) => {
+  const db = await getDb();
   const existing = await db.query.invites.findFirst({
     where: and(eq(invites.id, params.inviteId), eq(invites.tripId, params.tripId)),
   });

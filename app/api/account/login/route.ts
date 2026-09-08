@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { users } from '@/lib/db/schema';
 import { verifyPassword } from '@/lib/auth/password';
 import { createUserSession } from '@/lib/auth/user-session';
@@ -14,6 +14,7 @@ import { loginSchema } from '@/lib/validation/schemas';
  * 接口当"查邮箱是否已注册"的枚举工具。
  */
 export async function POST(request: NextRequest) {
+  const db = await getDb();
   const parsed = await parseJsonBody(request, loginSchema);
   if ('error' in parsed) return parsed.error;
   const { email, password } = parsed.data;

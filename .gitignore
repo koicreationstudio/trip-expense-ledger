@@ -1,6 +1,7 @@
 # --- Secrets / credentials (never commit) ---
 .env
 .env.*
+.dev.vars
 !.env.example
 *.pem
 *.key
@@ -9,6 +10,11 @@
 *token*
 *secret*
 *.crt
+
+# --- Cloudflare / OpenNext ---
+.open-next/
+.wrangler/
+worker-configuration.d.ts
 
 # --- Node / npm ---
 node_modules/

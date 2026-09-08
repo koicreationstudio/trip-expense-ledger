@@ -1,4 +1,4 @@
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { lookupInvite } from '@/lib/auth/invite';
 import { ClaimForm } from './claim-form';
 
@@ -10,6 +10,7 @@ const STATUS_MESSAGE: Record<string, string> = {
 };
 
 export default async function InviteClaimPage({ params }: { params: { code: string } }) {
+  const db = await getDb();
   const result = await lookupInvite(db, params.code);
 
   if (result.status !== 'ok') {

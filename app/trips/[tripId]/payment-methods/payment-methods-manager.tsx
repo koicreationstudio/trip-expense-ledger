@@ -36,7 +36,7 @@ export function PaymentMethodsManager() {
   async function loadMethods() {
     const res = await fetch('/api/payment-methods');
     if (res.ok) {
-      const data = await res.json();
+      const data = (await res.json()) as any;
       setMethods(data.paymentMethods);
     }
   }

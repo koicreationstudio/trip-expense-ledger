@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { participants } from '@/lib/db/schema';
 import { withTripOwner } from '@/lib/auth/require-session';
 import { revokeAllSessions } from '@/lib/auth/session';
@@ -11,6 +11,7 @@ interface Context {
 
 /** 纠错用：认领错人/换手机号，owner 可以把某个占位重新变回未认领状态。 */
 export const POST = withTripOwner<Context>(async (_request, { params }) => {
+  const db = await getDb();
   const existing = await db.query.participants.findFirst({
     where: and(eq(participants.id, params.participantId), eq(participants.tripId, params.tripId)),
   });

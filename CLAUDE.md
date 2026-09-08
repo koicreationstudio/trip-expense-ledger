@@ -8,13 +8,15 @@
 - 差异化卖点，写代码/文案时时刻记住：
   1. 汇率比对 + 算这笔消费用哪张卡/哪种支付方式最省钱（市场空白，别弱化这个功能）
   2. 出差场景专属结构化记账
-  3. 隐私自托管，数据不放别人服务器，Docker 一键自托管
+  3. 私有部署，数据不放第三方 SaaS（2026-09-07 起：这就是 Remy 自己用的私有部署，不再对外强调「自托管」卖点，部署形态是 Cloudflare Workers，不是 Docker）
 
 ## 技术栈
 - Next.js（App Router）全栈单体 + TypeScript
-- SQLite + Drizzle ORM + better-sqlite3
-- Docker 单容器自托管，不依赖任何云托管 / Supabase / Cloudflare
-- 单元测试：Vitest
+- Cloudflare D1（SQLite 语义）+ Drizzle ORM（`drizzle-orm/d1`）
+- 收据图片存 Cloudflare R2
+- 部署：`@opennextjs/cloudflare` 打包成 Cloudflare Worker（`wrangler deploy`），不是 Docker
+  - **⚠️ 版本钉死在 `@opennextjs/cloudflare@1.15.1`，不能升**：这是最后一个还支持 `next@^14.2.35` 的版本，1.16.0 起 peer dep 要求 Next 15+；这个项目跟 Remy 其他系统一样明确选择留在 Next 14（曾关掉过 Next 14→16 的 Dependabot PR），升级 adapter 版本前必须先决定要不要连带升级 Next 大版本
+- 单元测试：Vitest（涉及 D1 的测试走 `wrangler` 的 `getPlatformProxy()` 起本地 miniflare 模拟真实 D1 binding，见下面「测试哲学」）
 
 ## 数据模型核心表
 - `trip`：一次出差行程
@@ -52,7 +54,7 @@
 
 **打通两层**：`participant.user_id`（可空）记录哪个账号对应这个 participant。首页点一张「我的行程」卡片时，不是直接拿 Layer 2 身份去访问 trip 页面（那些页面只认 `tel_session`），而是先打 `POST /api/account/switch-trip`：查「这个 user 在这个 trip 里对应哪个 participant」，查到了就用 Layer 1 现成的 `createSession()` 给这个 participant 现铸一个新 `tel_session` 覆盖 cookie，再跳进 `/trips/{tripId}`。这样现有路由完全不用改，它们看到的永远是「当前激活的那一个 trip 的 tel_session」，只是这个 cookie 现在可以被 Layer 2 按需重新指向不同的 trip。
 
-密码哈希用 Node 内置 `crypto.scryptSync`（`lib/auth/password.ts`），没装 bcrypt/argon2 这类原生依赖——`better-sqlite3` 已经是这个项目唯一的原生依赖，够呛了，别再加一个。
+密码哈希用 Node 内置 `crypto.scryptSync`（`lib/auth/password.ts`），没装 bcrypt/argon2 这类原生依赖——Cloudflare Workers 的 `nodejs_compat` 原生支持 `scryptSync`，装原生模块在 Workers 运行时里根本装不上，内置这条路线本来就是唯一选项。
 
 ## API 权限边界（硬性要求，Code Review 必查）
 - 任何查询「消费明细」的函数，内部必须**硬编码** `WHERE entered_by_participant_id = <session 解出的 id>`
@@ -77,16 +79,19 @@
 ```
 app/                    # Next.js App Router：页面 + app/api/**/route.ts
 app/api/account/        # Layer 2 账号系统：signup/login/logout/switch-trip/link-current-trip
-lib/db/                 # Drizzle schema + migrations
+lib/db/                 # Drizzle schema + migrations + client.ts(生产 D1 binding) + test-client.ts(测试专用)
 lib/auth/               # session(Layer1) + user-session(Layer2) + invite 认领逻辑 + password 哈希
 lib/domain/             # 核心纯函数：settlement.ts / fx-recommendation.ts
-docker/                 # Dockerfile + 相关配置
+lib/storage/            # receipts.ts：R2 binding 存收据图片
 ```
 
-## Docker 化
-- 单容器，SQLite 文件 + 收据图片都挂载在 `./data` 卷下
-- `docker compose up -d` 一条命令跑起，不需要外部数据库服务
-- 不依赖任何云托管平台
+## 部署：Cloudflare Workers（D1 + R2）
+- **一律走 `./deploy.sh`，不能裸 `wrangler deploy`**（settings.json 已 deny 裸推，跟 Remy 其他项目同一套规矩）；deploy.sh 五步：lint → typecheck → test → `opennextjs-cloudflare build` → `wrangler deploy`，末尾回读部署 URL 的 `/api/health` 确认 200
+- D1 database：`trip-expense-ledger-db`（binding `DB`），R2 bucket：`trip-expense-ledger-receipts`（binding `RECEIPTS`），两者的 id/名字写在 `wrangler.jsonc` 里
+- 数据库迁移：`lib/db/migrations/*.sql`（drizzle-kit 生成）用 `npm run db:migrate:local` / `db:migrate:remote` 跑（内部是 `wrangler d1 migrations apply`，不是 drizzle-kit 自己的 migrator）
+- `lib/db/client.ts` 的 `getDb()` 是唯一读 D1 binding 的入口，生产环境走 `getCloudflareContext()`；**这个文件绝对不能 import `wrangler`**（哪怕是动态 import 也不行）——Next 的 webpack 打生产包时会把 `wrangler` 整个 CLI 一起打进 Worker 产物直接炸构建，测试专用的 `getPlatformProxy()` 逻辑收在只被 `*.test.ts` 引用的 `lib/db/test-client.ts` 里，靠 `__setTestD1Provider()` 做依赖注入，不能图省事挪回 `client.ts`
+- 本地开发：`next.config.mjs` 里 `initOpenNextCloudflareForDev()` 让 `next dev` 也能连到本地 miniflare 模拟的真实 D1/R2，不需要另开一套本地 sqlite 文件路线
+- 域名是 `*.workers.dev`（`https://trip-expense-ledger.remybali.workers.dev`），不是 `*.pages.dev`——这是 Worker 部署（`wrangler deploy`）跟 Pages 部署（`wrangler pages deploy`）的天然差异，Remy 已确认接受
 
 ## 测试哲学
 - `settlement.ts` 和 `fx-recommendation.ts` 是纯函数，**必须有单元测试**，是 v0.1 单测覆盖率要求最高的两个模块，涉及钱的计算逻辑，没测试不能合并

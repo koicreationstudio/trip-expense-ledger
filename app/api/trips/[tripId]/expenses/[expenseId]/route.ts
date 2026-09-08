@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb, type Db } from '@/lib/db/client';
 import { expenses, expenseSplits, participants, trips } from '@/lib/db/schema';
 import { assertSameTrip, withSession } from '@/lib/auth/require-session';
 import { toExpenseDto } from '@/lib/http/dto';
@@ -17,7 +17,7 @@ interface Context {
  * 不是自己录入的一律当不存在处理（404，不是 403）：
  * 查询条件里根本不看"谁在问"，只看"这条记录是不是自己录的"。
  */
-async function loadOwnExpense(tripId: string, expenseId: string, participantId: string) {
+async function loadOwnExpense(db: Db, tripId: string, expenseId: string, participantId: string) {
   const expense = await db.query.expenses.findFirst({
     where: and(eq(expenses.id, expenseId), eq(expenses.tripId, tripId)),
     with: { splits: true },
@@ -30,7 +30,8 @@ export const GET = withSession<Context>(async (_request, { params }, identity) =
   const denied = assertSameTrip(identity, params.tripId);
   if (denied) return denied;
 
-  const expense = await loadOwnExpense(params.tripId, params.expenseId, identity.participantId);
+  const db = await getDb();
+  const expense = await loadOwnExpense(db, params.tripId, params.expenseId, identity.participantId);
   if (!expense) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   return NextResponse.json({
@@ -46,7 +47,8 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
   const denied = assertSameTrip(identity, params.tripId);
   if (denied) return denied;
 
-  const existing = await loadOwnExpense(params.tripId, params.expenseId, identity.participantId);
+  const db = await getDb();
+  const existing = await loadOwnExpense(db, params.tripId, params.expenseId, identity.participantId);
   if (!existing) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   const parsed = await parseJsonBody(request, updateExpenseSchema);
@@ -94,8 +96,13 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
     if (splitError) return splitError;
   }
 
-  db.transaction((tx) => {
-    tx.update(expenses)
+  // D1 的 remote binding 不支持交互式多语句事务，官方推荐用 batch() 做原子
+  // 多语句写入。splits 是否重传是运行时才知道的，batch() 的 TS 签名要求一个
+  // 至少 1 项的元组类型来做逐项类型推断，这里数组长度可变，结构上退化成普通
+  // 数组，做一次断言（运行时永远至少有 1 项：更新 expense 本体）。
+  const statements = [
+    db
+      .update(expenses)
       .set({
         payerParticipantId: body.payerParticipantId ?? existing.payerParticipantId,
         amount: nextAmount,
@@ -107,22 +114,21 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
         expenseDate: body.expenseDate ? new Date(body.expenseDate) : existing.expenseDate,
         updatedAt: new Date(),
       })
-      .where(eq(expenses.id, params.expenseId))
-      .run();
-
-    if (body.splits) {
-      tx.delete(expenseSplits).where(eq(expenseSplits.expenseId, params.expenseId)).run();
-      tx.insert(expenseSplits)
-        .values(
-          body.splits.map((s) => ({
-            expenseId: params.expenseId,
-            participantId: s.participantId,
-            shareAmountBaseCurrency: s.shareAmountBaseCurrency,
-          }))
-        )
-        .run();
-    }
-  });
+      .where(eq(expenses.id, params.expenseId)),
+    ...(body.splits
+      ? [
+          db.delete(expenseSplits).where(eq(expenseSplits.expenseId, params.expenseId)),
+          db.insert(expenseSplits).values(
+            body.splits.map((s) => ({
+              expenseId: params.expenseId,
+              participantId: s.participantId,
+              shareAmountBaseCurrency: s.shareAmountBaseCurrency,
+            }))
+          ),
+        ]
+      : []),
+  ];
+  await db.batch(statements as unknown as Parameters<typeof db.batch>[0]);
 
   const updated = await db.query.expenses.findFirst({ where: eq(expenses.id, params.expenseId) });
   return NextResponse.json({ expense: toExpenseDto(updated!) });
@@ -132,7 +138,8 @@ export const DELETE = withSession<Context>(async (_request, { params }, identity
   const denied = assertSameTrip(identity, params.tripId);
   if (denied) return denied;
 
-  const existing = await loadOwnExpense(params.tripId, params.expenseId, identity.participantId);
+  const db = await getDb();
+  const existing = await loadOwnExpense(db, params.tripId, params.expenseId, identity.participantId);
   if (!existing) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   if (existing.receiptPath) {

@@ -1,22 +1,18 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import { NextRequest } from 'next/server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { getDb, type Db } from '@/lib/db/client';
+import { setupTestDb, teardownTestDb } from '@/lib/db/test-client';
 
 /**
  * 权限边界的核心回归测试：A 建了行程和一笔消费，B 是同一行程的另一个参与者，
  * B 用任何方式（含直接猜 expense id）都不能看到/改到 A 的消费明细，必须收到 404。
  * 这是 CLAUDE.md「API 权限边界」那节点名要求的自动化测试，不能只靠代码审查。
  *
- * 用独立临时 SQLite 文件跑，不碰 ./data/db.sqlite 这个开发用的真实数据库。
- * DATABASE_PATH 必须在第一次 import 到 lib/db/client 之前设好，所以这里全用
- * beforeAll 里的动态 import，不能在文件顶层静态 import 任何牵到 db/client 的模块。
+ * 用 getPlatformProxy() 换一套独立的本地 miniflare D1 binding（persist: false，
+ * 全新空库），不碰任何真实数据库，迁移在 beforeAll 里跑一次。
  */
 
-let tmpDbPath: string;
-
-let db: typeof import('@/lib/db/client').db;
+let db: Db;
 let createSession: typeof import('@/lib/auth/session').createSession;
 let SESSION_COOKIE_NAME: string;
 let USER_SESSION_COOKIE_NAME: string;
@@ -47,12 +43,8 @@ function jsonRequest(
 }
 
 beforeAll(async () => {
-  tmpDbPath = path.join(os.tmpdir(), `tel-test-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite`);
-  process.env.DATABASE_PATH = tmpDbPath;
-
-  ({ db } = await import('@/lib/db/client'));
-  const { migrate } = await import('drizzle-orm/better-sqlite3/migrator');
-  migrate(db, { migrationsFolder: './lib/db/migrations' });
+  await setupTestDb();
+  db = await getDb();
 
   ({ createSession, SESSION_COOKIE_NAME } = await import('@/lib/auth/session'));
   ({ USER_SESSION_COOKIE_NAME } = await import('@/lib/auth/user-session'));
@@ -66,10 +58,8 @@ beforeAll(async () => {
   } = await import('@/app/api/trips/[tripId]/expenses/[expenseId]/route'));
 });
 
-afterAll(() => {
-  for (const suffix of ['', '-wal', '-shm']) {
-    fs.rmSync(`${tmpDbPath}${suffix}`, { force: true });
-  }
+afterAll(async () => {
+  await teardownTestDb();
 });
 
 describe('expense 权限边界：entered_by 之外一律 404', () => {
@@ -101,7 +91,7 @@ describe('expense 权限边界：entered_by 之外一律 404', () => {
       )
     );
     expect(createTripResponse.status).toBe(201);
-    const tripBody = await createTripResponse.json();
+    const tripBody = (await createTripResponse.json()) as any;
     const tripId: string = tripBody.trip.id;
     const aToken = createTripResponse.cookies.get(SESSION_COOKIE_NAME)?.value;
     expect(aToken).toBeTruthy();
@@ -121,21 +111,21 @@ describe('expense 权限边界：entered_by 之外一律 404', () => {
       { params: { tripId } }
     );
     expect(createExpenseResponse.status).toBe(201);
-    const expenseId: string = (await createExpenseResponse.json()).expense.id;
+    const expenseId: string = ((await createExpenseResponse.json()) as any).expense.id;
 
     const asOwner = await expenseGetHandler(
       jsonRequest(`http://localhost/api/trips/${tripId}/expenses/${expenseId}`, 'GET', aToken),
       { params: { tripId, expenseId } }
     );
     expect(asOwner.status).toBe(200);
-    expect((await asOwner.json()).expense.id).toBe(expenseId);
+    expect(((await asOwner.json()) as any).expense.id).toBe(expenseId);
 
     const asOther = await expenseGetHandler(
       jsonRequest(`http://localhost/api/trips/${tripId}/expenses/${expenseId}`, 'GET', bToken),
       { params: { tripId, expenseId } }
     );
     expect(asOther.status).toBe(404);
-    expect((await asOther.json()).error).toBe('not_found');
+    expect(((await asOther.json()) as any).error).toBe('not_found');
 
     const patchAsOther = await expensePatchHandler(
       jsonRequest(`http://localhost/api/trips/${tripId}/expenses/${expenseId}`, 'PATCH', bToken, {

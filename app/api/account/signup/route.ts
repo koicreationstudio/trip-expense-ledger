@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { users } from '@/lib/db/schema';
 import { hashPassword } from '@/lib/auth/password';
 import { createUserSession } from '@/lib/auth/user-session';
@@ -14,6 +14,7 @@ import { signupSchema } from '@/lib/validation/schemas';
  * 完全不碰 Layer 1（tel_session/participant）——注册本身不认领任何行程身份。
  */
 export async function POST(request: NextRequest) {
+  const db = await getDb();
   const parsed = await parseJsonBody(request, signupSchema);
   if ('error' in parsed) return parsed.error;
   const { email, password, displayName } = parsed.data;

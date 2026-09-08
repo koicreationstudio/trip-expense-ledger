@@ -1,6 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { expenses, expenseSplits, participants, trips } from '@/lib/db/schema';
 import { assertSameTrip, withSession } from '@/lib/auth/require-session';
 import { toExpenseDto } from '@/lib/http/dto';
@@ -21,6 +21,7 @@ export const GET = withSession<Context>(async (_request, { params }, identity) =
   const denied = assertSameTrip(identity, params.tripId);
   if (denied) return denied;
 
+  const db = await getDb();
   const rows = await db
     .select()
     .from(expenses)
@@ -34,6 +35,7 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
   const denied = assertSameTrip(identity, params.tripId);
   if (denied) return denied;
 
+  const db = await getDb();
   const parsed = await parseJsonBody(request, createExpenseSchema);
   if ('error' in parsed) return parsed.error;
   const body = parsed.data;
@@ -65,34 +67,31 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
 
   const expenseId = crypto.randomUUID();
 
-  db.transaction((tx) => {
-    tx.insert(expenses)
-      .values({
-        id: expenseId,
-        tripId: params.tripId,
-        enteredByParticipantId: identity.participantId,
-        payerParticipantId: body.payerParticipantId,
-        amount: body.amount,
-        currency: body.currency,
-        amountBaseCurrency,
-        fxRateUsed,
-        fxRateSource: 'manual',
-        category: body.category,
-        note: body.note ?? null,
-        expenseDate: new Date(body.expenseDate),
-      })
-      .run();
-
-    tx.insert(expenseSplits)
-      .values(
-        splits.map((s) => ({
-          expenseId,
-          participantId: s.participantId,
-          shareAmountBaseCurrency: s.shareAmountBaseCurrency,
-        }))
-      )
-      .run();
-  });
+  // D1 的 remote binding 不支持交互式多语句事务，官方推荐用 batch() 做原子
+  // 多语句写入，两条语句互不依赖对方的执行结果，符合 batch 的用法。
+  await db.batch([
+    db.insert(expenses).values({
+      id: expenseId,
+      tripId: params.tripId,
+      enteredByParticipantId: identity.participantId,
+      payerParticipantId: body.payerParticipantId,
+      amount: body.amount,
+      currency: body.currency,
+      amountBaseCurrency,
+      fxRateUsed,
+      fxRateSource: 'manual',
+      category: body.category,
+      note: body.note ?? null,
+      expenseDate: new Date(body.expenseDate),
+    }),
+    db.insert(expenseSplits).values(
+      splits.map((s) => ({
+        expenseId,
+        participantId: s.participantId,
+        shareAmountBaseCurrency: s.shareAmountBaseCurrency,
+      }))
+    ),
+  ]);
 
   const created = await db.query.expenses.findFirst({ where: eq(expenses.id, expenseId) });
 

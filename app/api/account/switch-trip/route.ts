@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { participants } from '@/lib/db/schema';
 import { resolveUser, USER_SESSION_COOKIE_NAME } from '@/lib/auth/user-session';
 import { createSession } from '@/lib/auth/session';
@@ -19,6 +19,7 @@ import { switchTripSchema } from '@/lib/validation/schemas';
  * tel_session"，只是这个 cookie 现在可以被这里按需重新指向不同的 trip。
  */
 export async function POST(request: NextRequest) {
+  const db = await getDb();
   const userToken = request.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
   const user = await resolveUser(db, userToken);
   if (!user) {

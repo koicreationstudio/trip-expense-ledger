@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { exchangeRateCache, paymentMethods, trips } from '@/lib/db/schema';
 import { assertSameTrip, withSession } from '@/lib/auth/require-session';
 import { parseJsonBody } from '@/lib/http/validate';
@@ -24,6 +24,7 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
   const parsed = await parseJsonBody(request, fxRecommendationSchema);
   if ('error' in parsed) return parsed.error;
 
+  const db = await getDb();
   const trip = await db.query.trips.findFirst({ where: eq(trips.id, params.tripId) });
   if (!trip) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 

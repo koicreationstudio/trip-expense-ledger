@@ -1,6 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { expenses, participants, trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { ExpenseList } from './expense-list';
@@ -17,6 +17,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     redirect('/');
   }
 
+  const db = await getDb();
   const trip = await db.query.trips.findFirst({ where: eq(trips.id, params.tripId) });
   if (!trip) {
     redirect('/');

@@ -31,11 +31,11 @@ export function InvitesManager({ tripId }: { tripId: string }) {
       fetch(`/api/trips/${tripId}/invites`),
     ]);
     if (tripRes.ok) {
-      const data = await tripRes.json();
+      const data = (await tripRes.json()) as any;
       setParticipants(data.participants);
     }
     if (invitesRes.ok) {
-      const data = await invitesRes.json();
+      const data = (await invitesRes.json()) as any;
       setInvites(data.invites);
     }
   }

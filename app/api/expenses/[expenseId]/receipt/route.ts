@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb, type Db } from '@/lib/db/client';
 import { expenses } from '@/lib/db/schema';
 import { withSession } from '@/lib/auth/require-session';
 import { deleteReceipt, readReceipt, saveReceipt } from '@/lib/storage/receipts';
@@ -25,14 +25,15 @@ const CONTENT_TYPES: Record<string, string> = {
  * 收据只属于录入者本人，查询条件直接把 enteredByParticipantId 焊死在 WHERE 里，
  * 跟其它 expense 接口的权限模型完全一致：不是自己的一律当不存在。
  */
-async function loadOwnExpense(expenseId: string, participantId: string) {
+async function loadOwnExpense(db: Db, expenseId: string, participantId: string) {
   return db.query.expenses.findFirst({
     where: and(eq(expenses.id, expenseId), eq(expenses.enteredByParticipantId, participantId)),
   });
 }
 
 export const POST = withSession<Context>(async (request, { params }, identity) => {
-  const expense = await loadOwnExpense(params.expenseId, identity.participantId);
+  const db = await getDb();
+  const expense = await loadOwnExpense(db, params.expenseId, identity.participantId);
   if (!expense) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   const form = await request.formData();
@@ -65,7 +66,8 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
 });
 
 export const GET = withSession<Context>(async (_request, { params }, identity) => {
-  const expense = await loadOwnExpense(params.expenseId, identity.participantId);
+  const db = await getDb();
+  const expense = await loadOwnExpense(db, params.expenseId, identity.participantId);
   if (!expense || !expense.receiptPath) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
@@ -79,7 +81,8 @@ export const GET = withSession<Context>(async (_request, { params }, identity) =
 });
 
 export const DELETE = withSession<Context>(async (_request, { params }, identity) => {
-  const expense = await loadOwnExpense(params.expenseId, identity.participantId);
+  const db = await getDb();
+  const expense = await loadOwnExpense(db, params.expenseId, identity.participantId);
   if (!expense || !expense.receiptPath) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }

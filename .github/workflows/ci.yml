@@ -33,12 +33,9 @@ jobs:
       - name: Unit tests (vitest)
         run: npm run test
 
-      - name: Build (next build)
-        run: npm run build
-
-      # 2026-09-06 补：实测 docker compose up 时踩过两个只有真 build 才会暴露的坑
-      # （缺 .dockerignore 导致宿主机编译的 better-sqlite3 原生绑定覆盖容器内版本、
-      # 缺 public/ 目录导致 COPY 失败），当时 CI 没有这一步，两个坑都是手动跑
-      # docker build 才发现的。补上这步防止同类问题再悄悄潜伏到发布时才暴露。
-      - name: Docker image build
-        run: docker build -f docker/Dockerfile -t trip-expense-ledger:ci .
+      # opennextjs-cloudflare build 内部会先跑一次 next build 再打包成 Worker
+      # 产物，一步顶原来「Build (next build)」+「Docker image build」两步——
+      # 后者验证的是「这份代码真的能打包成能跑的产物」，现在换成验证能打包
+      # 成 Cloudflare Worker（.open-next/worker.js），不再验证 Docker 镜像。
+      - name: Build (opennextjs-cloudflare)
+        run: npx opennextjs-cloudflare build

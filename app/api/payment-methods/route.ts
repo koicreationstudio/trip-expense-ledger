@@ -1,6 +1,6 @@
 import { asc, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { paymentMethods } from '@/lib/db/schema';
 import { withSession } from '@/lib/auth/require-session';
 import { toPaymentMethodDto } from '@/lib/http/dto';
@@ -9,6 +9,7 @@ import { createPaymentMethodSchema } from '@/lib/validation/schemas';
 
 /** 支付方式永远挂在 session 解出的自己身上，不接受传 participantId 指定别人。 */
 export const GET = withSession(async (_request, _context, identity) => {
+  const db = await getDb();
   const rows = await db
     .select()
     .from(paymentMethods)
@@ -19,6 +20,7 @@ export const GET = withSession(async (_request, _context, identity) => {
 });
 
 export const POST = withSession(async (request, _context, identity) => {
+  const db = await getDb();
   const parsed = await parseJsonBody(request, createPaymentMethodSchema);
   if ('error' in parsed) return parsed.error;
 

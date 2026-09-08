@@ -11,19 +11,28 @@
 
 - **汇率比对 + 最省钱支付方式推荐**：录入一笔多币种消费后，根据你自己配置的各支付方式手续费率和汇率加点，算出这笔钱用哪张卡 / 哪种支付方式最划算。这个功能目前市面上的分账工具（Splitwise、Tricount、Settle Up）都没有。
 - **出差场景专属结构化记账**：不是泛用 AA 分账，围绕「行程」「代垫」「多币种」这些出差记账的实际痛点设计。
-- **隐私自托管**：数据不放在别人的服务器上，`docker compose up -d` 一条命令自己跑起来。
+- **私有部署**：数据不放在第三方分账 SaaS 里，部署在你自己的 Cloudflare 账号下。
 
 ## 怎么装
 
-<!-- TODO(Remy): 补充实际安装步骤，确认 Docker 镜像发布方式（自己 build / 发布到 Docker Hub / GHCR）后再写 -->
+部署在 Cloudflare Workers（`@opennextjs/cloudflare` + D1 + R2），不是 Docker 自托管。
 
 ```bash
 git clone https://github.com/<TODO: 你的 GitHub 用户名>/trip-expense-ledger.git
 cd trip-expense-ledger
-docker compose up -d
+npm install
+
+npx wrangler login
+npx wrangler d1 create trip-expense-ledger-db          # 把返回的 database_id 填进 wrangler.jsonc
+npx wrangler r2 bucket create trip-expense-ledger-receipts
+npm run db:migrate:remote
+
+./deploy.sh
 ```
 
-<!-- TODO(Remy): 确认默认端口、首次启动是否需要额外配置（.env 之类）后补充 -->
+本地开发：`npm run dev`（`next.config.mjs` 里的 `initOpenNextCloudflareForDev()` 会自动接到本地 miniflare 模拟的 D1/R2，不用另外配置）。
+
+<!-- TODO(Remy): 确认 SESSION_SECRET 等 secret 的 `wrangler secret put` 步骤要不要写进这里 -->
 
 ## 怎么用
 
@@ -54,12 +63,12 @@ docker compose up -d
 ## 技术栈
 
 - Next.js（App Router）+ TypeScript，全栈单体
-- SQLite + Drizzle ORM + better-sqlite3
-- Docker 单容器自托管，不依赖云托管服务
+- Cloudflare D1（SQLite 语义）+ Drizzle ORM + Cloudflare R2（收据图片）
+- 部署：`@opennextjs/cloudflare` 打包成 Cloudflare Worker
 
 ## 隐私 & 安全模型
 
-邀请链接机制是为了给互相信任的同行人提供低摩擦协作方式，**不是金融级身份鉴权**。自托管时请自行套 HTTPS 反向代理，不要把服务裸露在公网。详见 [SECURITY.md](./SECURITY.md)。
+邀请链接机制是为了给互相信任的同行人提供低摩擦协作方式，**不是金融级身份鉴权**。详见 [SECURITY.md](./SECURITY.md)。
 
 ## 贡献
 

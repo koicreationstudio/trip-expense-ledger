@@ -5,9 +5,8 @@ const KEY_LENGTH = 64;
 
 /**
  * 密码哈希用 Node 内置 scrypt，不装 bcrypt/argon2 这类原生依赖。
- * better-sqlite3 已经是这个项目唯一的原生依赖，Dockerfile 注释里明写了它让
- * 编译工具链和 `output: standalone` 踩过坑，再装一个原生模块等于重新踩一遍。
- * scryptSync 是内置的，够用。
+ * Cloudflare Workers 的 nodejs_compat 原生支持 node:crypto 的 scryptSync，
+ * 装原生模块在 Workers 运行时里根本装不上，内置这条路线本来就是唯一选项。
  */
 
 /** 存成 `salt:hash` 十六进制字符串，salt 每次随机生成，同密码两次哈希结果不同。 */

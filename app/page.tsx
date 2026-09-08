@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { participants, trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { getCurrentUser } from '@/lib/auth/current-user';
@@ -17,6 +17,7 @@ export default async function HomePage() {
   // ② 否则查 tel_user_session，有效就查这个账号建过/认领过的行程，画"我的行程"列表。
   const user = await getCurrentUser();
   if (user) {
+    const db = await getDb();
     const rows = await db
       .select({
         id: trips.id,

@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { LogoutButton } from './logout-button';
@@ -25,6 +25,7 @@ export default async function TripLayout({
     redirect('/');
   }
 
+  const db = await getDb();
   const trip = await db.query.trips.findFirst({ where: eq(trips.id, params.tripId) });
   if (!trip) {
     redirect('/');

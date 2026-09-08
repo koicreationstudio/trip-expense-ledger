@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { participants } from '@/lib/db/schema';
 import { resolveIdentity, SESSION_COOKIE_NAME } from '@/lib/auth/session';
 import { resolveUser, USER_SESSION_COOKIE_NAME } from '@/lib/auth/user-session';
@@ -14,6 +14,7 @@ import { resolveUser, USER_SESSION_COOKIE_NAME } from '@/lib/auth/user-session';
  * 传参指定 participantId——跟 Layer 1 权限边界的原则一致，防止越权关联别人的行程身份。
  */
 export async function POST(request: NextRequest) {
+  const db = await getDb();
   const userToken = request.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
   const user = await resolveUser(db, userToken);
   if (!user) {

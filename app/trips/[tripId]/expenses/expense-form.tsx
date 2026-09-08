@@ -148,7 +148,7 @@ export function ExpenseForm({
         body: JSON.stringify({ amount: yuanToCents(amount), expenseCurrency: currency }),
       });
       if (res.status === 400) {
-        const body = await res.json().catch(() => null);
+        const body = await (res.json() as Promise<any>).catch(() => null);
         if (body?.error === 'no_payment_methods') {
           setCompareError('no_payment_methods');
           return;
@@ -160,7 +160,7 @@ export function ExpenseForm({
         setCompareError('比价失败，检查一下金额/币种');
         return;
       }
-      const data = await res.json();
+      const data = (await res.json()) as any;
       setRecommendations(data.recommendations);
     } finally {
       setComparing(false);
@@ -238,7 +238,7 @@ export function ExpenseForm({
         return;
       }
 
-      const expenseId = isEdit ? initialExpense.id : (await res.json()).expense.id;
+      const expenseId = isEdit ? initialExpense.id : ((await res.json()) as any).expense.id;
 
       if (receiptFile) {
         const form = new FormData();

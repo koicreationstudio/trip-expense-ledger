@@ -1,32 +1,31 @@
-import crypto from 'node:crypto';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-
-const RECEIPTS_DIR = process.env.RECEIPTS_DIR ?? './data/receipts';
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 
 /**
- * 收据图片按 participant 分目录存放：
- * data/receipts/<participantId>/<随机文件名>.<ext>
+ * 收据图片按 participant 分 key 前缀存放：
+ * <participantId>/<随机文件名>.<ext>
  *
- * 用 participantId 分目录只是方便人工排查磁盘占用，
- * 真正的读取权限校验必须在 API 层查 DB（entered_by_participant_id）完成，
- * 不能假设"路径里带着谁的 id"本身就是权限凭证。
+ * 用 participantId 分前缀只是方便人工排查用量，真正的读取权限校验必须在
+ * API 层查 DB（entered_by_participant_id）完成，不能假设"key 里带着谁的 id"
+ * 本身就是权限凭证。
  */
 export async function saveReceipt(participantId: string, fileExtension: string, data: Buffer): Promise<string> {
-  const dir = path.join(RECEIPTS_DIR, participantId);
-  await fs.mkdir(dir, { recursive: true });
-
-  const filename = `${crypto.randomUUID()}${fileExtension}`;
-  const fullPath = path.join(dir, filename);
-  await fs.writeFile(fullPath, data);
-
-  return path.join(participantId, filename);
+  const { env } = await getCloudflareContext({ async: true });
+  const key = `${participantId}/${crypto.randomUUID()}${fileExtension}`;
+  await env.RECEIPTS.put(key, data);
+  return key;
 }
 
 export async function readReceipt(relativePath: string): Promise<Buffer> {
-  return fs.readFile(path.join(RECEIPTS_DIR, relativePath));
+  const { env } = await getCloudflareContext({ async: true });
+  const object = await env.RECEIPTS.get(relativePath);
+  if (!object) {
+    throw new Error(`receipt not found: ${relativePath}`);
+  }
+  const arrayBuffer = await object.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 export async function deleteReceipt(relativePath: string): Promise<void> {
-  await fs.rm(path.join(RECEIPTS_DIR, relativePath), { force: true });
+  const { env } = await getCloudflareContext({ async: true });
+  await env.RECEIPTS.delete(relativePath);
 }

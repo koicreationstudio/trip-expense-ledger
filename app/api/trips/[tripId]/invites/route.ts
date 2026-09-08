@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { invites } from '@/lib/db/schema';
 import { withTripOwner } from '@/lib/auth/require-session';
 import { generateInviteCode } from '@/lib/auth/invite';
@@ -13,6 +13,7 @@ interface Context {
 
 /** 邀请管理是 admin 操作，统一走 withTripOwner，非 owner 一律 404。 */
 export const POST = withTripOwner<Context>(async (request, { params }, identity) => {
+  const db = await getDb();
   const parsed = await parseJsonBody(request, createInviteSchema);
   if ('error' in parsed) return parsed.error;
 
@@ -34,6 +35,7 @@ export const POST = withTripOwner<Context>(async (request, { params }, identity)
 });
 
 export const GET = withTripOwner<Context>(async (_request, { params }) => {
+  const db = await getDb();
   const rows = await db.select().from(invites).where(eq(invites.tripId, params.tripId));
 
   return NextResponse.json({

@@ -1,0 +1,33 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"main": ".open-next/worker.js",
+	"name": "trip-expense-ledger",
+	"compatibility_date": "2025-12-01",
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			// 自引用 service binding，name 必须跟上面 "name" 字段一致
+			// 见 https://opennext.js.org/cloudflare/caching
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "trip-expense-ledger"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "trip-expense-ledger-db",
+			"database_id": "f1c8dc91-7991-4349-957d-b423abb638bd",
+			"migrations_dir": "lib/db/migrations"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "RECEIPTS",
+			"bucket_name": "trip-expense-ledger-receipts"
+		}
+	]
+}

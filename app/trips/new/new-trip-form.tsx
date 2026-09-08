@@ -40,7 +40,7 @@ export function NewTripForm() {
         setError('创建失败，检查一下行程名称/称呼是不是空的');
         return;
       }
-      const data = await res.json();
+      const data = (await res.json()) as any;
       router.push(`/trips/${data.trip.id}`);
     } finally {
       setSubmitting(false);

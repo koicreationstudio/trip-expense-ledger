@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../db/client';
+import { getDb } from '../db/client';
 import { resolveIdentity, SESSION_COOKIE_NAME } from './session';
 import type { AuthenticatedIdentity } from './session';
 
@@ -15,6 +15,7 @@ export type RouteHandler<Context> = (
  */
 export function withSession<Context>(handler: RouteHandler<Context>) {
   return async (request: NextRequest, context: Context): Promise<NextResponse> => {
+    const db = await getDb();
     const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
     const identity = await resolveIdentity(db, token);
 

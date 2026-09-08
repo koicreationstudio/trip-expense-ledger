@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { participants, trips } from '@/lib/db/schema';
 import { createSession } from '@/lib/auth/session';
 import { resolveUser, USER_SESSION_COOKIE_NAME } from '@/lib/auth/user-session';
@@ -19,6 +19,7 @@ import { createTripSchema } from '@/lib/validation/schemas';
  * 这是唯一一处碰 Layer 1 权限写入路径的地方，只加一列不改任何鉴权判断。
  */
 export async function POST(request: NextRequest) {
+  const db = await getDb();
   const userToken = request.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
   const user = await resolveUser(db, userToken);
   if (!user) {
@@ -32,23 +33,25 @@ export async function POST(request: NextRequest) {
   const tripId = crypto.randomUUID();
   const ownerId = crypto.randomUUID();
 
-  db.transaction((tx) => {
-    tx.insert(trips).values({ id: tripId, name, baseCurrency }).run();
-    tx.insert(participants)
-      .values({
-        id: ownerId,
-        tripId,
-        displayName: ownerDisplayName,
-        isOwner: true,
-        claimedAt: new Date(),
-        userId: user.userId,
-      })
-      .run();
-    for (const displayName of participantNames) {
-      tx.insert(participants).values({ tripId, displayName }).run();
-    }
-    tx.update(trips).set({ ownerParticipantId: ownerId }).where(eq(trips.id, tripId)).run();
-  });
+  // D1 的 remote binding 不支持交互式多语句事务，官方推荐用 batch() 做原子
+  // 多语句写入；这几条语句互不依赖对方的执行结果，符合 batch 的用法。
+  // 数组长度随 participantNames 变化，TS 的 batch() 签名要求一个至少 1 项的
+  // 元组类型来做逐项类型推断，这里的动态数组结构上退化成普通数组，做一次断言
+  // （运行时永远至少有 3 项：建 trip / 建 owner / 回填 ownerParticipantId）。
+  const statements = [
+    db.insert(trips).values({ id: tripId, name, baseCurrency }),
+    db.insert(participants).values({
+      id: ownerId,
+      tripId,
+      displayName: ownerDisplayName,
+      isOwner: true,
+      claimedAt: new Date(),
+      userId: user.userId,
+    }),
+    ...participantNames.map((displayName) => db.insert(participants).values({ tripId, displayName })),
+    db.update(trips).set({ ownerParticipantId: ownerId }).where(eq(trips.id, tripId)),
+  ];
+  await db.batch(statements as unknown as Parameters<typeof db.batch>[0]);
 
   const token = await createSession(db, ownerId, request.headers.get('user-agent'));
 

@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 
 /**
  * Docker HEALTHCHECK 用：不只是「进程还活着」，顺手跑一个最轻量的 DB 查询，
@@ -14,7 +14,8 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    db.run(sql`SELECT 1`);
+    const db = await getDb();
+    await db.run(sql`SELECT 1`);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ ok: false }, { status: 500 });

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
+import { getDb } from '@/lib/db/client';
 import { participants } from '@/lib/db/schema';
 import { claimParticipant, lookupInvite } from '@/lib/auth/invite';
 import { createSession } from '@/lib/auth/session';
@@ -14,6 +14,7 @@ interface Context {
 }
 
 export async function POST(request: NextRequest, { params }: Context) {
+  const db = await getDb();
   const parsed = await parseJsonBody(request, claimParticipantSchema);
   if ('error' in parsed) return parsed.error;
 
