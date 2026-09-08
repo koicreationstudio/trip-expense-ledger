@@ -6,7 +6,7 @@ export function Avatar({ name, size = 32 }: { name: string; size?: number }) {
   const initial = name.trim().charAt(0).toUpperCase() || '?';
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-slate-200 font-medium text-slate-700"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-sand font-medium text-ink"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
       aria-hidden="true"
     >

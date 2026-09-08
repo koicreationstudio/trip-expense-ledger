@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Avatar } from '@/components/avatar';
 
 interface Invite {
   id: string;
@@ -134,8 +135,11 @@ export function InvitesManager({ tripId }: { tripId: string }) {
               const isRevoked = invite.revokedAt !== null;
               const isExpired = invite.expiresAt !== null && new Date(invite.expiresAt).getTime() < Date.now();
               return (
-                <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] text-sm">
-                  <code className="break-all text-xs text-muted">{inviteUrl(invite.code)}</code>
+                <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] text-sm shadow-card">
+                  <span className="flex items-start gap-1">
+                    <span aria-hidden="true">🔗</span>
+                    <code className="break-all font-mono text-xs text-muted">{inviteUrl(invite.code)}</code>
+                  </span>
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
                     {isRevoked || isExpired ? (
                       <span>
@@ -176,9 +180,10 @@ export function InvitesManager({ tripId }: { tripId: string }) {
             {participants.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px]"
+                className="flex items-center justify-between rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] shadow-card"
               >
-                <span className="text-[12.5px]">
+                <span className="flex items-center gap-2 text-[12.5px]">
+                  <Avatar name={p.displayName} size={24} />
                   {p.displayName}
                   {p.isOwner && <span className="ml-2 text-[10px] text-muted">创建者</span>}
                   <span

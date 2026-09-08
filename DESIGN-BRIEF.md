@@ -892,3 +892,89 @@ body {
 - team-board 系统默认字体栈——解决的是字体家族问题，Remy 这次反馈的是字号问题，两个轴不该混着处理
 
 **如果这个判断跟 Remy 的本意不符**（比如她其实是想要更彻底地转向 team-board 那种冷静克制的团队工具感），沿用第六版结尾同一条原则：请直接说清楚，不用整份重写——这次 B/C/D 三节（灰阶归位、Fraunces bug 修复、切换入口）都是独立于"要不要换整套调性"这个更大决定的具体修复，哪怕以后色板方向翻篇，这三节的结论大概率还是成立的。
+
+
+---
+
+# 第八版：设置类二级页面视觉丰满化（2026-09-08）
+
+> **这次的性质**：Remy 反馈"这个系统不够 user friendly，颜色感觉还是像 team-board"。诊断已经做过：色值本身不一样，问题是三个二级页面（`payment-methods`/`invites`/`settlement`）从建库起就只套了色板 token，零个性装饰，看着像任何通用工具。这次实读了这三个页面的最新代码，发现一件事需要先说清楚——**v5/v6/v7 的字号/颜色收紧其实已经落地到这三个页面了**（`text-ink`/`text-muted`/`ok`/`live`/`wait` 状态 pill、`shadow-hero`、紧凑字号全部到位），跟"完全没接过色板"这个初始描述有出入，不能再照"从零开始加装饰"去处理。实际缺的不是风格判断，是**四类具体、可验证、黄金路径页面已经用过但这三个页面没接上的手法**，外加一处顺手挖到的代码 bug。下面全部按"文件+行为"写清楚，不是空泛的"加点装饰"。
+
+## 诊断：缺的是"没接上已建好的手法"，不是"没风格判断"
+
+逐条对照黄金路径（`page.tsx` Hero 卡/参与者清单、`wallet-grid.tsx`、`exchange-record-list.tsx`、`fx-compare-list.tsx`、`trip-switcher.tsx`）已经在用的手法，找出这三个二级页面漏接的地方：
+
+### 缺口 1：`shadow-card` 没接上（第七版新增 token，铺到这三页时漏了）
+
+`app/globals.css` 的 `.tx-item` 共用 class（`expense-list.tsx`/`exchange-record-list.tsx` 都在用）本身已经带 `shadow-card`；`trip-switcher.tsx` 的弹层容器也显式加了 `shadow-card`。但这三个页面的清单行全部是**逐行手写**跟 `.tx-item` 结构几乎一样的 class 串（`rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px]`），唯独没带上 `shadow-card`，肉眼看就是比黄金路径"扁一档"：
+
+- `payment-methods-manager.tsx` 第 98-101 行，已配置支付方式 `<li>`
+- `invites-manager.tsx` 第 137 行，邀请链接 `<li>`；第 177-180 行，参与者认领状态 `<li>`
+- `settlement/page.tsx` 第 48 行、第 70 行，净值清单/转账清单外层 `<ul>`（这两处结构上是"分组盒子+行"，跟 `page.tsx` 参与者清单同一个既有合法模式，见下面「不该做的事」第 6 条，这里只是给外层盒子补阴影，不改结构）
+
+**Fix**：`payment-methods-manager.tsx` 的 `<li>` 改成 `className="tx-item justify-between"`（原来手写的 class 换成共用 class，直接带上 `shadow-card`，用法跟 `expense-list.tsx` 第 66 行 `tx-item justify-between` 一致）；`invites-manager.tsx` 两处 `<li>` 保留各自需要的布局（第一处 `flex-col`，第二处 `justify-between`），在现有 class 串末尾补 `shadow-card` 即可，不强求换成 `.tx-item`（结构不完全一样，硬套会牺牲 `flex-col`）；`settlement/page.tsx` 两处 `<ul>` 同样在现有 class 串末尾补 `shadow-card`。
+
+### 缺口 2：零 emoji，支付方式类型最明显
+
+`payment-methods-manager.tsx` 的"卡/现金"目前是纯文字括注 `（卡 · MYR）`。`wallet-grid.tsx` 第 24 行 `EMOJI_CHOICES = ['🏦', '💵', '🌐', '📱', '🟠', '💳', '💰']` 里已经有 💳（卡）和 💵（现金）这两个符号，是这个项目自己已经建立的词汇，不是要新造。
+
+**Fix**：给每条支付方式配一个跟 `exchange-record-list.tsx` 第 33-38 行同款的圆形图标底（`h-7 w-7 rounded-full bg-gold-lt text-sm`），`kind==='card'` 放 💳，`'cash'` 放 💵。
+
+`invites-manager.tsx` 的邀请链接一行可以在 `<code>` 前加一个 🔗——`wallet-grid.tsx` 第 102 行已经用 🔗 表示"绑定的支付方式"（`🔗 {linkedPaymentMethodLabel}`），邀请链接本身语义上就是一个"链接"，复用同一个符号完全贴切，不是新发明一个图标语言。
+
+参与者认领状态清单、结算净值清单不用再叠 emoji——这两处已经有 Avatar 头像做身份识别（净值清单已有，认领状态清单目前没有，见缺口 3），emoji 是给"没有更具体身份符号"的分类用的补充手法，两者不冲突但也不用同一行堆两种符号（绝对禁止第 7 条"同一行不堆多个符号"，这里是"同一行不堆头像+emoji 两套不同的符号系统"，同一个精神）。
+
+### 缺口 3：`invites-manager.tsx` 参与者列表缺 Avatar
+
+`page.tsx` 参与者清单、`settlement/page.tsx` 净值清单和转账清单，三处都配了 `<Avatar name={...} size={24} />`。唯独 `invites-manager.tsx` 第 176-198 行"参与者认领状态"这个列表只有裸文字名字，是这三处同类清单里唯一缺头像的一个，这是可以直接拿系统内部三个现成实例对比出来的遗漏，不是主观装饰判断。
+
+**Fix**：每行 `<li>` 里 `p.displayName` 前面加 `<Avatar name={p.displayName} size={24} />`，跟另外三处保持一致。
+
+**顺带挖到的一个更底层问题**：`components/avatar.tsx` 第 9 行 `bg-slate-200 text-slate-700`——这个共用组件本身还是 Tailwind 默认灰阶孤岛，没接上这套系统的色板。第七版 B 节做过一次全站 `slate-*` 归位扫描，但那次 grep 命令是 `grep -rn "..." app --include="*.tsx"`，只扫了 `app/` 目录，`components/avatar.tsx` 在这个目录之外，漏网了。这个组件被 `page.tsx`/`settlement/page.tsx`/`trip-switcher.tsx` 全部复用，这次再往 `invites-manager.tsx` 添一处调用，等于又多复制一份这个孤岛。**建议顺手把它也归位**：`bg-slate-200 text-slate-700` → `bg-sand text-ink`（`sand #EDE8DA` 底配 `ink #23232E` 字，对比度足够，跟系统里"浅底深字"的既有配色逻辑一致，不用新造配色）。这不是这次任务点名的文件，但因为改一处能顺带修好全站每一个用到 Avatar 的地方（含这次新增的 `invites-manager.tsx`），值得一起做。
+
+### 缺口 4：邀请码没用 Plex Mono；支付方式费率细节没有虚线分层
+
+邀请 URL（`inviteUrl(invite.code)`，域名+路径+邀请码）是保证纯 ASCII 的内容，第五版第 5 条已经把"货币代码/双语标题英文半段"定为 Plex Mono 的合法落地场景，目前项目里这个字体只在 `wallet-grid.tsx` 的货币代码上真正用过一次。邀请码完全符合"纯 ASCII 短文本、带一点技术感"这个前提，是这套字体分工里现成的第二个使用场景，不是新开一个用途。
+
+**Fix**：`invites-manager.tsx` 第 138 行 `<code className="break-all text-xs text-muted">` 加 `font-mono`。
+
+`payment-methods-manager.tsx` 第 103-109 行，名称/类型这行和"汇率加点/境外手续费/返现/固定费"这行紧挨着堆在同一个 `flex-col` 里，没有第七版给 `exchange-record-list.tsx`/`fx-compare-list.tsx` 定的"主信息/元信息用虚线分层"处理。
+
+**Fix**：费率细节那一行（第 106-109 行）加 `border-t border-dashed border-sand pt-1 mt-1`，跟已经建立的手法保持一致，不是另开一套新分隔手法。
+
+## 顺手挖到一处代码 bug（不是装饰判断）：`mark-settled-button.tsx` 错误提示颜色误用财务语义色
+
+`settlement/mark-settled-button.tsx` 第 39 行：
+```
+{error && <p className="text-base text-red-600">{error}</p>}
+```
+`red-600` 是"该付/负净额"专用的财务语义色（第一版就定死"财务语义色最不该乱换、不能跟别的用途混"），这里被拿来给一个泛用的表单错误提示上色，是两个不同语义域混用。系统里已经有正确写法可以对照——`wallet-grid.tsx`/`fx-rate-card.tsx`/`invites-manager.tsx`/`payment-methods-manager.tsx` 的错误提示全部是 `text-sm text-coral`（`coral` 是第三版定的"警示/危险语义色"，第五版第 4 条的关键约束原话是"财务语义色最不该轻易动"，这里适用同一条精神：不能被别的场景借去用），只有 `mark-settled-button.tsx` 落单还留着改版前的 `text-base text-red-600`。
+
+**Fix**：`text-base text-red-600` → `text-sm text-coral`，尺寸和颜色一次对齐已经建立的错误提示规范。
+
+**这个 bug 不止这一处**，`grep -rn "text-red-600" app` 还能在 `my-trips.tsx`/`app/signup/page.tsx`/`app/login/page.tsx`/`app/invite/[code]/claim-form.tsx`/`app/trips/new/new-trip-form.tsx`/`expense-list.tsx`（第 61 行错误提示 + 第 87 行删除图标颜色）/`trip-switcher.tsx`/`expense-form.tsx`/`exchange-form.tsx` 里找到同一个问题，但这些文件不在这次任务范围内，这里只改在范围内的 `mark-settled-button.tsx`，其余建议排进下一轮全站扫描一次性修完（同一个 chokepoint 类问题，参照第七版处理 `slate-*` 的方式，逐个改不如列个清单一次性扫）。
+
+## 不该做的事（这次容易翻车的地方）
+
+1. **不引入新色相、不给"卡/现金"这类分类套状态 pill**——`kind` 不是"状态"（不是进行中/待定/完成这类进度语义），不能套 `ok`/`wait`/`live` 这套 pill 样式，emoji 图标已经够用，硬套颜色 pill 是绝对禁止第 8 条"颜色语义乱用"的翻版，会把"这是什么类型"和"这个东西现在处于什么进度"这两件事混在一起。
+2. **不把这三个页面做得比首页 Hero 卡还花**——不加渐变、不加大号 Fraunces 水印、不引入类似 `shadow-hero` 的重阴影，这三个页面维持"轻一档"的光影（`shadow-card` 而不是 `shadow-hero`），这是第七版本来就定死的两级阴影分工，二级页面本该比黄金路径克制。
+3. **不把 Plex Mono 用到中文标签上**——"已配置的支付方式"这类中文标题、"汇率加点/境外手续费"这类字段名依然是 Inter，这次只有邀请 URL/code 这一处纯 ASCII 内容套 `font-mono`，不能因为"这次要接上 Plex Mono"就顺手扩大到别的地方。
+4. **不在同一行堆多个 emoji**——支付方式一行最多一个（💳 或 💵），邀请链接一行最多一个（🔗），延续绝对禁止第 7 条。
+5. **不要求把 `settlement/page.tsx` 的"分组盒子+行"结构改成跟 `payment-methods`/`invites` 一样的"逐行卡片"结构**——这是黄金路径自己（`page.tsx` 参与者清单）已经验证过的一个合法的、不同的既有模式。"关系类清单"（谁欠谁 / 净值 / 转账）用分组盒子，"记录类清单"（消费 / 换汇 / 支付方式 / 邀请链接）用逐行卡片，这是两种内容性质决定的两种呈现方式，不是不一致，不用为了"看起来统一"强行拉平成一种结构。
+6. **不要因为这次在加装饰就顺手放松紧凑基准**——这三个页面目前的字号（`text-[12.5px]`/`text-[10px]`/`text-[9.5px]` 等）已经实读代码确认全部合规，这次一个尺寸数字都不改，只加光影/图标/字体分工这三类此前没接上的手法。
+
+## 落地点清单（方便 frontend-dev 对照，ui-auditor 验收）
+
+| 文件 | 改动 |
+|---|---|
+| `payment-methods-manager.tsx` | 已配置列表 `<li>` 改用 `tx-item justify-between`（带上 `shadow-card`）；每行名称前加圆形 emoji 图标（💳/💵，`h-7 w-7 rounded-full bg-gold-lt text-sm`）；费率细节行加 `border-t border-dashed border-sand pt-1 mt-1` |
+| `invites-manager.tsx` | 邀请链接 `<li>` 补 `shadow-card`；`<code>` 加 `font-mono`；`<code>` 前加 🔗；参与者认领状态 `<li>` 补 `shadow-card` + 每行加 `<Avatar name={p.displayName} size={24} />` |
+| `settlement/page.tsx` | 净值清单、转账清单外层 `<ul>` 各补 `shadow-card`（结构不变，只加阴影） |
+| `settlement/mark-settled-button.tsx` | 错误提示 `text-base text-red-600` → `text-sm text-coral` |
+| `components/avatar.tsx`（顺带，非任务点名文件但影响面大） | `bg-slate-200 text-slate-700` → `bg-sand text-ink` |
+
+## 跟系统里其它二级页面/黄金路径的关系
+
+这次修的四类缺口全部是"黄金路径已经验证过的手法，接到没接上的地方"，没有发明任何新色板/新字体/新圆角/新阴影 token——延续第三版以来"照搬 X 风格＝读 X 真实代码逐值对齐，不是凭印象照猜"这条纪律，这次的"X"就是本项目自己的黄金路径页面，不是外部参照。
+
+**顺带发现但不在这次强制范围内**（列出方便以后排期，不是这次的任务）：`wallet-grid.tsx`/`fx-compare-list.tsx` 的卡片、`page.tsx` 参与者清单外层盒子，同样没有 `shadow-card`——这是第七版当时承诺"落地点"时漏掉的几处（第七版原文列的落地点是 `.tx-item`、`wallet-grid.tsx`、`fx-compare-list.tsx`、行程切换弹层，但实读代码确认只有 `.tx-item` 和 `trip-switcher.tsx` 真的接上了）。建议排进下一轮"全站 `shadow-card` 覆盖扫描"一次做完，这次任务范围只处理三个点名页面，不在这里展开修。`text-red-600` 误用于非财务错误提示这个 bug 同理，见上面单独一节列的文件清单。

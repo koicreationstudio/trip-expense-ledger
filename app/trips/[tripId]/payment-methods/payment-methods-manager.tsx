@@ -95,23 +95,28 @@ export function PaymentMethodsManager() {
         ) : (
           <ul className="flex flex-col gap-2">
             {methods.map((m) => (
-              <li
-                key={m.id}
-                className="flex items-center justify-between rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px]"
-              >
-                <div className="flex flex-col">
-                  <span className="text-[12.5px] font-medium">
-                    {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
+              <li key={m.id} className="tx-item justify-between">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-lt text-sm"
+                    aria-hidden="true"
+                  >
+                    {m.kind === 'card' ? '💳' : '💵'}
                   </span>
-                  <span className="text-[10px] text-muted">
-                    汇率加点 {m.fxMarkupPercent}% · 境外手续费 {m.foreignTxnFeePercent}% · 返现 {m.cashbackPercent}%
-                    {m.fixedFee > 0 && ` · 固定费 ${formatMoney(m.fixedFee, m.settlementCurrency)}`}
-                  </span>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-[12.5px] font-medium">
+                      {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
+                    </span>
+                    <span className="mt-0.5 border-t border-dashed border-sand pt-1 text-[10px] text-muted">
+                      汇率加点 {m.fxMarkupPercent}% · 境外手续费 {m.foreignTxnFeePercent}% · 返现 {m.cashbackPercent}%
+                      {m.fixedFee > 0 && ` · 固定费 ${formatMoney(m.fixedFee, m.settlementCurrency)}`}
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleDelete(m.id)}
-                  className="btn-secondary"
+                  className="btn-secondary shrink-0"
                 >
                   删除
                 </button>

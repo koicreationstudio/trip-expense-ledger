@@ -36,7 +36,7 @@ export function MarkSettledButton({ tripId }: { tripId: string }) {
       >
         {submitting ? '处理中…' : '标记已结算'}
       </button>
-      {error && <p className="text-base text-red-600">{error}</p>}
+      {error && <p className="text-sm text-coral">{error}</p>}
     </div>
   );
 }

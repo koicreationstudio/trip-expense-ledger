@@ -45,7 +45,7 @@ export default async function SettlementPage({ params }: { params: { tripId: str
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-ink">每人净值</h2>
-        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px]">
+        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] shadow-card">
           {[...netBalances.entries()].map(([participantId, amount]) => {
             const name = nameById.get(participantId) ?? participantId;
             return (
@@ -67,7 +67,7 @@ export default async function SettlementPage({ params }: { params: { tripId: str
         {transfers.length === 0 ? (
           <p className="text-xs text-muted">目前不需要任何转账。</p>
         ) : (
-          <ul className="flex flex-col gap-2 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px]">
+          <ul className="flex flex-col gap-2 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] shadow-card">
             {transfers.map((t, index) => {
               const fromName = nameById.get(t.fromParticipantId) ?? t.fromParticipantId;
               const toName = nameById.get(t.toParticipantId) ?? t.toParticipantId;
