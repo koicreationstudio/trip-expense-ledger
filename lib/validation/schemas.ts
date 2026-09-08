@@ -25,6 +25,8 @@ export const createExpenseSchema = z.object({
   // 只在 currency !== trip.baseCurrency 时需要，手动输入兜底，不在这里强制必填，
   // 由路由按 trip.baseCurrency 动态判断要不要求这个字段。
   fxRateUsed: z.number().positive().optional(),
+  // 比价卡片里选定实际使用的支付方式，可空（不比价/不选也能记账）。
+  paymentMethodId: z.string().min(1).optional(),
   category: z.string().trim().min(1).max(100),
   note: z.string().trim().max(2000).optional(),
   expenseDate: z.string().datetime(),
@@ -86,3 +88,34 @@ export const loginSchema = z.object({
 export const switchTripSchema = z.object({
   tripId: z.string().min(1),
 });
+
+export const createWalletSchema = z.object({
+  label: z.string().trim().min(1).max(100),
+  currency: currencyCode,
+  emoji: z.string().trim().min(1).max(8).default('💰'),
+  // 用户输入的起始余额（最小货币单位），只在新建时设置一次；之后由记账/换汇驱动变化。
+  initialBalance: z.number().int().min(0).default(0),
+  paymentMethodId: z.string().min(1).optional(),
+});
+
+export const updateWalletSchema = z.object({
+  label: z.string().trim().min(1).max(100).optional(),
+  emoji: z.string().trim().min(1).max(8).optional(),
+  paymentMethodId: z.string().min(1).nullable().optional(),
+  // 允许手动订正余额（比如跟实际现金对不上时），不算「记一笔换汇」，直接覆盖。
+  currentBalance: z.number().int().optional(),
+});
+
+export const createExchangeRecordSchema = z
+  .object({
+    fromWalletId: z.string().min(1).optional(),
+    toWalletId: z.string().min(1),
+    fromAmount: z.number().int().positive().optional(),
+    toAmount: z.number().int().positive(),
+    exchangeDate: z.string().datetime(),
+    note: z.string().trim().max(2000).optional(),
+  })
+  .refine((v) => (v.fromWalletId ? v.fromAmount !== undefined : v.fromAmount === undefined), {
+    message: 'fromAmount 要跟 fromWalletId 同时有或同时没有',
+    path: ['fromAmount'],
+  });

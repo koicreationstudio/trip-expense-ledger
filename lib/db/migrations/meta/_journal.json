@@ -15,6 +15,13 @@
       "when": 1788702403103,
       "tag": "0001_pale_meteorite",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788842757816,
+      "tag": "0002_right_legion",
+      "breakpoints": true
     }
   ]
 }

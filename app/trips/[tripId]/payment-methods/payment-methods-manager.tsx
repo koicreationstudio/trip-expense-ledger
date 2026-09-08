@@ -89,21 +89,21 @@ export function PaymentMethodsManager() {
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-700">已配置的支付方式</h2>
         {methods === null ? (
-          <p className="text-sm text-slate-500">载入中…</p>
+          <p className="text-sm text-muted">载入中…</p>
         ) : methods.length === 0 ? (
-          <p className="text-sm text-slate-500">还没配置任何支付方式。</p>
+          <p className="text-sm text-muted">还没配置任何支付方式。</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {methods.map((m) => (
               <li
                 key={m.id}
-                className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-base"
+                className="flex items-center justify-between rounded-xl border border-sand bg-paper px-3 py-2 text-base"
               >
                 <div className="flex flex-col">
                   <span className="font-medium">
                     {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
                   </span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-muted">
                     汇率加点 {m.fxMarkupPercent}% · 境外手续费 {m.foreignTxnFeePercent}% · 返现 {m.cashbackPercent}%
                     {m.fixedFee > 0 && ` · 固定费 ${formatMoney(m.fixedFee, m.settlementCurrency)}`}
                   </span>
@@ -231,7 +231,7 @@ export function PaymentMethodsManager() {
             </div>
           </div>
 
-          {error && <p className="text-base text-red-600">{error}</p>}
+          {error && <p className="text-base text-coral">{error}</p>}
 
           <button
             type="submit"

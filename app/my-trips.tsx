@@ -50,7 +50,7 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
   }
 
   if (trips.length === 0) {
-    return <p className="text-sm text-slate-500">还没建过行程，点上面「创建新行程」开始。</p>;
+    return <p className="text-sm text-muted">还没建过行程，点上面「创建新行程」开始。</p>;
   }
 
   return (
@@ -63,10 +63,10 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
             type="button"
             onClick={() => handleOpen(trip.id)}
             disabled={switchingId === trip.id}
-            className="flex flex-col gap-1 rounded-md border border-slate-200 bg-white p-4 text-left text-base hover:border-slate-400 disabled:opacity-50"
+            className="flex flex-col gap-1 rounded-xl border border-sand bg-paper p-4 text-left text-base hover:border-muted disabled:opacity-50"
           >
             <span className="font-medium">{trip.name}</span>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted">
               本位币 {trip.baseCurrency} · {trip.isOwner ? '创建者' : '同行人'} ·{' '}
               {STATUS_LABEL[trip.status] ?? trip.status}
             </span>
@@ -77,7 +77,7 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
             >
               {trip.netBalance >= 0 ? '该收' : '该付'} {formatMoney(Math.abs(trip.netBalance), trip.baseCurrency)}
             </span>
-            {switchingId === trip.id && <span className="text-xs text-slate-500">打开中…</span>}
+            {switchingId === trip.id && <span className="text-xs text-muted">打开中…</span>}
           </button>
         ))}
       </div>

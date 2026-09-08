@@ -11,9 +11,10 @@ import { Plus } from 'lucide-react';
  */
 export function RecordExpenseFab({ tripId }: { tripId: string }) {
   const pathname = usePathname();
-  const onExpenseForm = pathname.includes('/expenses/new') || pathname.includes('/edit');
+  const onFormPage =
+    pathname.includes('/expenses/new') || pathname.includes('/edit') || pathname.includes('/exchange/new');
 
-  if (onExpenseForm) return null;
+  if (onFormPage) return null;
 
   return (
     <div

@@ -29,6 +29,7 @@ export interface InitialExpense {
   amountBaseCurrency: number;
   hasReceipt: boolean;
   splits: SplitShare[];
+  paymentMethodId: string | null;
 }
 
 /**
@@ -104,6 +105,9 @@ export function ExpenseForm({
   const [comparing, setComparing] = useState(false);
   const [recommendations, setRecommendations] = useState<FxRecommendationResult[] | null>(null);
   const [compareError, setCompareError] = useState<string | null>(null);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(
+    initialExpense?.paymentMethodId ?? null
+  );
 
   const [customSplit, setCustomSplit] = useState(initialSplitState?.customSplit ?? false);
   const [splitIncluded, setSplitIncluded] = useState<Record<string, boolean>>(
@@ -163,6 +167,8 @@ export function ExpenseForm({
       }
       const data = (await res.json()) as any;
       setRecommendations(data.recommendations);
+      // 每次重新比价都清掉已选定的支付方式：金额/币种可能变了，旧的选择不一定还成立。
+      setSelectedPaymentMethodId(null);
     } finally {
       setComparing(false);
     }
@@ -227,6 +233,7 @@ export function ExpenseForm({
           amount: amountCents,
           currency,
           fxRateUsed: needsManualFxRate ? Number(fxRateUsed) : undefined,
+          paymentMethodId: selectedPaymentMethodId ?? undefined,
           category: category.trim(),
           note: note.trim() || undefined,
           expenseDate: new Date(expenseDate).toISOString(),
@@ -270,7 +277,7 @@ export function ExpenseForm({
             value={amountYuan}
             onChange={(e) => setAmountYuan(e.target.value)}
             placeholder="0.00"
-            className="field-input text-lg font-semibold tabular-nums"
+            className="field-input font-serif text-lg font-medium tabular-nums"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -313,7 +320,7 @@ export function ExpenseForm({
         </div>
       )}
 
-      <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-3">
+      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-paper p-3">
         <div className="flex items-center justify-between">
           <span className="field-label">这笔用哪张卡最划算？</span>
           <button
@@ -326,7 +333,7 @@ export function ExpenseForm({
           </button>
         </div>
         {compareError === 'no_payment_methods' && (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted">
             还没配置支付方式，先去{' '}
             <Link href={`/trips/${tripId}/payment-methods`} className="tap-link">
               支付方式设置
@@ -335,34 +342,51 @@ export function ExpenseForm({
           </p>
         )}
         {compareError && compareError !== 'no_payment_methods' && (
-          <p className="text-base text-red-600">{compareError}</p>
+          <p className="text-base text-coral">{compareError}</p>
         )}
         {recommendations && (
-          <ul className="flex flex-col gap-1">
-            {recommendations.map((r, index) => (
-              <li
-                key={r.paymentMethodId}
-                className={`flex items-center justify-between rounded px-2 py-1 text-base ${
-                  index === 0 && !r.unavailable ? 'bg-emerald-50 text-emerald-800' : ''
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  {r.label}
-                  {index === 0 && !r.unavailable && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white">
-                      <Check className="h-3 w-3" aria-hidden="true" />
-                      最划算
+          <div className="flex flex-col gap-2">
+            {recommendations.map((r, index) => {
+              const isBest = index === 0 && !r.unavailable;
+              const isSelected = selectedPaymentMethodId === r.paymentMethodId;
+              return (
+                <button
+                  key={r.paymentMethodId}
+                  type="button"
+                  disabled={r.unavailable}
+                  onClick={() => setSelectedPaymentMethodId(r.paymentMethodId)}
+                  className={`flex flex-col gap-1 rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-60 ${
+                    isBest ? 'border-seafoam bg-sf-lt' : 'border-sand bg-white'
+                  } ${isSelected ? 'ring-2 ring-ink' : ''}`}
+                >
+                  <span className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      {r.label}
+                      {isBest && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-seafoam px-2 py-0.5 text-xs font-medium text-white">
+                          <Check className="h-3 w-3" aria-hidden="true" />
+                          最划算
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-                <span className="tabular-nums">
-                  {r.unavailable || r.costInCompareCurrency === null
-                    ? '汇率缺失，建议手动核对'
-                    : formatMoney(r.costInCompareCurrency, baseCurrency)}
-                </span>
-              </li>
-            ))}
-          </ul>
+                    <span className="font-serif text-lg font-medium tabular-nums">
+                      {r.unavailable || r.costInCompareCurrency === null
+                        ? '缺汇率'
+                        : formatMoney(r.costInCompareCurrency, baseCurrency)}
+                    </span>
+                  </span>
+                  <span className="text-xs text-muted">
+                    {r.unavailable || r.costInCompareCurrency === null
+                      ? '汇率缺失，建议手动核对'
+                      : r.requiresConversion
+                        ? `汇率 ${r.effectiveRate?.toFixed(4) ?? '—'}`
+                        : '同币种，无需换汇'}
+                  </span>
+                </button>
+              );
+            })}
+            <p className="text-xs text-muted">点一张卡标记「这笔实际用它」，记账时会自动扣对应钱包余额。</p>
+          </div>
         )}
       </div>
 
@@ -444,7 +468,7 @@ export function ExpenseForm({
         />
       </div>
 
-      <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-3">
+      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-paper p-3">
         <label className="flex items-center gap-2 text-base font-medium">
           <input
             type="checkbox"
@@ -454,7 +478,7 @@ export function ExpenseForm({
           自定义分摊（不勾选默认全员等分）
         </label>
 
-        {!customSplit && <p className="text-xs text-slate-500">默认所有参与者平均分摊这笔消费。</p>}
+        {!customSplit && <p className="text-xs text-muted">默认所有参与者平均分摊这笔消费。</p>}
 
         {customSplit && (
           <div className="flex flex-col gap-2">
@@ -481,7 +505,7 @@ export function ExpenseForm({
                     placeholder="0.00"
                     className="field-input w-28"
                   />
-                  <span className="text-xs text-slate-500">{currency}</span>
+                  <span className="text-xs text-muted">{currency}</span>
                 </div>
               ))}
             </div>
@@ -493,18 +517,18 @@ export function ExpenseForm({
               >
                 平均分给已勾选的人
               </button>
-              <span className={`text-sm tabular-nums ${splitMismatch ? 'text-red-600' : 'text-emerald-700'}`}>
+              <span className={`text-sm tabular-nums ${splitMismatch ? 'text-coral' : 'text-emerald-700'}`}>
                 已分配 {formatMoney(splitCentsTotal, currency)} / 共 {formatMoney(amountCentsTotal, currency)}
               </span>
             </div>
             {splitMismatch && (
-              <p className="text-base text-red-600">分摊总和要跟消费总金额完全一致才能提交。</p>
+              <p className="text-base text-coral">分摊总和要跟消费总金额完全一致才能提交。</p>
             )}
           </div>
         )}
       </div>
 
-      {error && <p className="text-base text-red-600">{error}</p>}
+      {error && <p className="text-base text-coral">{error}</p>}
 
       <div className="flex items-center gap-3">
         <button
@@ -515,7 +539,7 @@ export function ExpenseForm({
           {submitting ? '保存中…' : isEdit ? '保存修改' : '记这笔账'}
         </button>
         {isEdit && (
-          <Link href={`/trips/${tripId}`} className="tap-link text-slate-500">
+          <Link href={`/trips/${tripId}`} className="tap-link text-muted">
             取消
           </Link>
         )}

@@ -53,7 +53,7 @@ export function ExpenseList({
   }
 
   if (expenses.length === 0) {
-    return <p className="text-sm text-slate-500">还没记过账，点下面「记一笔消费」开始。</p>;
+    return <p className="text-sm text-muted">还没记过账，点下面「记一笔消费」开始。</p>;
   }
 
   return (
@@ -63,10 +63,8 @@ export function ExpenseList({
         {expenses.map((e) => {
           const mine = e.enteredByParticipantId === myParticipantId;
           return (
-            <li
-              key={e.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-base"
-            >
+            <li key={e.id} className="tx-item justify-between">
+
               <Avatar name={e.payerName} size={28} />
               {/* 编辑/删除放在头像右边（不是行尾）：常驻 FAB 固定贴在屏幕右下角，
                   行尾贴边的图标只要行数够多、总高度接近一屏，就会被 FAB 盖住
@@ -98,14 +96,14 @@ export function ExpenseList({
                   有的因为名字长换成两行，看起来参差不齐（ui-auditor 走查点名过这个）。 */}
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="font-medium">{e.category}</span>
-                <span className="truncate text-xs text-slate-500">
+                <span className="truncate text-xs text-muted">
                   {e.payerName} · {e.expenseDate.slice(5, 10)}
                   {e.hasReceipt && ' · 有收据'}
                 </span>
               </div>
               {/* 金额继续钉死在行最右侧（DESIGN-BRIEF 第一版就定的规矩：金额一律放最右侧、
                   等宽数字对齐），不因为这次挪了编辑/删除就跟着松动。 */}
-              <span className="shrink-0 tabular-nums">{formatMoney(e.amount, e.currency)}</span>
+              <span className="shrink-0 font-serif tabular-nums">{formatMoney(e.amount, e.currency)}</span>
             </li>
           );
         })}

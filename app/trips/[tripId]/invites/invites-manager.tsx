@@ -119,24 +119,24 @@ export function InvitesManager({ tripId }: { tripId: string }) {
             {creating ? '生成中…' : '生成邀请链接'}
           </button>
         </form>
-        {error && <p className="text-base text-red-600">{error}</p>}
+        {error && <p className="text-base text-coral">{error}</p>}
       </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-700">现有邀请链接</h2>
         {invites === null ? (
-          <p className="text-sm text-slate-500">载入中…</p>
+          <p className="text-sm text-muted">载入中…</p>
         ) : invites.length === 0 ? (
-          <p className="text-sm text-slate-500">还没生成过邀请链接。</p>
+          <p className="text-sm text-muted">还没生成过邀请链接。</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {invites.map((invite) => {
               const isRevoked = invite.revokedAt !== null;
               const isExpired = invite.expiresAt !== null && new Date(invite.expiresAt).getTime() < Date.now();
               return (
-                <li key={invite.id} className="flex flex-col gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+                <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-paper px-3 py-2 text-sm">
                   <code className="break-all text-xs text-slate-600">{inviteUrl(invite.code)}</code>
-                  <div className="flex items-center gap-3 text-xs text-slate-500">
+                  <div className="flex items-center gap-3 text-xs text-muted">
                     <span>
                       {isRevoked ? '已撤销' : isExpired ? '已过期' : '有效'}
                       {invite.expiresAt && !isRevoked ? ` · 到期 ${new Date(invite.expiresAt).toLocaleDateString()}` : ''}
@@ -145,7 +145,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
                       {copiedCode === invite.code ? '已复制' : '复制链接'}
                     </button>
                     {!isRevoked && (
-                      <button type="button" onClick={() => handleRevoke(invite.id)} className="tap-link text-red-600">
+                      <button type="button" onClick={() => handleRevoke(invite.id)} className="tap-link text-coral">
                         撤销
                       </button>
                     )}
@@ -159,25 +159,25 @@ export function InvitesManager({ tripId }: { tripId: string }) {
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-700">参与者认领状态</h2>
-        <p className="text-xs text-slate-500">认领错人、换手机号了，可以把某个人重置回未认领状态，让他重新用邀请链接认领。</p>
+        <p className="text-xs text-muted">认领错人、换手机号了，可以把某个人重置回未认领状态，让他重新用邀请链接认领。</p>
         {participants === null ? (
-          <p className="text-sm text-slate-500">载入中…</p>
+          <p className="text-sm text-muted">载入中…</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {participants.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-base"
+                className="flex items-center justify-between rounded-xl border border-sand bg-paper px-3 py-2 text-base"
               >
                 <span>
                   {p.displayName}
-                  {p.isOwner && <span className="ml-2 text-xs text-slate-500">创建者</span>}
-                  <span className={`ml-2 text-xs ${p.claimed ? 'text-emerald-600' : 'text-slate-500'}`}>
+                  {p.isOwner && <span className="ml-2 text-xs text-muted">创建者</span>}
+                  <span className={`ml-2 text-xs ${p.claimed ? 'text-emerald-600' : 'text-muted'}`}>
                     {p.claimed ? '已认领' : '未认领'}
                   </span>
                 </span>
                 {p.claimed && !p.isOwner && (
-                  <button type="button" onClick={() => handleResetClaim(p.id)} className="tap-link text-sm text-slate-500">
+                  <button type="button" onClick={() => handleResetClaim(p.id)} className="tap-link text-sm text-muted">
                     重置认领
                   </button>
                 )}

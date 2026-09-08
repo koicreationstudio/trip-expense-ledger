@@ -55,6 +55,7 @@ export default async function EditExpensePage({
           fxRateUsed: expense.fxRateUsed,
           amountBaseCurrency: expense.amountBaseCurrency,
           hasReceipt: expense.receiptPath !== null,
+          paymentMethodId: expense.paymentMethodId,
           splits: expense.splits.map((s) => ({
             participantId: s.participantId,
             shareAmountBaseCurrency: s.shareAmountBaseCurrency,

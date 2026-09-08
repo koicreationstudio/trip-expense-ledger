@@ -1,14 +1,16 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getDb } from '@/lib/db/client';
-import { expenses, participants, trips } from '@/lib/db/schema';
+import { exchangeRecords, expenses, participants, trips, wallets } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadSettlementInput } from '@/lib/db/settlement-query';
 import { computeNetBalances } from '@/lib/domain/settlement';
 import { formatMoney } from '@/lib/money';
 import { Avatar } from '@/components/avatar';
 import { ExpenseList } from './expense-list';
+import { WalletGrid } from './wallet-grid';
+import { ExchangeRecordList } from './exchange-record-list';
 
 const STATUS_LABEL: Record<string, string> = {
   active: '记账中',
@@ -46,19 +48,35 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     .where(eq(expenses.tripId, params.tripId))
     .orderBy(desc(expenses.expenseDate));
 
+  // 钱包 + 换汇记录都私有：硬编码 participant_id = 自己，跟活动流那种「整个行程可见」
+  // 是完全不同的性质（这里是「我自己的现金在哪张卡/现金里」，不共享）。
+  const myWallets = await db
+    .select()
+    .from(wallets)
+    .where(and(eq(wallets.tripId, params.tripId), eq(wallets.participantId, identity.participantId)))
+    .orderBy(wallets.createdAt);
+
+  const myExchangeRecords = await db
+    .select()
+    .from(exchangeRecords)
+    .where(and(eq(exchangeRecords.tripId, params.tripId), eq(exchangeRecords.participantId, identity.participantId)))
+    .orderBy(desc(exchangeRecords.exchangeDate));
+
+  const walletById = new Map(myWallets.map((w) => [w.id, w]));
+
   return (
     <main className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold">{trip.name}</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-ink">{trip.name}</h1>
+        <p className="mt-1 text-sm text-muted">
           本位币 {trip.baseCurrency} · {STATUS_LABEL[trip.status] ?? trip.status}
         </p>
       </div>
 
-      <section className="flex flex-col gap-3 rounded-lg bg-slate-900 p-5 text-white">
+      <section className="flex flex-col gap-3 rounded-hero bg-ink p-5 text-white">
         <span className="text-xs uppercase tracking-wide text-slate-400">我的净额</span>
         <span
-          className={`text-5xl font-semibold tabular-nums tracking-tight sm:text-6xl ${
+          className={`font-serif text-5xl font-medium tabular-nums tracking-tight sm:text-6xl ${
             myNet >= 0 ? 'text-emerald-400' : 'text-red-400'
           }`}
         >
@@ -74,8 +92,25 @@ export default async function TripPage({ params }: { params: { tripId: string } 
       </section>
 
       <section className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold text-slate-700">我的钱包</h2>
+          <span className="text-[10px] text-muted">仅自己可见</span>
+        </div>
+        <WalletGrid tripId={trip.id} wallets={myWallets.map((w) => ({
+          id: w.id,
+          label: w.label,
+          currency: w.currency,
+          emoji: w.emoji,
+          currentBalance: w.currentBalance,
+        }))} />
+        <Link href={`/trips/${trip.id}/exchange/new`} className="tap-link self-start text-sm text-gold-dk">
+          💱 取款 / 换汇
+        </Link>
+      </section>
+
+      <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-700">参与者</h2>
-        <ul className="flex flex-col gap-1 rounded-md border border-slate-200 bg-white p-3">
+        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-paper p-3">
           {tripParticipants.map((p) => {
             const net = netBalances.get(p.id) ?? 0;
             const isMe = p.id === identity.participantId;
@@ -85,15 +120,15 @@ export default async function TripPage({ params }: { params: { tripId: string } 
                 <div className="flex flex-1 flex-col">
                   <span className="text-base">
                     {p.displayName}
-                    {p.isOwner && <span className="ml-2 text-xs text-slate-500">创建者</span>}
+                    {p.isOwner && <span className="ml-2 text-xs text-muted">创建者</span>}
                   </span>
-                  <span className="text-xs text-slate-400">{p.claimedAt ? '已认领' : '邀请待认领'}</span>
+                  <span className="text-xs text-muted">{p.claimedAt ? '已认领' : '邀请待认领'}</span>
                 </div>
                 {isMe ? (
-                  <span className="text-sm text-slate-400">我自己</span>
+                  <span className="text-sm text-muted">我自己</span>
                 ) : (
                   <span
-                    className={`tabular-nums text-base ${net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                    className={`font-serif tabular-nums text-base ${net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
                   >
                     {net >= 0 ? '该收' : '该付'} {formatMoney(Math.abs(net), trip.baseCurrency)}
                   </span>
@@ -118,6 +153,26 @@ export default async function TripPage({ params }: { params: { tripId: string } 
             hasReceipt: e.receiptPath !== null,
             payerName: nameById.get(e.payerParticipantId) ?? '未知',
             enteredByParticipantId: e.enteredByParticipantId,
+          }))}
+        />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold text-slate-700">换汇 · EXCHANGE</h2>
+          <span className="text-[10px] text-muted">仅自己可见</span>
+        </div>
+        <ExchangeRecordList
+          records={myExchangeRecords.map((r) => ({
+            id: r.id,
+            fromLabel: r.fromWalletId ? walletById.get(r.fromWalletId)?.label ?? '未知钱包' : null,
+            toLabel: walletById.get(r.toWalletId)?.label ?? '未知钱包',
+            fromAmount: r.fromAmount,
+            toAmount: r.toAmount,
+            toCurrency: walletById.get(r.toWalletId)?.currency ?? '',
+            fromCurrency: r.fromWalletId ? walletById.get(r.fromWalletId)?.currency ?? '' : '',
+            exchangeDate: r.exchangeDate.toISOString(),
+            note: r.note,
           }))}
         />
       </section>

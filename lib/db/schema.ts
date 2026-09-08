@@ -170,6 +170,9 @@ export const expenses = sqliteTable(
     fxRateSource: text('fx_rate_source', { enum: ['manual', 'fetched'] })
       .notNull()
       .default('manual'),
+    // 用户在比价卡片里实际选定使用的支付方式，可空（不比价/不选也能记账）。
+    // 只用于「记账时钱包自动扣减」这一件事，不影响结算计算。
+    paymentMethodId: text('payment_method_id').references(() => paymentMethods.id, { onDelete: 'set null' }),
     category: text('category').notNull(),
     note: text('note'),
     receiptPath: text('receipt_path'),
@@ -233,6 +236,69 @@ export const paymentMethods = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// wallet：挂在「某个人在某趟行程下」的现金/账户余额追踪，私有——只有
+// participant_id 对应的那个人自己能查自己的钱包，查询边界跟 expense 的
+// entered_by_participant_id 同一套规矩：硬编码 WHERE，不接受客户端传参覆盖。
+// 挂在 trip 而不是全局：每趟行程各自记自己的钱包余额，不做跨行程结转，
+// 这是「按行程归属」目前最简单可靠的实现方式。
+// ---------------------------------------------------------------------------
+export const wallets = sqliteTable(
+  'wallet',
+  {
+    id: id(),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    participantId: text('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    currency: text('currency').notNull(),
+    emoji: text('emoji').notNull().default('💰'),
+    currentBalance: integer('current_balance').notNull().default(0), // 最小货币单位
+    // 可选关联到自己配置的支付方式，用于「记账选中这个支付方式时自动扣这个钱包」。
+    paymentMethodId: text('payment_method_id').references(() => paymentMethods.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (table) => ({
+    tripIdx: index('wallet_trip_idx').on(table.tripId),
+    participantIdx: index('wallet_participant_idx').on(table.participantId),
+  })
+);
+
+// ---------------------------------------------------------------------------
+// exchange_record：一笔换汇/充值记录，私有规矩同 wallet。fromWalletId 为空
+// 代表「纯充值，没有可追踪的来源钱包」（比如带的实体现金第一次登记）。
+// 隐含汇率 = toAmount / fromAmount，故意不额外存 rate 字段——展示时现算，
+// 避免存储值跟金额本身算出来的不一致（同一条教训见 expense 表不重复存派生值）。
+// ---------------------------------------------------------------------------
+export const exchangeRecords = sqliteTable(
+  'exchange_record',
+  {
+    id: id(),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    participantId: text('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    fromWalletId: text('from_wallet_id').references(() => wallets.id, { onDelete: 'set null' }),
+    toWalletId: text('to_wallet_id')
+      .notNull()
+      .references(() => wallets.id, { onDelete: 'cascade' }),
+    fromAmount: integer('from_amount'), // fromWalletId 币种最小单位，无来源时为 null
+    toAmount: integer('to_amount').notNull(), // toWalletId 币种最小单位
+    exchangeDate: integer('exchange_date', { mode: 'timestamp_ms' }).notNull(),
+    note: text('note'),
+    createdAt: createdAt(),
+  },
+  (table) => ({
+    tripIdx: index('exchange_record_trip_idx').on(table.tripId),
+    participantIdx: index('exchange_record_participant_idx').on(table.participantId),
+  })
+);
+
+// ---------------------------------------------------------------------------
 // settlement_snapshot：行程被显式标记「已结算」时才写入的冻结快照。
 // 平时净额结算走实时计算（见 lib/domain/settlement.ts），不落这张表，
 // 只有这里的记录代表「过去某一刻算出来、之后不再变」的结果。
@@ -284,6 +350,8 @@ export const tripsRelations = relations(trips, ({ many }) => ({
   invites: many(invites),
   expenses: many(expenses),
   settlementSnapshots: many(settlementSnapshots),
+  wallets: many(wallets),
+  exchangeRecords: many(exchangeRecords),
 }));
 
 export const participantsRelations = relations(participants, ({ one, many }) => ({
@@ -293,6 +361,8 @@ export const participantsRelations = relations(participants, ({ one, many }) => 
   paymentMethods: many(paymentMethods),
   enteredExpenses: many(expenses, { relationName: 'enteredBy' }),
   paidExpenses: many(expenses, { relationName: 'payer' }),
+  wallets: many(wallets),
+  exchangeRecords: many(exchangeRecords),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -326,6 +396,10 @@ export const expensesRelations = relations(expenses, ({ one, many }) => ({
     relationName: 'payer',
   }),
   splits: many(expenseSplits),
+  paymentMethod: one(paymentMethods, {
+    fields: [expenses.paymentMethodId],
+    references: [paymentMethods.id],
+  }),
 }));
 
 export const expenseSplitsRelations = relations(expenseSplits, ({ one }) => ({
@@ -333,8 +407,32 @@ export const expenseSplitsRelations = relations(expenseSplits, ({ one }) => ({
   participant: one(participants, { fields: [expenseSplits.participantId], references: [participants.id] }),
 }));
 
-export const paymentMethodsRelations = relations(paymentMethods, ({ one }) => ({
+export const paymentMethodsRelations = relations(paymentMethods, ({ one, many }) => ({
   participant: one(participants, { fields: [paymentMethods.participantId], references: [participants.id] }),
+  wallets: many(wallets),
+}));
+
+export const walletsRelations = relations(wallets, ({ one, many }) => ({
+  trip: one(trips, { fields: [wallets.tripId], references: [trips.id] }),
+  participant: one(participants, { fields: [wallets.participantId], references: [participants.id] }),
+  paymentMethod: one(paymentMethods, { fields: [wallets.paymentMethodId], references: [paymentMethods.id] }),
+  exchangeRecordsFrom: many(exchangeRecords, { relationName: 'fromWallet' }),
+  exchangeRecordsTo: many(exchangeRecords, { relationName: 'toWallet' }),
+}));
+
+export const exchangeRecordsRelations = relations(exchangeRecords, ({ one }) => ({
+  trip: one(trips, { fields: [exchangeRecords.tripId], references: [trips.id] }),
+  participant: one(participants, { fields: [exchangeRecords.participantId], references: [participants.id] }),
+  fromWallet: one(wallets, {
+    fields: [exchangeRecords.fromWalletId],
+    references: [wallets.id],
+    relationName: 'fromWallet',
+  }),
+  toWallet: one(wallets, {
+    fields: [exchangeRecords.toWalletId],
+    references: [wallets.id],
+    relationName: 'toWallet',
+  }),
 }));
 
 export const settlementSnapshotsRelations = relations(settlementSnapshots, ({ one }) => ({

@@ -3,13 +3,15 @@
  * 这样新加一个数据库列不会自动被响应体带出去，尤其是 expense 的 note/receiptPath
  * 这类只有本人能看的字段，必须每个响应形状自己决定要不要包含。
  */
-import type { participants, trips, expenses, paymentMethods, users } from '../db/schema';
+import type { participants, trips, expenses, paymentMethods, users, wallets, exchangeRecords } from '../db/schema';
 
 type ParticipantRow = typeof participants.$inferSelect;
 type TripRow = typeof trips.$inferSelect;
 type ExpenseRow = typeof expenses.$inferSelect;
 type PaymentMethodRow = typeof paymentMethods.$inferSelect;
 type UserRow = typeof users.$inferSelect;
+type WalletRow = typeof wallets.$inferSelect;
+type ExchangeRecordRow = typeof exchangeRecords.$inferSelect;
 
 export function toParticipantSummaryDto(row: ParticipantRow) {
   return {
@@ -43,6 +45,7 @@ export function toExpenseDto(row: ExpenseRow) {
     amountBaseCurrency: row.amountBaseCurrency,
     fxRateUsed: row.fxRateUsed,
     fxRateSource: row.fxRateSource,
+    paymentMethodId: row.paymentMethodId,
     category: row.category,
     note: row.note,
     hasReceipt: row.receiptPath !== null,
@@ -73,5 +76,33 @@ export function toPaymentMethodDto(row: PaymentMethodRow) {
     cashbackPercent: row.cashbackPercent,
     isActive: row.isActive,
     sortOrder: row.sortOrder,
+  };
+}
+
+/** 私有资源，只会出现在「查自己」的响应里，不做跨参与者展开。 */
+export function toWalletDto(row: WalletRow) {
+  return {
+    id: row.id,
+    tripId: row.tripId,
+    label: row.label,
+    currency: row.currency,
+    emoji: row.emoji,
+    currentBalance: row.currentBalance,
+    paymentMethodId: row.paymentMethodId,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function toExchangeRecordDto(row: ExchangeRecordRow) {
+  return {
+    id: row.id,
+    tripId: row.tripId,
+    fromWalletId: row.fromWalletId,
+    toWalletId: row.toWalletId,
+    fromAmount: row.fromAmount,
+    toAmount: row.toAmount,
+    exchangeDate: row.exchangeDate.toISOString(),
+    note: row.note,
+    createdAt: row.createdAt.toISOString(),
   };
 }

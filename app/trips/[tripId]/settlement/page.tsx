@@ -33,7 +33,7 @@ export default async function SettlementPage({ params }: { params: { tripId: str
       <h1 className="text-xl font-semibold">结算</h1>
 
       {trip.status === 'settled' ? (
-        <p className="rounded-md bg-slate-100 px-3 py-2 text-base text-slate-600">
+        <p className="rounded-xl bg-sand px-3 py-2 text-base text-slate-600">
           这个行程已标记结算，数字已冻结。
         </p>
       ) : (
@@ -42,14 +42,14 @@ export default async function SettlementPage({ params }: { params: { tripId: str
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-700">每人净值</h2>
-        <ul className="flex flex-col gap-1 rounded-md border border-slate-200 bg-white p-3">
+        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-paper p-3">
           {[...netBalances.entries()].map(([participantId, amount]) => {
             const name = nameById.get(participantId) ?? participantId;
             return (
               <li key={participantId} className="flex items-center gap-3 py-1">
                 <Avatar name={name} />
                 <span className="flex-1 text-base">{name}</span>
-                <span className={`tabular-nums text-base ${amount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                <span className={`font-serif tabular-nums text-base ${amount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                   {amount >= 0 ? '该收' : '该付'} {formatMoney(Math.abs(amount), trip.baseCurrency)}
                 </span>
               </li>
@@ -61,9 +61,9 @@ export default async function SettlementPage({ params }: { params: { tripId: str
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-700">转账清单</h2>
         {transfers.length === 0 ? (
-          <p className="text-sm text-slate-500">目前不需要任何转账。</p>
+          <p className="text-sm text-muted">目前不需要任何转账。</p>
         ) : (
-          <ul className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-3">
+          <ul className="flex flex-col gap-2 rounded-xl border border-sand bg-paper p-3">
             {transfers.map((t, index) => {
               const fromName = nameById.get(t.fromParticipantId) ?? t.fromParticipantId;
               const toName = nameById.get(t.toParticipantId) ?? t.toParticipantId;
@@ -72,13 +72,13 @@ export default async function SettlementPage({ params }: { params: { tripId: str
                   <span className="flex flex-wrap items-center gap-2">
                     <Avatar name={fromName} size={28} />
                     <span>{fromName}</span>
-                    <span className="text-slate-400" aria-hidden="true">
+                    <span className="text-muted" aria-hidden="true">
                       →
                     </span>
                     <Avatar name={toName} size={28} />
                     <span>{toName}</span>
                   </span>
-                  <span className="tabular-nums">{formatMoney(t.amountBaseCurrency, trip.baseCurrency)}</span>
+                  <span className="font-serif tabular-nums">{formatMoney(t.amountBaseCurrency, trip.baseCurrency)}</span>
                 </li>
               );
             })}

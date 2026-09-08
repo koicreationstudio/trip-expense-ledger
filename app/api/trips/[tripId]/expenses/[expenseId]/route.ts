@@ -109,6 +109,9 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
         currency: nextCurrency,
         amountBaseCurrency,
         fxRateUsed,
+        // 编辑时改支付方式只更新这个标记字段本身，不会回溯调整钱包余额——
+        // 钱包扣减只在创建那一刻发生一次，这是 v1 明确的简化边界（见 POST handler 注释）。
+        paymentMethodId: body.paymentMethodId !== undefined ? body.paymentMethodId : existing.paymentMethodId,
         category: body.category ?? existing.category,
         note: body.note !== undefined ? body.note : existing.note,
         expenseDate: body.expenseDate ? new Date(body.expenseDate) : existing.expenseDate,

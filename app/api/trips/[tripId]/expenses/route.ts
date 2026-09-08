@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db/client';
-import { expenses, expenseSplits, participants, trips } from '@/lib/db/schema';
+import { expenses, expenseSplits, participants, trips, wallets } from '@/lib/db/schema';
 import { assertSameTrip, withSession } from '@/lib/auth/require-session';
 import { toExpenseDto } from '@/lib/http/dto';
 import { parseJsonBody } from '@/lib/http/validate';
@@ -67,31 +67,53 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
 
   const expenseId = crypto.randomUUID();
 
+  const insertExpense = db.insert(expenses).values({
+    id: expenseId,
+    tripId: params.tripId,
+    enteredByParticipantId: identity.participantId,
+    payerParticipantId: body.payerParticipantId,
+    amount: body.amount,
+    currency: body.currency,
+    amountBaseCurrency,
+    fxRateUsed,
+    fxRateSource: 'manual',
+    paymentMethodId: body.paymentMethodId ?? null,
+    category: body.category,
+    note: body.note ?? null,
+    expenseDate: new Date(body.expenseDate),
+  });
+  const insertSplits = db.insert(expenseSplits).values(
+    splits.map((s) => ({
+      expenseId,
+      participantId: s.participantId,
+      shareAmountBaseCurrency: s.shareAmountBaseCurrency,
+    }))
+  );
+
+  // 记账自动扣钱包余额：只在「选了支付方式 + 那个支付方式绑了一个钱包 + 钱包币种
+  // 跟这笔消费币种完全一致」时才扣，不一致就静默跳过（不做隐式换算猜汇率，也不用
+  // 额外 UI 提示「没扣」——这是 v1 明确的简化边界，DESIGN-BRIEF 之外的产品决定）。
+  const linkedWallet = body.paymentMethodId
+    ? await db.query.wallets.findFirst({
+        where: and(
+          eq(wallets.participantId, identity.participantId),
+          eq(wallets.paymentMethodId, body.paymentMethodId),
+          eq(wallets.currency, body.currency)
+        ),
+      })
+    : undefined;
+
   // D1 的 remote binding 不支持交互式多语句事务，官方推荐用 batch() 做原子
-  // 多语句写入，两条语句互不依赖对方的执行结果，符合 batch 的用法。
-  await db.batch([
-    db.insert(expenses).values({
-      id: expenseId,
-      tripId: params.tripId,
-      enteredByParticipantId: identity.participantId,
-      payerParticipantId: body.payerParticipantId,
-      amount: body.amount,
-      currency: body.currency,
-      amountBaseCurrency,
-      fxRateUsed,
-      fxRateSource: 'manual',
-      category: body.category,
-      note: body.note ?? null,
-      expenseDate: new Date(body.expenseDate),
-    }),
-    db.insert(expenseSplits).values(
-      splits.map((s) => ({
-        expenseId,
-        participantId: s.participantId,
-        shareAmountBaseCurrency: s.shareAmountBaseCurrency,
-      }))
-    ),
-  ]);
+  // 多语句写入，各条语句互不依赖对方的执行结果，符合 batch 的用法。
+  if (linkedWallet) {
+    const debitWallet = db
+      .update(wallets)
+      .set({ currentBalance: linkedWallet.currentBalance - body.amount })
+      .where(eq(wallets.id, linkedWallet.id));
+    await db.batch([insertExpense, insertSplits, debitWallet]);
+  } else {
+    await db.batch([insertExpense, insertSplits]);
+  }
 
   const created = await db.query.expenses.findFirst({ where: eq(expenses.id, expenseId) });
 
