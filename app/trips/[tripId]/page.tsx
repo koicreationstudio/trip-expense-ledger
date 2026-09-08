@@ -90,7 +90,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         >
           {getCurrencySymbol(trip.baseCurrency)}
         </span>
-        <span className="text-[10px] uppercase tracking-wide text-muted">我的净额</span>
+        <span className="text-[10px] uppercase tracking-wide text-slate-400">我的净额</span>
         <span
           className={`font-serif text-2xl font-medium tabular-nums tracking-tight ${
             myNet >= 0 ? 'text-emerald-400' : 'text-red-400'
@@ -99,7 +99,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
           {myNet >= 0 ? '+' : '-'}
           {formatMoney(Math.abs(myNet), trip.baseCurrency)}
         </span>
-        <span className="text-xs text-muted">
+        <span className="text-xs text-slate-400">
           {myNet >= 0 ? '该收回' : '该付出'} · {unsettledCount} 笔消费
         </span>
         <Link
@@ -141,7 +141,10 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-ink">参与者</h2>
-        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px]">
+        <ul
+          data-fab-avoid
+          className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px]"
+        >
           {tripParticipants.map((p) => {
             const net = netBalances.get(p.id) ?? 0;
             const isMe = p.id === identity.participantId;
