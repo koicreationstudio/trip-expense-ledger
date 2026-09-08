@@ -47,7 +47,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     .orderBy(desc(expenses.expenseDate));
 
   return (
-    <main className="flex flex-col gap-8">
+    <main className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold">{trip.name}</h1>
         <p className="mt-1 text-sm text-slate-500">
@@ -55,7 +55,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         </p>
       </div>
 
-      <section className="flex flex-col gap-3 rounded-lg bg-slate-900 p-6 text-white">
+      <section className="flex flex-col gap-3 rounded-lg bg-slate-900 p-5 text-white">
         <span className="text-xs uppercase tracking-wide text-slate-400">我的净额</span>
         <span
           className={`text-5xl font-semibold tabular-nums tracking-tight sm:text-6xl ${

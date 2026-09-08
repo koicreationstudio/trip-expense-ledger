@@ -22,7 +22,7 @@ export function RecordExpenseFab({ tripId }: { tripId: string }) {
     >
       <Link
         href={`/trips/${tripId}/expenses/new`}
-        className="inline-flex min-h-[52px] items-center gap-2 rounded-full bg-accent-700 px-5 text-base font-medium text-white shadow-lg transition-colors hover:bg-accent-800"
+        className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-accent-700 px-4 text-base font-medium text-white shadow-lg transition-colors hover:bg-accent-800"
       >
         <Plus className="h-5 w-5" aria-hidden="true" />
         记一笔消费

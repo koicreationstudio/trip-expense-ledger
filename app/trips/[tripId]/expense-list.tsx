@@ -68,8 +68,32 @@ export function ExpenseList({
               className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-base"
             >
               <Avatar name={e.payerName} size={28} />
+              {/* 编辑/删除放在头像右边（不是行尾）：常驻 FAB 固定贴在屏幕右下角，
+                  行尾贴边的图标只要行数够多、总高度接近一屏，就会被 FAB 盖住
+                  （压缩过上面区块间距也没用，总会有某一行凑巧落进 FAB 的固定区域）。
+                  挪来这里之后不管记了几笔账、FAB 多宽，编辑/删除都不会被挡。 */}
+              {mine && (
+                <div className="flex shrink-0 items-center gap-1">
+                  <Link
+                    href={`/trips/${tripId}/expenses/${e.id}/edit`}
+                    aria-label="编辑这笔消费"
+                    className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-slate-500"
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(e.id)}
+                    disabled={deletingId === e.id}
+                    aria-label="删除这笔消费"
+                    className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-red-600 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
               {/* min-w-0 让 flex-1 子元素的 truncate 生效——没有它 flex item 默认不收缩，
-                  长垫付人名字会把这一栏撑宽挤爆金额/编辑/删除，而不是自己省略号截断。
+                  长垫付人名字会把这一栏撑宽挤爆金额，而不是自己省略号截断。
                   统一单行（不换行）是为了不同卡片之间高度一致，避免有的卡片单行、
                   有的因为名字长换成两行，看起来参差不齐（ui-auditor 走查点名过这个）。 */}
               <div className="flex min-w-0 flex-1 flex-col">
@@ -79,32 +103,9 @@ export function ExpenseList({
                   {e.hasReceipt && ' · 有收据'}
                 </span>
               </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <span className="tabular-nums">{formatMoney(e.amount, e.currency)}</span>
-                {mine && (
-                  <>
-                    {/* 编辑/删除改图标按钮（而不是"编辑"/"删除"文字链接）：横向空间比第一版紧张
-                        （多了头像 + 垫付人副标题），文字链接会把中间栏挤到换行，图标更省宽度。
-                        44px 最小热区靠 padding 撑，不是靠图标本身大小。 */}
-                    <Link
-                      href={`/trips/${tripId}/expenses/${e.id}/edit`}
-                      aria-label="编辑这笔消费"
-                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-slate-500"
-                    >
-                      <Pencil className="h-4 w-4" aria-hidden="true" />
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(e.id)}
-                      disabled={deletingId === e.id}
-                      aria-label="删除这笔消费"
-                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-red-600 disabled:opacity-50"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </>
-                )}
-              </div>
+              {/* 金额继续钉死在行最右侧（DESIGN-BRIEF 第一版就定的规矩：金额一律放最右侧、
+                  等宽数字对齐），不因为这次挪了编辑/删除就跟着松动。 */}
+              <span className="shrink-0 tabular-nums">{formatMoney(e.amount, e.currency)}</span>
             </li>
           );
         })}
