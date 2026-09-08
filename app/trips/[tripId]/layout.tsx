@@ -40,7 +40,7 @@ export default async function TripLayout({
   ];
 
   return (
-    <div className="flex flex-col gap-8 pb-24">
+    <div className="flex flex-col gap-8 pb-28">
       <header className="flex flex-col gap-4 border-b border-slate-200 pb-4">
         <div className="flex items-center justify-between">
           <div>
