@@ -30,7 +30,7 @@ export default async function SettlementPage({ params }: { params: { tripId: str
 
   return (
     <main className="flex flex-col gap-8">
-      <h1 className="text-xl font-semibold">结算</h1>
+      <h1 className="text-base font-semibold text-ink">结算</h1>
 
       {trip.status === 'settled' ? (
         <div className="flex w-fit items-center gap-2">
@@ -44,7 +44,7 @@ export default async function SettlementPage({ params }: { params: { tripId: str
       )}
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-slate-700">每人净值</h2>
+        <h2 className="text-[12.5px] font-semibold text-ink">每人净值</h2>
         <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px]">
           {[...netBalances.entries()].map(([participantId, amount]) => {
             const name = nameById.get(participantId) ?? participantId;
@@ -52,8 +52,9 @@ export default async function SettlementPage({ params }: { params: { tripId: str
               <li key={participantId} className="flex items-center gap-2 py-1">
                 <Avatar name={name} size={24} />
                 <span className="flex-1 text-[12.5px]">{name}</span>
-                <span className={`font-serif tabular-nums text-[12.5px] ${amount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {amount >= 0 ? '该收' : '该付'} {formatMoney(Math.abs(amount), trip.baseCurrency)}
+                <span className={`text-[12.5px] ${amount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {amount >= 0 ? '该收' : '该付'}{' '}
+                  <span className="font-serif tabular-nums">{formatMoney(Math.abs(amount), trip.baseCurrency)}</span>
                 </span>
               </li>
             );
@@ -62,7 +63,7 @@ export default async function SettlementPage({ params }: { params: { tripId: str
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-slate-700">转账清单</h2>
+        <h2 className="text-[12.5px] font-semibold text-ink">转账清单</h2>
         {transfers.length === 0 ? (
           <p className="text-xs text-muted">目前不需要任何转账。</p>
         ) : (

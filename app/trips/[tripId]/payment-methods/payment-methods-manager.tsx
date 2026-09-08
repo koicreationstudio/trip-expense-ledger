@@ -87,7 +87,7 @@ export function PaymentMethodsManager() {
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-slate-700">已配置的支付方式</h2>
+        <h2 className="text-[12.5px] font-semibold text-ink">已配置的支付方式</h2>
         {methods === null ? (
           <p className="text-xs text-muted">载入中…</p>
         ) : methods.length === 0 ? (
@@ -122,7 +122,7 @@ export function PaymentMethodsManager() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-[12.5px] font-semibold text-slate-700">新增支付方式</h2>
+        <h2 className="text-[12.5px] font-semibold text-ink">新增支付方式</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">

@@ -38,7 +38,7 @@ export default async function EditExpensePage({
 
   return (
     <main className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">编辑消费</h1>
+      <h1 className="text-base font-semibold text-ink">编辑消费</h1>
       <ExpenseForm
         tripId={trip.id}
         baseCurrency={trip.baseCurrency}

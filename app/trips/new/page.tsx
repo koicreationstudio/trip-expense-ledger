@@ -14,7 +14,7 @@ export default async function NewTripPage() {
 
   return (
     <main className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">创建新行程</h1>
+      <h1 className="text-base font-semibold text-ink">创建新行程</h1>
       <NewTripForm />
     </main>
   );

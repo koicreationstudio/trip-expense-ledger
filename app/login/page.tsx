@@ -42,7 +42,7 @@ function LoginForm() {
 
   return (
     <main className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">登录</h1>
+      <h1 className="text-base font-semibold text-ink">登录</h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <div className="flex flex-col gap-1">
           <label className="field-label" htmlFor="email">
@@ -82,7 +82,7 @@ function LoginForm() {
           {submitting ? '登录中…' : '登录'}
         </button>
       </form>
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-muted">
         还没有账号？
         <Link href={`/signup?next=${encodeURIComponent(next)}`} className="tap-link ml-1">
           注册一个

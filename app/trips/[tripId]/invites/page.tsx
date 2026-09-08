@@ -13,7 +13,7 @@ export default async function InvitesPage({ params }: { params: { tripId: string
 
   return (
     <main className="flex flex-col gap-8">
-      <h1 className="text-xl font-semibold">邀请管理</h1>
+      <h1 className="text-base font-semibold text-ink">邀请管理</h1>
       <InvitesManager tripId={params.tripId} />
     </main>
   );

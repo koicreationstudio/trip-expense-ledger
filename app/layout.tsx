@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh" className={`${inter.variable} ${fraunces.variable} ${plexMono.variable}`}>
-      <body className="min-h-screen bg-paper font-sans text-slate-900">
+      <body className="min-h-screen bg-paper font-sans text-ink">
         <div className="mx-auto max-w-3xl px-4 py-8">{children}</div>
       </body>
     </html>

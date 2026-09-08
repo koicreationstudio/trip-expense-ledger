@@ -20,7 +20,7 @@ export default async function NewExchangePage({ params }: { params: { tripId: st
 
   return (
     <main className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold text-ink">取款 / 换汇</h1>
+      <h1 className="text-base font-semibold text-ink">取款 / 换汇</h1>
       <ExchangeForm
         tripId={params.tripId}
         wallets={myWallets.map((w) => ({ id: w.id, label: w.label, currency: w.currency, emoji: w.emoji }))}

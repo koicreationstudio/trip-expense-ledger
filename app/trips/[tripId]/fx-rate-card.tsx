@@ -77,7 +77,7 @@ export function FxRateCard({
   return (
     <section className="flex flex-col gap-3 rounded-[22px] border border-sand bg-paper p-4">
       <button type="button" onClick={handleToggle} className="flex items-center justify-between text-left">
-        <span className="text-[12.5px] font-semibold text-slate-700">💱 当前汇率比价</span>
+        <span className="text-[12.5px] font-semibold text-ink">💱 当前汇率比价</span>
         <span className="text-[10px] text-muted">{expanded ? '收起 ▲' : '展开 ▼'}</span>
       </button>
 
@@ -90,7 +90,7 @@ export function FxRateCard({
                 type="button"
                 onClick={() => handleSelectCurrency(c)}
                 className={`rounded-full px-[9px] py-[3px] font-mono text-[11.5px] font-medium ${
-                  currency === c ? 'bg-ink text-white' : 'bg-paper text-slate-600'
+                  currency === c ? 'bg-ink text-white' : 'bg-paper text-muted'
                 }`}
               >
                 {c}

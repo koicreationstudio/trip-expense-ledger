@@ -55,6 +55,8 @@ const config: Config = {
       boxShadow: {
         // 外层两组阴影让卡片浮起来，inset 高光模拟顶部打光——银行卡/钱包类 UI 常见手法。
         hero: '0 10px 24px -6px rgba(20,20,30,.35), 0 4px 10px rgba(20,20,30,.18), inset 0 1px 0 rgba(255,255,255,.08)',
+        // 第七版：普通卡片的极轻两层阴影，借 team-board 的"极轻阴影"结构但色值锚定本系统的 ink（35,35,46），不借它的中性灰。
+        card: '0 1px 2px rgba(35,35,46,.06), 0 1px 1px rgba(35,35,46,.04)',
       },
     },
   },

@@ -96,7 +96,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-3">
-        <h2 className="text-[12.5px] font-semibold text-slate-700">生成新邀请链接</h2>
+        <h2 className="text-[12.5px] font-semibold text-ink">生成新邀请链接</h2>
         <form onSubmit={handleCreateInvite} className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="field-label" htmlFor="expires-in-days">
@@ -123,7 +123,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-slate-700">现有邀请链接</h2>
+        <h2 className="text-[12.5px] font-semibold text-ink">现有邀请链接</h2>
         {invites === null ? (
           <p className="text-xs text-muted">载入中…</p>
         ) : invites.length === 0 ? (
@@ -135,7 +135,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
               const isExpired = invite.expiresAt !== null && new Date(invite.expiresAt).getTime() < Date.now();
               return (
                 <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] text-sm">
-                  <code className="break-all text-xs text-slate-600">{inviteUrl(invite.code)}</code>
+                  <code className="break-all text-xs text-muted">{inviteUrl(invite.code)}</code>
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
                     {isRevoked || isExpired ? (
                       <span>
@@ -167,7 +167,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-slate-700">参与者认领状态</h2>
+        <h2 className="text-[12.5px] font-semibold text-ink">参与者认领状态</h2>
         <p className="text-xs text-muted">认领错人、换手机号了，可以把某个人重置回未认领状态，让他重新用邀请链接认领。</p>
         {participants === null ? (
           <p className="text-xs text-muted">载入中…</p>

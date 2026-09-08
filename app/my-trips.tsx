@@ -71,11 +71,14 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
               {STATUS_LABEL[trip.status] ?? trip.status}
             </span>
             <span
-              className={`tabular-nums text-sm font-medium ${
+              className={`text-sm font-medium ${
                 trip.netBalance >= 0 ? 'text-emerald-600' : 'text-red-600'
               }`}
             >
-              {trip.netBalance >= 0 ? '该收' : '该付'} {formatMoney(Math.abs(trip.netBalance), trip.baseCurrency)}
+              {trip.netBalance >= 0 ? '该收' : '该付'}{' '}
+              <span className="font-serif tabular-nums">
+                {formatMoney(Math.abs(trip.netBalance), trip.baseCurrency)}
+              </span>
             </span>
             {switchingId === trip.id && <span className="text-xs text-muted">打开中…</span>}
           </button>

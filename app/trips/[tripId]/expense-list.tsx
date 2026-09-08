@@ -75,7 +75,7 @@ export function ExpenseList({
                   <Link
                     href={`/trips/${tripId}/expenses/${e.id}/edit`}
                     aria-label="编辑这笔消费"
-                    className="inline-flex min-h-[28px] min-w-[28px] items-center justify-center text-slate-500"
+                    className="inline-flex min-h-[28px] min-w-[28px] items-center justify-center text-muted"
                   >
                     <Pencil className="h-4 w-4" aria-hidden="true" />
                   </Link>

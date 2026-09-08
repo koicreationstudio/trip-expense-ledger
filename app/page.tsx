@@ -47,8 +47,8 @@ export default async function HomePage() {
       <main className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold">我的行程</h1>
-            <p className="mt-1 text-sm text-slate-500">{user.displayName}，欢迎回来。</p>
+            <h1 className="text-base font-semibold text-ink">我的行程</h1>
+            <p className="mt-1 text-[10px] text-muted">{user.displayName}，欢迎回来。</p>
           </div>
           <Link
             href="/trips/new"
@@ -66,8 +66,8 @@ export default async function HomePage() {
   return (
     <main className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold">消费记录</h1>
-        <p className="mt-2 text-slate-600">
+        <h1 className="text-base font-semibold text-ink">消费记录</h1>
+        <p className="mt-2 text-[10px] text-muted">
           出差记账 + 同行人代垫结清 + 汇率比对，帮你算清这笔该用哪张卡最划算。数据只存在你自己部署的服务器上。
         </p>
       </div>
@@ -77,13 +77,13 @@ export default async function HomePage() {
       >
         创建新行程
       </Link>
-      <p className="text-sm text-slate-500">
+      <p className="text-[10px] text-muted">
         已经有账号？
         <Link href="/login" className="tap-link ml-1">
           登录
         </Link>
       </p>
-      <p className="text-sm text-slate-500">已经有同行人分享给你的邀请链接？直接打开那个链接就能认领身份。</p>
+      <p className="text-[10px] text-muted">已经有同行人分享给你的邀请链接？直接打开那个链接就能认领身份。</p>
     </main>
   );
 }

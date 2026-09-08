@@ -8,7 +8,7 @@ html {
 
 body {
   background-color: #FEFCF7;
-  color: #0f172a;
+  color: #23232E;
 }
 
 @layer components {
@@ -19,7 +19,7 @@ body {
 
   /* 次要操作按钮：比价/平均分摊/移除这类不需要抢主按钮风头的动作，触控高度跟主 CTA/FAB 拉开一级 */
   .btn-secondary {
-    @apply inline-flex min-h-[36px] items-center justify-center rounded-full border border-sand bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50;
+    @apply inline-flex min-h-[36px] items-center justify-center rounded-full border border-sand bg-white px-3 text-sm font-medium text-ink transition-colors hover:bg-slate-50 disabled:opacity-50;
   }
 
   /* 行内文字链接型操作（编辑/删除/撤销/复制）：纯文字链接不需要 44px 按钮级触控热区 */
@@ -28,7 +28,7 @@ body {
   }
 
   .field-label {
-    @apply text-sm font-medium text-slate-700;
+    @apply text-sm font-medium text-ink;
   }
 
   .field-input {
@@ -42,6 +42,6 @@ body {
      "卡片比页面深一档"的双层背景层次（吸收 brand-pm paper/paper-raised 分层
      思路，但取值继续用本系统已验证的 sand，不引入未验证的新 hex）。 */
   .tx-item {
-    @apply flex items-center gap-2 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px];
+    @apply flex items-center gap-2 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] shadow-card;
   }
 }

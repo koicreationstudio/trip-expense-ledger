@@ -553,7 +553,7 @@ ui-auditor 上一轮点过的 `settlement/page.tsx`、`payment-methods-manager.t
 
 ## 2. `gold`/`gold-dk`/`gold-lt` 三阶金色——统一降饱和度，`gold-dk` 降幅最大
 
-先说清楚为什么三个一起动：这三个是配好的一套色阶（浅底/中间装饰色/深字），只调中间会两端脱节，这条纪律第五版判断 brand-pm 的 `accent` 时已经用过一次，这次自己调色同样要守。
+先说清楚为什么三个一起动：这三个是配好的一套色阶（浅底/中间装饰色/深字），只调中间会两端脱节，这条纪律第五版判断 brand-pm 时已经用过一次，这次自己调色同样要守。
 
 换算 HSL，三个色号色相都落在同一个暖金色相家族（41-47°），但饱和度差异很大：
 - `gold #C9A24B`：H41° / S53.8% / L54.1%
@@ -567,7 +567,7 @@ ui-auditor 上一轮点过的 `settlement/page.tsx`、`payment-methods-manager.t
 |---|---|---|---|---|---|
 | `gold` | `#C9A24B` | H41/S53.8%/L54.1% | `#B89E61` | H42/S38%/L55% | 约 -29% |
 | `gold-dk` | `#8B6914` | H43/S74.9%/L31.2% | `#7E6630` | H42/S45%/L34% | 约 -40%（降幅最大） |
-| `gold-lt` | `#F5EDD0` | H47/S64.9%/L88.8% | `#F0E8D6` | H42/S45%/L89% | 约 -31% |
+| `gold-lt` | `#F5EDD0` | H47/S64.9%/L88.8% | `#F0E8D6` | H42/S45%/L89% | 约 -31%（保持三阶色温一致，改动幅度最小） |
 
 **对比度实算，确认没调过头**：
 - `gold-dk` 当"次要链接文字色"用在 `paper` 背景上：改前 4.96:1 → 改后 **5.35:1**（不降反升，因为明度略微提高抵消了饱和度下降对亮度的影响，这是巧合中的好结果，不是刻意算出来的）。
@@ -719,3 +719,176 @@ ui-auditor 上一轮点过的 `settlement/page.tsx`、`payment-methods-manager.t
 **建议吸收的是 suimuse 展现出的两个原则性的东西**：①**字号密度**——suimuse 全站没有一处文字超过 18px，绝大多数在 10-13px，这条直接支撑了这次"顶部导航栏也要收紧"的判断；②**卡片必须有光影质感**——即使 suimuse 用的是浅色克制配色，卡片依然靠 `shadow-sm`/`shadow-elevated`/`border` 建立立体感，不会让任何卡片变成纯色块，这条直接支撑了这次 Hero 卡加渐变/阴影/高光的判断。这两条都是"怎么让东西显得精致"的通用原则，跟"该用什么颜色"是两件独立的事，这次只借第一件，不借第二件。
 
 **如果这个判断跟 Remy 的本意不符**（比如她其实是想让整个配色体系也往冷灰调靠），请在这份简报基础上直接说清楚，不用整份重写——上面这些字号/质感层面的决定跟"最终用哪套色板"是两个独立维度，色板决定翻篇不影响这轮字号和质感的判断。
+
+---
+
+# 第七版：全站一致性 + team-board 参照 + 行程切换入口（2026-09-08）
+
+> **这次的性质**：Remy 看了线上效果，两句话原话："颜色还要再调，参照 team-board 的颜色风格和排版"、"为什么每个页面字体大小风格排版都不一致，字体有些大有些小"。这是第三次有人拿"团队内部工具"这类系统当参照过来了（brand-pm 是第一次，第六版判断要不要换成 suimuse 是第二次），也是第一次实读代码把"不一致"的真正根因挖到底——不是三个页面漏改这么简单，是从 `body` 标签的默认文字色开始就没接过这套色板，往下所有没显式指定颜色的元素全部继承了 Tailwind 默认灰阶，这也是为什么每次"修完"过一阵子又冒出新的不一致：漏洞在根上，不在枝叶上。
+>
+> 这次还批准了一个新功能：行程内加一个不退登录就能切换到其它行程的入口，放进这轮要重做的头部导航区域一起出。
+
+## A. team-board 参照——不整套照抄，借哪几条
+
+**结论先行：不把 trip-expense-ledger 的强调色/圆角/图标语言换成 team-board 那套，但吸收它的字色分层原则、极轻阴影原则，并用来验证第四/六版已经定的字号密度方向是对的。**
+
+### 不采纳的部分，逐条给理由
+
+**强调色 `#2f5d50` 墨绿——不引入**。这是第三次遇到同一类判断：brand-pm 是暖棕青铜色 `#8B7248`，suimuse 是近黑灰，team-board 这次是墨绿，三个具体色值不一样，但它们共享同一个身份——都是"团队协作/管理看板"这一类系统的强调色，这类系统要传达"结构化、专业、可核对进度"，trip-expense-ledger 三轮下来确认的身份是"有温度的私人记账本"，这条判断第五版第 2/3 条、第六版结尾都已经用同一个理由说过两次。这次墨绿本身还有一个新增的具体冲突：`seafoam #2DAA85` 这个"比价最优"语义色本身就是绿色系，如果再引入一个墨绿做主强调色，页面上会同时存在两种绿色但语义完全不搭边（一个是主操作色，一个是"这个渠道最划算"提示色），比色相相近的金棕色（brand-pm 那次）更容易读错。
+
+**圆角 `--radius:6px`/`--radius-sm:4px`——不引入**。跟第五版第 2 条判断 brand-pm 3px 直角是同一个逻辑，team-board 的 6px 虽然不是近乎直角，但依然是"内部工具"那个量级，跟 remy-thailand 验证过的 12-22px+pill 这套友好圆润语言方向相反。这条不重复展开论证，直接沿用第五版已经写清楚的理由。
+
+**字体栈 `-apple-system,BlinkMacSystemFont,"Segoe UI"...`（系统默认字体）——不引入**。这条值得单独说一句：Remy 这次抱怨的是"字体大小"不一致，不是"字体家族"不一致，这两件事容易被一起处理但其实是两个问题。trip-expense-ledger 的字体家族目前实际上已经是统一的（Inter 管全部中文/正文，Fraunces 严格限定金额数字，这条纪律从第三版定到现在没破例过，唯一的破例是下面 C 节要修的那个 bug）。把 Inter 换成系统默认字体栈解决不了"字号不一致"这个问题，这是两条不同的轴，不能因为 team-board 用系统字体就顺手也换，那是在处理一个不存在的问题。
+
+### 采纳的部分，逐条给理由
+
+**三档灰阶文字层级——采纳原则，不采纳具体三个 hex，理由见下面 B 节**。team-board 的 `#1f2328`/`#5b6168`/`#8b9096` 证明了一件事：一套系统的文字颜色必须提前想清楚有几个层级、每个层级具体是哪个 token，不能让组件各自决定"这里该多深的灰"——这正是这次实读代码挖出的根因（下面 B 节会列出至少 20 处独立决定的 `text-slate-*` 用法，等于每个组件都在自己现造一个灰阶）。但 trip-expense-ledger 不需要复刻三个全新的中性灰 hex：这个项目已经有 `ink`（近黑藏青，H240）管标题/强调，`muted`（暖灰棕，H约30）管说明文字，这两个 token 本身色相不同（一冷一暖），差异已经足够撑起两级层次；缺的不是"要不要三档"，是"这两档有没有被贯彻到底"。所以这次借的是 team-board 教会我们的**纪律**（灰阶要提前定死、不能现造），不是它的具体色值。
+
+**极轻两层阴影 `--shadow-sm:0 1px 2px rgba(20,20,15,.05)`——采纳原则，重新计算色值**。第六版已经确认"卡片需要光影质感"这条原则（当时对照的是 suimuse），但第六版的落地只做了 Hero 卡一处（渐变+较重阴影，银行卡质感）。team-board 这次提供了另一个证据：**普通卡片**（不是 Hero 级别的东西）也应该有极轻的阴影，不是"要么很重要么没有"。这次的判断：给全站普通卡片（`.tx-item`、钱包卡、比价卡、下面 D 节新增的行程切换弹层）新增一个极轻两层阴影 token，但不直接抄 team-board 给的 rgba(20,20,15)（那是中性冷灰基调，跟 team-board 自己 `#f5f5f2` 暖白背景配的），trip-expense-ledger 的深浅色系全部锚定在 `ink` 这个色相上（H240），阴影颜色也该用 `ink` 的 RGB 而不是借team-board的中性灰，否则阴影会跟卡片本身的暖色调打架（这条判断沿用第五版第 6 条"结构学、色值不抄"同一个原则）。具体见下面「视觉决定新增」。
+
+**密度校验，不是新指令**。team-board 实测字号绝大多数落在 9.5-12.5px，这个区间跟 `user_compact_ui_preference.md` 记的紧凑基准（卡片标题 12.5px/副信息 10px/tag-mini 9.5px）以及第四/六版已经定下的目标值几乎完全重合。这次没有依据 team-board 把字号定得比第六版已定的还小——第六版的数字本来就是对的方向，team-board 只是又一次独立验证了这个方向没错。真正的问题不是"目标值还要再小"，是下面 B 节要处理的"目标值没有铺满全站"。
+
+## B. 全站字号/圆角/灰阶规范表——根因 + 完整清单
+
+### 根因：`body` 默认文字色从没接过色板
+
+实读 `app/globals.css` 第 9-12 行：
+```css
+body {
+  background-color: #FEFCF7;
+  color: #0f172a;
+}
+```
+`#0f172a` 是 Tailwind `slate-900` 的原始 hex，跟 `app/layout.tsx` 第 36 行 `<body className="min-h-screen bg-paper font-sans text-slate-900">` 是**同一个值声明了两遍**（一处写 CSS 变量、一处写 Tailwind class，互相冗余但都没换成这套系统自己的 `ink` token）。这是"每个页面字体不一致"这句话背后真正的根因：任何组件只要没有显式写颜色 class，就会静默继承这个从没被设计过、纯 Tailwind 默认值的深灰黑，而不是这套系统自己定义的 `ink #23232E`。三个被点名的页面（`settlement`/`payment-methods`/`invites`）的 h1 之所以是"默认黑"，正是因为它们只写了 `text-xl font-semibold`，没写颜色，颜色就落进了这个根因；`app/page.tsx`（登录后首页）的 h1/副标题同理。
+
+**这次的第一步，不是逐个组件改颜色，是先把根上这一处改对**：`body { color: #0f172a }` → `color: #23232E`（即 `ink`），`layout.tsx` 的 `text-slate-900` 同步改成 `text-ink`（两处必须一起改，不能只改一处留一处，否则又是"改一半"的坑，绝对禁止第 9 条同一类问题）。这一步做完，全站没有显式覆盖颜色的文字会自动从"Tailwind 默认黑"变成"这套系统自己的近黑藏青"，覆盖面比逐个改三个页面大得多。
+
+### 灰阶：确认 2 档够用，不新增第 3 档，但要把散落的 `slate-*` 全部归位
+
+实读全项目，`text-slate-*`/`border-slate-*`/`bg-slate-*` 一共在 **13 个文件、24 处**独立出现（`grep -rn "text-slate-\|border-slate-\|bg-slate-" app --include="*.tsx"` 实测结果），不是只有 Remy 点名的 3 个页面。这是本轮最大的一个新发现：**连"已经按第四版改过尺寸"的页面，h2 标题的颜色也从没跟着改**——比如 trip 主页自己的 4 个 h2（"我的钱包"/"参与者"/"活动流"/"换汇·EXCHANGE"）、`fx-rate-card.tsx` 的"当前汇率比价"、`payment-methods-manager.tsx`/`invites-manager.tsx` 各自的 h2，全部是 `text-[12.5px] font-semibold text-slate-700`——**尺寸对了，颜色从来没对过**。这解释了 Remy"字体大小风格排版都不一致"这句反馈里"风格不一致"这半句：哪怕两个页面字号完全一样，一个用了品牌灰、一个用了 Tailwind 默认灰，肉眼扫过去依然会觉得"这两块不像一个系统出的"。
+
+**归位规则（两档，不新增第三档）**：
+- **标题/强调层 → `text-ink`**：所有 `<h1>`/`<h2>` 分区标题、需要"这是重点"的文字。替换目标：`app/layout.tsx` 的 `text-slate-900`（根因，见上）、全站 9 处 `text-slate-700` 的 h2（`page.tsx` 4 处、`fx-rate-card.tsx` 1 处、`settlement/page.tsx` 2 处、`payment-methods-manager.tsx` 2 处、`invites-manager.tsx` 3 处，共 12 处，含前面几轮"改过尺寸没改颜色"的全部实例）、`.btn-secondary`/`.field-label` 这两个全局 class 里的 `text-slate-700`。
+- **说明/次要层 → `text-muted`**：所有副标题、帮助文字、meta 信息、次要按钮说明。替换目标：`app/page.tsx` 3 处 `text-slate-500`/`slate-600`、`app/login/page.tsx`/`app/signup/page.tsx`/`app/invite/[code]/*.tsx` 共 6 处 `text-slate-500`/`slate-600`、`app/trips/[tripId]/page.tsx` 2 处 `text-slate-400`（第 93/102 行"我的净额"标签和副标题——这两处是第六版新加的 Hero 卡文字，当时直接写了 Tailwind 灰阶没有接色板，这次一并归位）、`payment-methods/page.tsx` 副标题、`expense-list.tsx` 编辑/删除按钮的 `text-slate-500`、`fx-rate-card.tsx` 币种 chip 未选中态的 `text-slate-600`。
+- **边框 → `border-sand`**：`app/trips/[tripId]/layout.tsx` 头部分隔线的 `border-slate-200`（第六版已经点出这一处但还没铺开成规则，这次明确定为全站边框统一走 `border-sand`，不再有 `slate` 边框孤例）。
+- **不新增第三档中间灰**：这是对 A 节判断的延续——`ink`/`muted` 色相不同、层级已经够用，新增第三档只会制造"两个看起来分不太清的灰"这个第五版第 1 条早就点名过的坑。
+
+### h1 全站统一规则（覆盖任务点名的 3 个页面 + 补 1 个漏网页面）
+
+| 页面 | 现状 | 改后 | 备注 |
+|---|---|---|---|
+| `app/trips/[tripId]/page.tsx`（行程主页，`trip.name`） | `text-base`(16px) `font-semibold text-gold-dk`（第六版已定） | **不变** | 这是身份文字（行程名），保留 `gold-dk` 强调，不套用下面的通用规则 |
+| `app/trips/[tripId]/settlement/page.tsx`"结算" | `text-xl`(20px) `font-semibold`，无颜色（继承根因） | `text-base`(16px) `font-semibold text-ink` | 任务点名页面之一 |
+| `app/trips/[tripId]/payment-methods/page.tsx`"支付方式设置" | `text-xl`(20px) `font-semibold`，无颜色；副标题 `text-sm text-slate-500`(14px) | `text-base`(16px) `font-semibold text-ink`；副标题 `text-[10px] text-muted` | 任务点名页面之一，且副标题也要一并归位 |
+| `app/trips/[tripId]/invites/page.tsx`"邀请管理" | `text-xl`(20px) `font-semibold`，无颜色 | `text-base`(16px) `font-semibold text-ink` | 任务点名页面之一 |
+| `app/page.tsx`"我的行程"/"消费记录"（登录前后首页） | `text-2xl`(24px) `font-semibold`，无颜色；副标题 `text-sm text-slate-500`/`slate-600`(14px) | `text-base`(16px) `font-semibold text-ink`；副标题 `text-[10px] text-muted` | **这是我在任务给定的 3 个页面之外自己扫出来的第 4 处**，同一类问题（漏改+无色），逻辑上没理由排除在外——这个页面虽然在 `[tripId]` 路由外，但用户从这里第一眼看到的字号如果还是 24px，会比刚离开的行程页 16px 的标题更大，一样制造"不一致"的观感 |
+
+**为什么统一走 `text-ink` 不是 `text-gold-dk`**：`gold-dk` 是"这是我的行程身份"这个专属语境的强调色（trip.name 在导航头和首页 h1 都用它，这是刻意的呼应），"结算"/"支付方式设置"/"邀请管理"/"我的行程"这几个词是功能页/列表页标题，不携带身份信息，如果也套 `gold-dk`，这个颜色会从"专属于行程身份"稀释成"随便什么标题都套一下的默认色"，违反第三版"绝对禁止"第 8 条"颜色一多必须绑死语义"的精神。**这条判断是这轮新定的，之前几版没有明确说过 h1 该用什么颜色**（因为之前几版没人发现 h1 其实一直没颜色），标注清楚。
+
+### h2 全站统一规则
+
+`text-[12.5px] font-semibold text-ink`——尺寸沿用第四版已定的值不变，颜色从 `text-slate-700` 统一改成 `text-ink`。覆盖上面列的全部 12 处。
+
+### 圆角/间距——这次不动，B 节只处理字号和颜色
+
+上面 A 节已经论证过圆角/强调色不跟 team-board 走，这里不重复。
+
+## C. Fraunces 衬线规则复核——"该收 RM 0.00"是真实代码 bug，不是规则本身的问题
+
+**结论：Fraunces 只用于阿拉伯数字金额这条规则（第三版"绝对禁止"第 6 条）本身继续有效，不调整应用范围。但实读代码找到了这条规则的两处真实违反，"该收 RM 0.00"这种观感极可能就是这两处违反直接造成的，需要修**。
+
+实读代码，全站搜 `font-serif`（Fraunces）+ 中文金额标签"该收/该付"的交叉点，发现：
+
+**违反 1**：`app/trips/[tripId]/page.tsx` 第 168-170 行（参与者列表净额）：
+```tsx
+<span className={`font-serif tabular-nums text-[12.5px] font-medium ${net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+  {net >= 0 ? '该收' : '该付'} {formatMoney(Math.abs(net), trip.baseCurrency)}
+</span>
+```
+**违反 2**：`app/trips/[tripId]/settlement/page.tsx` 第 55-56 行（结算页净值清单），结构完全一样：
+```tsx
+<span className={`font-serif tabular-nums text-[12.5px] ${amount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+  {amount >= 0 ? '该收' : '该付'} {formatMoney(Math.abs(amount), trip.baseCurrency)}
+</span>
+```
+
+这两处 `font-serif` 这个 class 是加在**整个 `<span>` 上**的，"该收"/"该付"这两个中文字和后面的 `RM 0.00` 金额被同一个 class 一起包住。按第三版"绝对禁止"第 6 条的判断，中文字符碰到 `font-serif` 会静默回退到系统默认衬线体（一般是宋体一类），而后面的阿拉伯数字部分是真的 Fraunces——**这就是"该收 RM 0.00"这行字看起来"混进了另一种字体"的直接技术原因**：不是错觉，是"该收"两个字真的在用另一套字体渲染，只是这套字体本身不显眼（宋体在小字号下不容易一眼看出是衬线体），所以观感上像是"排版有点怪"而不是一眼看出"这是两种字体"，但根因是确定的代码 bug，不是主观审美判断。
+
+**这两处的修法方向**（不写代码，只说方向）：把"该收/该付"这两个字挪到 `font-serif` 这个 class 之外，单独用一个不带 `font-serif` 的 `<span>` 包起来（继承 Inter），只让紧跟着的金额部分（`formatMoney(...)` 这部分）留在 `font-serif` 里。财务语义色（`emerald-600`/`red-600`）两段都要，不能因为拆成两个 span 就丢了颜色一致性。
+
+**顺带发现一处相反方向的疏漏**：`app/my-trips.tsx` 第 74-79 行（首页"我的行程"卡片列表）显示同样的"该收/该付 + 金额"结构，但这处从来没加过 `font-serif`：
+```tsx
+<span className={`tabular-nums text-sm font-medium ${trip.netBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+  {trip.netBalance >= 0 ? '该收' : '该付'} {formatMoney(Math.abs(trip.netBalance), trip.baseCurrency)}
+</span>
+```
+这处虽然没有违反"中文不套 Fraunces"这条禁令，但也违反了另一条规则——"金额一律用 Fraunces"这条从第三版就定死的纪律在这里从没被应用过，是相反方向的疏漏（该有的没有，而不是不该有的多了）。这次一并指出，方向是：把金额部分（不含"该收/该付"两个字）套上 `font-serif`，做法上跟上面两处修完之后的结构应该长一样。
+
+**为什么这轮不调整规则本身或者放宽/收紧应用范围**：Remy 的反馈没有说"金额数字不该用衬线体"，说的是它"看起来混进来"，而实读代码已经确认这就是拼接 bug 造成的，不是规则设计有问题。规则本身（金额用 Fraunces，中文一律 Inter）在其它 9 处正确实现的地方（`wallet-grid.tsx`/`exchange-record-list.tsx`/`expense-list.tsx`/`fx-compare-list.tsx`/`fx-rate-card.tsx`/`exchange-form.tsx`/`expense-form.tsx`）都是干净的，`<span>` 边界卡得很准（金额单独一个 span，前面的中文标签是另一个 span），没有出现同样的问题——这说明规则本身可执行、大部分地方也确实执行对了，只是这两处（+ my-trips.tsx 一处反向疏漏）在写的时候没留意 span 边界，是实现层面的疏漏，不是设计层面的缺陷。**也不需要额外调整字重/颜色让它"更像强调层"**——金额部分本来就继承财务语义色（emerald/red）+ `tabular-nums`+`font-medium`，这三样已经足够让它在系统里读作"这是一个被特别处理过的数字"，问题只出在 span 边界，边界修对就够了。
+
+## D. 行程切换入口——头部导航新增
+
+### 已有基础设施，这次是补上"从行程内部够得着"这一环
+
+实读代码确认这套系统**账号层面本来就支持多行程**，缺的只是"在行程里能不能不登出就换"这一个入口：
+- `/api/account/switch-trip`（POST `{ tripId }`）已存在，作用是把当前 `tel_session` 换成指向另一个行程，`app/my-trips.tsx` 第 33-50 行的 `handleOpen` 已经在用它。
+- `app/page.tsx` 第 12-63 行已经有一套"查这个账号名下所有行程 + 各自净额"的查询逻辑（`getCurrentUser()` → 关联 `participants`/`trips` 表），渲染成 `MyTrips` 卡片列表——**但这套逻辑目前只在"没有 `tel_session`"这个分支下跑**（`app/page.tsx` 第 14-17 行：只要 `identity` 存在就直接 `redirect` 进那个行程，根本不会走到查询"我的行程列表"这一段）。这正是 Remy 反馈"只能退出登录才能换"的技术原因：不是没有多行程支持，是这套支持只在"未登录进任何行程"这个状态下可见。
+
+**这次要补的缺口，标注清楚这是架构依赖不是纯视觉决定**：要在行程内部弹出切换列表，需要一个不依赖"当前没有 `tel_session`"这个前提、单纯凭账号身份（`tel_user_session`）就能查到"这个账号名下所有行程"的轻量查询入口（比如一个新的 `GET` 端点），现有的 `app/page.tsx` 查询逻辑目前是耦合在"未登录落地页"这个 Server Component 里的。这部分是 frontend-dev 需要评估的架构决定，这份简报只出视觉方向，不越界设计 API。
+
+### 视觉方向：头部导航里"行程名"本身变成触发器，弹出紧凑下拉
+
+**入口位置**：`app/trips/[tripId]/layout.tsx` 头部第一行，`trip.name` 这个位置本身升级成可点击触发器，不额外占用新的一行空间——这跟第六版已经确认的"头部导航是权重不低的常驻区域，不该继续膨胀"这条判断一致，新功能挂在已有元素上比新增一整块更符合"紧凑"的方向。
+
+**触发器样式**：`trip.name` 后面加一个 `▾` 符号，`text-[10px] text-muted`，整块（行程名+chevron）包成一个 `<button>`。用 Unicode 符号而不是新引入图标库或 emoji，是延续这个项目已有的先例（`fx-rate-card.tsx` 的"展开▲/收起▼"用的是同一种文字符号手法，不是新习惯）。
+
+**弹出层**：点击后在 `trip.name` 正下方弹出一个紧凑下拉（`absolute left-0 top-full mt-1`），不是 remy-thailand 那种 bottom-sheet——这条延续第三版"取款/换汇表单"那节已经定过的架构判断："bottom-sheet 是 remy-thailand 作为单页 App 的实现选择，trip-expense-ledger 是 Next.js 多路由 App，不该为了像参照而引入一套新的浮层模式"，这次同一个理由适用于切换入口。移动端窄屏下弹出层宽度改 `w-full`（贴合头部宽度），不做成固定像素宽度的浮窗，保持单手操作友好。
+
+**弹出层内容**（尺寸全部对齐已经建立的紧凑基准，不新造一套）：
+- 容器：`rounded-xl`(12px，跟标准卡片同一档) + 新增的极轻两层阴影 token（见下面视觉决定新增）+ `border border-sand`，背景 `bg-paper`
+- 顶部小标签"切换行程"：`text-[9.5px] uppercase tracking-wide text-muted`，跟比价卡片"最划算"徽章同一个 tag 尺度
+- 每个行程一行，复用 `.tx-item` 同款密度（`px-[9px] py-[5px]`），内容：行程名 `text-[12.5px] font-medium text-ink` + 右侧净额 `text-[10px] font-serif tabular-nums`（该收 emerald / 该付 red，延续既有财务语义色）；当前所在的行程这一行用 `bg-[#EDE8DA]/35`（跟卡片填充同一个 token）标记出来且不可再点，避免"点了但没反应"这种困惑
+- 行与行之间：`border-t border-sand` 实线分隔（不是虚线——第五版第 7 条已经把虚线的用途钉死在"卡片内部主/次信息分层"，这里是列表行之间的分隔，跟那个场景不是一回事，不能混用）
+- 底部一行"＋ 创建新行程"：`tap-link` 风格，链接到 `/trips/new`
+- 净额展示延续"余额优先"这条从第一版就定的核心原则——切换列表里带上净额，用户不用逐个点进去就能判断"要不要先处理这个行程的账"，这条跟 `my-trips.tsx` 现有卡片的设计意图一致，只是尺寸换成这次的紧凑档位
+
+**只有 1 个行程时的处理**：建议 chevron 和弹出功能直接不渲染（`trip.name` 退回纯文字，不可点），避免给只有一个行程的用户一个点了也没用的按钮——这条是我的判断，具体要不要做这个条件判断，看 frontend-dev 实现时數据是否方便拿到用户的行程总数，不是这份简报的强制项。
+
+## 视觉决定新增（第七版新增 token）
+
+- **`shadow-card`（新，极轻两层阴影，给普通卡片和新增的切换弹层用）**：`0 1px 2px rgba(35,35,46,.06), 0 1px 1px rgba(35,35,46,.04)`——借 team-board `--shadow-sm` 的"极轻两层"结构，色值用 `ink` 的 RGB（35,35,46）取代 team-board 原本的中性灰 RGB（20,20,15），保持这套系统自己的暖藏青底色而不是嫁接一个不属于这里的中性灰（跟第五版第 6 条"结构学、色值不抄"同一个原则）。落地点：`.tx-item`、`wallet-grid.tsx` 卡片、`fx-compare-list.tsx` 卡片、这次新增的行程切换弹层——这几处目前只靠 `border-sand` 分辨"这是卡片"，加一层极轻阴影能让"这是立起来的东西"更明确，跟第六版给 Hero 卡加的重阴影是同一个"卡片要有光影"的原则在不同权重级别上的应用（Hero 卡权重最高用渐变+强阴影+高光，普通卡片权重较低只需要极轻两层阴影提示存在，不需要渐变）。
+- **`text-ink`/`text-muted` 全站归位**：见 B 节，这不是新 token，是把已有两个 token 铺满全站，替换掉 24 处散落的 `text-slate-*`。
+
+## 这次明确不动的东西
+
+- **十色板核心语义 + 状态色**（`ink`/`gold`/`gold-lt`/`gold-dk`/`sand`/`paper`/`coral`/`seafoam`/`sf-lt`/`muted`/`ok`/`live`）——十个 hex 值本身这次不改，上一节"色彩强度柔和化"的降饱和度结果继续有效
+- **财务语义色 `emerald-600`/`red-600`**——不动，理由同前几版
+- **圆角尺度**（12px 标准卡/22px Hero 卡/pill）——不动，A 节已论证不跟 team-board 走 6px
+- **emoji 默认图标语言**——不动，跟这次的调整无关；切换入口的 `▾` 是延续既有的 Unicode 符号手法，不是新引入图标语言
+- **Fraunces 只用于数字金额、Inter 管中文**——规则本身不变，C 节修的是代码违反，不是规则设计
+- **紧凑 padding/gap 基准**——不动，B 节的字号统一是把已定的目标值铺满全站，不是定新的更小的值
+- **单列信息架构**（Hero 卡→我的钱包→参与者→活动流→FAB）——不动，D 节的切换入口挂在头部导航，不影响这个主体架构
+- **第六版 Hero 卡渐变/阴影/水印**——不动，这次新增的 `shadow-card` 是给普通卡片用的更轻量级 token，跟 Hero 专属的 `boxShadow.hero` 是两个不同权重的 token，不互相取代
+
+## 第六版 vs 第七版对照表
+
+**保留（第六版判断，这次不变）**：
+- Hero 卡质感（渐变/阴影/高光/水印）、Hero 数字 24px、行程标题 16px
+- 顶部导航栏字号/颜色的第一轮收紧（`trip.name` 12.5px `text-gold-dk`、副标题 10px `text-muted`、导航链接 12.5px `text-muted`、44px 触控热区保留）——这次没有再改这几个值，只是在此基础上做全站扫描确认还有没有漏网
+- 十色板 hex 值、圆角尺度、emoji 图标语言、Fraunces/Inter 字体分工
+
+**新增/修正（第七版这次做的事）**：
+- 挖到"字体不一致"的根因：`body` 默认色从没接过 `ink` token，这是比"三个页面漏改"更深一层的问题
+- h1 规则第一次被明确定义（`text-base` 16px `text-ink`，身份类例外用 `gold-dk`），覆盖 4 个页面（含任务外自己扫出的 `app/page.tsx`）
+- h2 规则的颜色部分第一次被修正（`text-ink` 替换全站 12 处 `text-slate-700`，尺寸本身第四版就已经是对的）
+- 全站 24 处 `text-slate-*` 散落用法归位成 `text-ink`/`text-muted`/`border-sand` 两档灰阶体系
+- 修正 Fraunces 规则的两处真实代码违反（中文被误套衬线体，"该收 RM 0.00"观感的直接成因）+ 一处反向疏漏（my-trips.tsx 金额没套 Fraunces）
+- 新增 `shadow-card` 极轻阴影 token，扩展第六版"卡片要有光影"原则到 Hero 卡之外的普通卡片
+- 新增行程切换入口（头部导航触发器 + 紧凑下拉），复用现有 `/api/account/switch-trip` 和 `MyTrips` 已验证过的视觉语言，架构依赖（账号级行程查询要能在有 `tel_session` 时也可用）标注清楚留给 frontend-dev
+
+**这次否决的（第三次遇到但依然否决，跟前两次同一逻辑）**：
+- team-board 墨绿强调色 `#2f5d50`——跟 `seafoam` 语义色相近，会造成新的语义混淆
+- team-board 6px/4px 圆角——"团队协作工具"身份跟"私人记账本"定位不符，第三次用同一条理由否决
+- team-board 系统默认字体栈——解决的是字体家族问题，Remy 这次反馈的是字号问题，两个轴不该混着处理
+
+**如果这个判断跟 Remy 的本意不符**（比如她其实是想要更彻底地转向 team-board 那种冷静克制的团队工具感），沿用第六版结尾同一条原则：请直接说清楚，不用整份重写——这次 B/C/D 三节（灰阶归位、Fraunces bug 修复、切换入口）都是独立于"要不要换整套调性"这个更大决定的具体修复，哪怕以后色板方向翻篇，这三节的结论大概率还是成立的。

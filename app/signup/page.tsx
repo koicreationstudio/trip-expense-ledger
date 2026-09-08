@@ -47,7 +47,7 @@ function SignupForm() {
 
   return (
     <main className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">注册</h1>
+      <h1 className="text-base font-semibold text-ink">注册</h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <div className="flex flex-col gap-1">
           <label className="field-label" htmlFor="display-name">
@@ -102,7 +102,7 @@ function SignupForm() {
           {submitting ? '注册中…' : '注册'}
         </button>
       </form>
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-muted">
         已经有账号？
         <Link href={`/login?next=${encodeURIComponent(next)}`} className="tap-link ml-1">
           登录
