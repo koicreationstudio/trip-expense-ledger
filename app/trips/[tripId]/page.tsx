@@ -2,7 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getDb } from '@/lib/db/client';
-import { exchangeRecords, expenses, participants, trips, wallets } from '@/lib/db/schema';
+import { exchangeRecords, expenses, participants, paymentMethods, trips, wallets } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadSettlementInput } from '@/lib/db/settlement-query';
 import { computeNetBalances } from '@/lib/domain/settlement';
@@ -64,10 +64,18 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
   const walletById = new Map(myWallets.map((w) => [w.id, w]));
 
+  // 钱包卡片上要能显示「绑了哪个支付方式」+ 建钱包时要能选支付方式，两处都需要
+  // 这份清单。payment_method 跟人走不跟行程走，按 participant_id 查，不用管 tripId。
+  const myPaymentMethods = await db
+    .select()
+    .from(paymentMethods)
+    .where(eq(paymentMethods.participantId, identity.participantId));
+  const paymentMethodLabelById = new Map(myPaymentMethods.map((m) => [m.id, m.label]));
+
   return (
     <main className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold text-ink">{trip.name}</h1>
+        <h1 className="text-3xl font-semibold text-gold-dk">{trip.name}</h1>
         <p className="mt-1 text-sm text-muted">
           本位币 {trip.baseCurrency} · {STATUS_LABEL[trip.status] ?? trip.status}
         </p>
@@ -96,13 +104,23 @@ export default async function TripPage({ params }: { params: { tripId: string } 
           <h2 className="text-sm font-semibold text-slate-700">我的钱包</h2>
           <span className="text-[10px] text-muted">仅自己可见</span>
         </div>
-        <WalletGrid tripId={trip.id} wallets={myWallets.map((w) => ({
-          id: w.id,
-          label: w.label,
-          currency: w.currency,
-          emoji: w.emoji,
-          currentBalance: w.currentBalance,
-        }))} />
+        <WalletGrid
+          tripId={trip.id}
+          wallets={myWallets.map((w) => ({
+            id: w.id,
+            label: w.label,
+            currency: w.currency,
+            emoji: w.emoji,
+            currentBalance: w.currentBalance,
+            paymentMethodId: w.paymentMethodId,
+            linkedPaymentMethodLabel: w.paymentMethodId ? paymentMethodLabelById.get(w.paymentMethodId) ?? null : null,
+          }))}
+          paymentMethods={myPaymentMethods.map((m) => ({
+            id: m.id,
+            label: m.label,
+            settlementCurrency: m.settlementCurrency,
+          }))}
+        />
         <Link href={`/trips/${trip.id}/exchange/new`} className="tap-link self-start text-sm text-gold-dk">
           💱 取款 / 换汇
         </Link>

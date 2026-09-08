@@ -11,23 +11,45 @@ export interface WalletItem {
   currency: string;
   emoji: string;
   currentBalance: number;
+  paymentMethodId: string | null;
+  linkedPaymentMethodLabel: string | null;
+}
+
+export interface WalletPaymentMethodOption {
+  id: string;
+  label: string;
+  settlementCurrency: string;
 }
 
 const EMOJI_CHOICES = ['🏦', '💵', '🌐', '📱', '🟠', '💳', '💰'];
+const NO_LINK = '__none__';
 
 /**
  * 横向可滚动一行（不是网格换行）：钱包数量因人而异，数量一多网格会挤爆版面，
  * 横向滚动能优雅容纳任意数量（DESIGN-BRIEF.md 第三版「逐区块改动点」第一小节）。
  */
-export function WalletGrid({ tripId, wallets }: { tripId: string; wallets: WalletItem[] }) {
+export function WalletGrid({
+  tripId,
+  wallets,
+  paymentMethods,
+}: {
+  tripId: string;
+  wallets: WalletItem[];
+  paymentMethods: WalletPaymentMethodOption[];
+}) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [label, setLabel] = useState('');
   const [currency, setCurrency] = useState<string>(COMMON_CURRENCIES[0]);
   const [emoji, setEmoji] = useState(EMOJI_CHOICES[0]);
   const [initialBalanceYuan, setInitialBalanceYuan] = useState('');
+  const [paymentMethodId, setPaymentMethodId] = useState(NO_LINK);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 只有跟当前选的钱包币种完全一致的支付方式才有意义绑——扣款逻辑要求币种精确匹配，
+  // 列出币种不一致的选项只会让人绑了也白绑（app/api/trips/[tripId]/expenses/route.ts）。
+  const eligibleMethods = paymentMethods.filter((m) => m.settlementCurrency === currency);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -46,6 +68,7 @@ export function WalletGrid({ tripId, wallets }: { tripId: string; wallets: Walle
           currency,
           emoji,
           initialBalance: yuanToCents(Number(initialBalanceYuan) || 0),
+          paymentMethodId: paymentMethodId === NO_LINK ? undefined : paymentMethodId,
         }),
       });
       if (!res.ok) {
@@ -54,6 +77,7 @@ export function WalletGrid({ tripId, wallets }: { tripId: string; wallets: Walle
       }
       setLabel('');
       setInitialBalanceYuan('');
+      setPaymentMethodId(NO_LINK);
       setCreating(false);
       router.refresh();
     } finally {
@@ -74,6 +98,9 @@ export function WalletGrid({ tripId, wallets }: { tripId: string; wallets: Walle
               {formatMoney(w.currentBalance, w.currency)}
             </div>
             <div className="text-[10px] text-muted">{w.currency}</div>
+            {w.linkedPaymentMethodLabel && (
+              <div className="mt-1 truncate text-[10px] text-gold-dk">🔗 {w.linkedPaymentMethodLabel}</div>
+            )}
           </div>
         ))}
 
@@ -98,7 +125,14 @@ export function WalletGrid({ tripId, wallets }: { tripId: string; wallets: Walle
               value={label}
               onChange={(e) => setLabel(e.target.value)}
             />
-            <select className="field-input" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            <select
+              className="field-input"
+              value={currency}
+              onChange={(e) => {
+                setCurrency(e.target.value);
+                setPaymentMethodId(NO_LINK);
+              }}
+            >
               {COMMON_CURRENCIES.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -106,6 +140,20 @@ export function WalletGrid({ tripId, wallets }: { tripId: string; wallets: Walle
               ))}
             </select>
           </div>
+          {eligibleMethods.length > 0 && (
+            <select
+              className="field-input"
+              value={paymentMethodId}
+              onChange={(e) => setPaymentMethodId(e.target.value)}
+            >
+              <option value={NO_LINK}>不绑定支付方式（可以之后再绑）</option>
+              {eligibleMethods.map((m) => (
+                <option key={m.id} value={m.id}>
+                  记账选「{m.label}」时自动扣这个钱包
+                </option>
+              ))}
+            </select>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <input
               type="number"

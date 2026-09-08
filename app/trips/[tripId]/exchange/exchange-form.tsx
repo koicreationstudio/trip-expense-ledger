@@ -128,25 +128,30 @@ export function ExchangeForm({ tripId, wallets }: { tripId: string; wallets: Wal
         </div>
       </div>
 
-      <div className="grid grid-cols-2 items-end gap-3">
+      <div className="flex items-end gap-2">
         {fromWalletId && (
-          <div className="flex flex-col gap-1">
-            <label className="field-label" htmlFor="from-amount">
-              来源金额（{fromWallet?.currency}）
-            </label>
-            <input
-              id="from-amount"
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={fromAmountYuan}
-              onChange={(e) => setFromAmountYuan(e.target.value)}
-              className="field-input font-serif text-lg"
-              placeholder="0.00"
-            />
-          </div>
+          <>
+            <div className="flex flex-1 flex-col gap-1">
+              <label className="field-label" htmlFor="from-amount">
+                来源金额（{fromWallet?.currency}）
+              </label>
+              <input
+                id="from-amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={fromAmountYuan}
+                onChange={(e) => setFromAmountYuan(e.target.value)}
+                className="field-input font-serif text-lg"
+                placeholder="0.00"
+              />
+            </div>
+            <span className="pb-2.5 text-lg text-muted" aria-hidden="true">
+              →
+            </span>
+          </>
         )}
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-1 flex-col gap-1">
           <label className="field-label" htmlFor="to-amount">
             目标金额（{toWallet?.currency}）
           </label>
