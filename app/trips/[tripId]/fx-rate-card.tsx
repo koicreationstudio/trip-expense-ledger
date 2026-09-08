@@ -37,6 +37,7 @@ export function FxRateCard({
     const amount = Number(amountYuan);
     if (!amount || amount <= 0) {
       setError('金额要大于 0');
+      setRecommendations(null);
       return;
     }
     setError(null);
@@ -74,7 +75,7 @@ export function FxRateCard({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-[22px] border border-sand bg-white p-4 sm:p-5">
+    <section className="flex flex-col gap-3 rounded-[22px] border border-sand bg-paper p-4 sm:p-5">
       <button type="button" onClick={handleToggle} className="flex items-center justify-between text-left">
         <span className="text-sm font-semibold text-slate-700">💱 当前汇率比价</span>
         <span className="text-xs text-muted">{expanded ? '收起 ▲' : '展开 ▼'}</span>
