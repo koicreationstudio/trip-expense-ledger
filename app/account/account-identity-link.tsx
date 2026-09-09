@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 
-export function AccountIdentityLink({ token }: { token: string }) {
+export function AccountIdentityLink({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
-  const url = typeof window !== 'undefined' ? `${window.location.origin}/id/${token}` : '';
 
   async function handleCopy() {
     try {
