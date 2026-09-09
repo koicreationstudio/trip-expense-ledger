@@ -97,6 +97,7 @@
     --a-gold-lt: #F6DFAA;
     --a-gold: #DFA01E;
     --a-hero-label: #CFE3EE;
+    --a-blue-lt: #90AFCA;
   }
   .variant-333 .hero {
     background:
@@ -106,6 +107,21 @@
   .variant-333 .hero-cta {
     background: rgba(223,160,30,.26);
     color: #FFF3D9;
+  }
+  /* 第三轮反馈"少了点浅蓝色的搭配"：金色已经铺满卡片/头像/CTA，头像圈+图标圈这两处
+     反复出现在多屏（邀请管理/结算/支付方式）的圆形徽标改回蓝调，跟 Hero 里本来就有的
+     蓝紫渐变互相呼应，暖金留给卡片/CTA/光晕，蓝色留给"人"和"物"的圆形标记，两个色相
+     分工明确不互相抢戏。--a-blue-lt 是 333 原色 #789DB7 与 Sunny Stripes Powder Blue
+     #A7C0DC 的融合值，延续候选B"两个色板融合"的一贯做法，不是新引入的第三个来源。 */
+  .variant-333 .avatar {
+    background: var(--a-blue-lt);
+    color: var(--a-accent-800);
+  }
+  .variant-333 .icon-circle {
+    background: var(--a-blue-lt);
+  }
+  .variant-333 .seg-btn:not(.active) {
+    border-color: var(--a-blue-lt);
   }
 
   * { box-sizing: border-box; }
@@ -332,7 +348,7 @@
       <h2 class="sec-title">候选 B · 暖阳蓝调色板速查（333 × Sunny Stripes 融合，第二轮重调）</h2>
       <p class="section-note">第一版候选 B 被 Remy 指出文字色像直接套用候选 A、黄色太少；这版重新设计文字层级 + 追加 Sunny Stripes 色板融合，语义色仍跟着候选 A 不变</p>
     </div>
-    <div class="quote">这版不再是简单换色：<b>#33566E</b> 是候选B专属新标题色（由 333 的 #486D87 与 Sunny Stripes 的 Glaucous #627EAB 融合后加深而来，不是候选A文字token的换皮），<b>#5F6F7A</b> 是专属次要文字色（冷石板蓝灰，跟候选A暖棕灰 #685C50 刻意区分开）。黄色这次铺得更广：卡片浅底 <span class="f-mono" style="font-size:12px">card-tint</span> 从蓝色调雾改成 <b>Harvest Gold #DFA01E</b> 的暖金薄雾（几乎全站卡片都在用这个类，一次换掉分量足够）、头像圈/未认领徽章底色换成 Sunny Stripes 的 Sunset #F1CA81 融合出的蜜金色 <b>#F6DFAA</b>、Hero 卡右上角加了一层柔和的金色光晕、Hero 里的"查看结算明细"药丸也改成金色半透明底。卡片边框 <span class="f-mono" style="font-size:12px">sand</span> 也从偏蓝改成暖沙金色，呼应"清新海岸"的整体气质。</div>
+    <div class="quote">这版不再是简单换色：<b>#33566E</b> 是候选B专属新标题色（由 333 的 #486D87 与 Sunny Stripes 的 Glaucous #627EAB 融合后加深而来，不是候选A文字token的换皮），<b>#5F6F7A</b> 是专属次要文字色（冷石板蓝灰，跟候选A暖棕灰 #685C50 刻意区分开）。黄色这次铺得更广：卡片浅底 <span class="f-mono" style="font-size:12px">card-tint</span> 从蓝色调雾改成 <b>Harvest Gold #DFA01E</b> 的暖金薄雾（几乎全站卡片都在用这个类，一次换掉分量足够）、头像圈/未认领徽章底色换成 Sunny Stripes 的 Sunset #F1CA81 融合出的蜜金色 <b>#F6DFAA</b>、Hero 卡右上角加了一层柔和的金色光晕、Hero 里的"查看结算明细"药丸也改成金色半透明底。卡片边框 <span class="f-mono" style="font-size:12px">sand</span> 也从偏蓝改成暖沙金色，呼应"清新海岸"的整体气质。<b>第三轮</b>反馈黄色铺得太满、浅蓝色的存在感被压下去了——头像圆圈（邀请管理/结算多次出现）、支付方式图标圆圈、换汇页未选中的分段按钮边框，这三处圆形/线框元素改用融合出的晴空蓝 <b>#90AFCA</b>，跟 Hero 本来就有的蓝紫渐变互相呼应，卡片浅底/CTA/光晕这些"面"继续用暖金，"点"（头像、图标）用蓝，两个色相各管一部分不抢戏。</div>
     <div class="token-grid">
       <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#F6F2E4"></span><span class="token-name">paper</span></div><span class="token-hex">#F6F2E4</span><span class="token-role">全站背景（333 米白 + Sunny Stripes Eggshell 融合，更暖）</span></div>
       <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#33566E"></span><span class="token-name">ink / hero（候选B专属）</span></div><span class="token-hex">#33566E</span><span class="token-role">标题文字+Hero/CTA/选中态，融合 #486D87+Glaucous #627EAB 后加深，非套用候选A</span></div>
@@ -345,6 +361,7 @@
       <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#F6DFAA"></span><span class="token-name">gold-lt（融合 Sunset）</span></div><span class="token-hex">#F6DFAA</span><span class="token-role">头像圆圈底色/未认领徽章底色，比第一版更饱和更"黄"</span></div>
       <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:rgba(223,160,30,.35)"></span><span class="token-name">card-tint（改暖）</span></div><span class="token-hex">rgba(223,160,30,.09)</span><span class="token-role">卡片浅底，从蓝色雾改成暖金雾——全站卡片都在用，是加黄色分量最有效的一处</span></div>
       <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#CFE3EE"></span><span class="token-name">hero-label</span></div><span class="token-hex">#CFE3EE</span><span class="token-role">Hero 深底次要标签文字</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#90AFCA"></span><span class="token-name">blue-lt（第三轮新增）</span></div><span class="token-hex">#90AFCA</span><span class="token-role">头像圆圈/图标圆圈/未选中分段按钮边框，333 的 #789DB7 与 Sunny Stripes Powder Blue #A7C0DC 融合，把浅蓝重新带回来跟暖金呼应</span></div>
       <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#3E7787"></span><span class="token-name">live（保留的青色）</span></div><span class="token-hex">#3E7787</span><span class="token-role">进行中态徽章，跟候选 A 完全一样，不受这版影响</span></div>
     </div>
   </section>
