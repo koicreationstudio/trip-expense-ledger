@@ -143,7 +143,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         <h2 className="text-[12.5px] font-semibold text-ink">参与者</h2>
         <ul
           data-fab-avoid
-          className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px]"
+          className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] shadow-card"
         >
           {tripParticipants.map((p) => {
             const net = netBalances.get(p.id) ?? 0;
