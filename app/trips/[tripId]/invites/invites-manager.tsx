@@ -136,7 +136,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
               const isExpired = invite.expiresAt !== null && new Date(invite.expiresAt).getTime() < Date.now();
               return (
                 <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] text-sm shadow-card">
-                  <span className="flex items-start gap-1">
+                  <span className="flex items-start gap-1.5">
                     <span aria-hidden="true">🔗</span>
                     <code className="break-all font-mono text-xs text-muted">{inviteUrl(invite.code)}</code>
                   </span>
