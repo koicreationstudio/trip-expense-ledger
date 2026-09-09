@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>行程主页 Hero净额卡 + 我的钱包 · 三个 compact 风格对比</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F1F0EA; --surface: #FFFFFF; --border: #E2E0D3;
+    --text: #23232E; --text-muted: #6B6B78; --text-faint: #9A9AA4;
+    --accent: #1A1A2E; --accent-soft: #E9E8EE;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, sans-serif; line-height: 1.5; }
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 44px 24px 80px; }
+  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
+  h1.page-title { font-family: 'Fraunces', serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px); margin: 10px 0 12px; letter-spacing: -.01em; }
+  .lede { max-width: 70ch; color: var(--text-muted); font-size: 14px; }
+  .note-box {
+    margin: 16px 0 0; padding: 12px 16px; background: var(--accent-soft);
+    border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0;
+    font-size: 13px; color: var(--text); max-width: 70ch;
+  }
+  section { margin-top: 44px; }
+  .variant-head { margin-bottom: 14px; }
+  .variant-title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; margin: 0 0 4px; }
+  .variant-desc { font-size: 12.5px; color: var(--text-muted); max-width: 60ch; }
+  .variant-diff {
+    margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .diff-chip {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; color: var(--text-muted);
+  }
+  .variants-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 32px; margin-top: 40px; }
+
+  /* ---- phone frame ---- */
+  .phone { background: #14150F; border-radius: 30px; padding: 9px; box-shadow: 0 18px 36px -14px rgba(20,20,15,.35), 0 4px 10px rgba(20,20,15,.16); max-width: 320px; }
+  .phone-notch { height: 16px; width: 78px; background: #14150F; border-radius: 0 0 12px 12px; margin: 0 auto -16px; position: relative; z-index: 2; }
+  .app-screen {
+    background: #FEFCF7; border-radius: 22px; overflow: hidden; color: #23232E;
+    font-family: 'Inter', sans-serif; padding: 16px 14px 14px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .home-indicator { height: 4px; width: 90px; background: rgba(35,35,46,.25); border-radius: 4px; margin: 6px auto 0; }
+
+  .app-h1 { font-size: 14.5px; font-weight: 600; color: #7E6630; margin: 0; }
+  .app-sub { font-size: 10px; color: #8A7A6A; margin: 2px 0 0; }
+  .app-h2 { font-size: 12.5px; font-weight: 600; color: #23232E; margin: 0; }
+  .f-serif { font-family: 'Fraunces', serif; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+  /* ============ 现在真实线上版本（对照基线，不是变体，抄自 app/trips/[tripId]/page.tsx 真实结构/数值）============ */
+  .hero-baseline {
+    position: relative; overflow: hidden; border-radius: 22px; padding: 16px; color: #fff;
+    display: flex; flex-direction: column; gap: 8px;
+    background: linear-gradient(165deg, #2A2A38 0%, #23232E 45%, #1B1B24 100%);
+    box-shadow: 0 10px 24px -6px rgba(20,20,30,.35), 0 4px 10px rgba(20,20,30,.18), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .hero-baseline .wm {
+    position: absolute; right: -8px; bottom: -16px; font-family: 'Fraunces', serif; font-style: italic;
+    font-size: 140px; line-height: 1; color: rgba(255,255,255,.05); pointer-events: none; user-select: none;
+  }
+  .hero-baseline .label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+  .hero-baseline .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 24px; letter-spacing: -.01em; color: #6ee7b7; }
+  .hero-baseline .sub { font-size: 12px; color: #94a3b8; }
+  .hero-baseline .cta {
+    margin-top: 4px; display: inline-flex; width: fit-content; align-items: center; gap: 4px;
+    min-height: 32px; background: rgba(255,255,255,.1); padding: 3px 9px; border-radius: 999px; font-size: 10px; color: #e2e8f0;
+  }
+  .wallet-baseline-strip { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 2px; }
+  .wallet-baseline-card {
+    width: 120px; flex-shrink: 0; border: 1px solid #EDE8DA; background: rgba(237,232,218,.35);
+    border-radius: 12px; padding: 8px 9px;
+  }
+  .wallet-baseline-card .lbl { display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #8A7A6A; }
+  .wallet-baseline-card .val { margin-top: 4px; font-size: 14px; }
+  .wallet-baseline-card .cur { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #8A7A6A; }
+  .wallet-baseline-add {
+    width: 120px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    border: 1px dashed #EDE8DA; border-radius: 12px; font-size: 20px; color: #8A7A6A;
+  }
+  .baseline-tag {
+    display: inline-flex; align-self: flex-start; font-size: 10.5px; font-weight: 600; color: #6B6B78;
+    background: #E9E8EE; padding: 3px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+
+  /* ============ 方案 A：极简数字优先（砍水印/渐变，扁平色块，最大化压缩） ============ */
+  .hero-a {
+    border-radius: 14px; padding: 10px 12px; color: #fff; background: #23232E;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .hero-a .label { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
+  .hero-a .row-num { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .hero-a .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 21px; letter-spacing: -.01em; color: #6ee7b7; }
+  .hero-a .cta-text { font-size: 10px; color: #cbd5e1; text-decoration: underline; text-underline-offset: 2px; min-height: 32px; display: inline-flex; align-items: center; }
+  .hero-a .sub { font-size: 10px; color: #94a3b8; margin-top: -1px; }
+
+  .wallet-a-strip { display: flex; flex-wrap: wrap; gap: 6px; }
+  .wallet-a-chip {
+    display: inline-flex; align-items: center; gap: 5px; border-radius: 999px;
+    background: rgba(237,232,218,.5); padding: 4px 10px 4px 6px; font-size: 11px;
+  }
+  .wallet-a-chip .em { font-size: 12px; }
+  .wallet-a-chip .val { font-family: 'Fraunces', serif; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .wallet-a-add {
+    display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+    border-radius: 50%; border: 1px dashed #CBC2A8; color: #8A7A6A; font-size: 14px;
+  }
+
+  /* ============ 方案 B：保留质感，收紧内边距/行高（渐变+阴影+水印都留着） ============ */
+  .hero-b {
+    position: relative; overflow: hidden; border-radius: 18px; padding: 11px 12px; color: #fff;
+    display: flex; flex-direction: column; gap: 4px;
+    background: linear-gradient(165deg, #2A2A38 0%, #23232E 45%, #1B1B24 100%);
+    box-shadow: 0 8px 18px -6px rgba(20,20,30,.32), 0 3px 8px rgba(20,20,30,.16), inset 0 1px 0 rgba(255,255,255,.07);
+  }
+  .hero-b .wm {
+    position: absolute; right: -10px; bottom: -20px; font-family: 'Fraunces', serif; font-style: italic;
+    font-size: 108px; line-height: 1; color: rgba(255,255,255,.045); pointer-events: none;
+  }
+  .hero-b .label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+  .hero-b .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; letter-spacing: -.01em; color: #6ee7b7; }
+  .hero-b .sub { font-size: 11px; color: #94a3b8; }
+  .hero-b .cta {
+    margin-top: 2px; display: inline-flex; width: fit-content; align-items: center; gap: 4px;
+    min-height: 32px; background: rgba(255,255,255,.1); padding: 2px 8px; border-radius: 999px; font-size: 9.5px; color: #e2e8f0;
+  }
+  .wallet-b-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .wallet-b-card {
+    width: 96px; flex-shrink: 0; border: 1px solid #EDE8DA; background: rgba(237,232,218,.35);
+    border-radius: 10px; padding: 6px 7px;
+  }
+  .wallet-b-card .lbl { display: flex; align-items: center; gap: 3px; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #8A7A6A; }
+  .wallet-b-card .val { margin-top: 2px; font-size: 12px; }
+  .wallet-b-card .cur { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: #8A7A6A; }
+  .wallet-b-add {
+    width: 96px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    border: 1px dashed #EDE8DA; border-radius: 10px; font-size: 16px; color: #8A7A6A;
+  }
+
+  /* ============ 方案 C：净额+钱包合并单卡，省掉两个区块之间的外边距和第二个标题行 ============ */
+  .combo-c {
+    position: relative; overflow: hidden; border-radius: 18px; color: #fff;
+    background: linear-gradient(165deg, #2A2A38 0%, #23232E 45%, #1B1B24 100%);
+    box-shadow: 0 8px 18px -6px rgba(20,20,30,.32), 0 3px 8px rgba(20,20,30,.16);
+  }
+  .combo-c .top-row {
+    display: flex; align-items: baseline; justify-content: space-between; padding: 12px 12px 10px; gap: 8px;
+  }
+  .combo-c .label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+  .combo-c .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; letter-spacing: -.01em; color: #6ee7b7; }
+  .combo-c .cta { font-size: 9.5px; color: #cbd5e1; text-decoration: underline; text-underline-offset: 2px; min-height: 32px; display: inline-flex; align-items: center; }
+  .combo-c .divider { height: 1px; background: rgba(255,255,255,.08); margin: 0 12px; }
+  .combo-c .wallet-zone { padding: 9px 12px 11px; display: flex; flex-direction: column; gap: 5px; }
+  .combo-c .wallet-zone-label { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
+  .wallet-c-strip { display: flex; gap: 7px; overflow-x: auto; }
+  .wallet-c-chip {
+    flex-shrink: 0; display: flex; flex-direction: column; gap: 1px; background: rgba(255,255,255,.08);
+    border-radius: 9px; padding: 5px 8px; min-width: 64px;
+  }
+  .wallet-c-chip .lbl { font-size: 8.5px; color: #cbd5e1; display: flex; align-items: center; gap: 3px; }
+  .wallet-c-chip .val { font-family: 'Fraunces', serif; font-size: 11.5px; font-variant-numeric: tabular-nums; color: #fff; }
+  .wallet-c-add {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 30px; border-radius: 9px;
+    background: rgba(255,255,255,.06); color: #cbd5e1; font-size: 14px;
+  }
+
+  footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-faint); max-width: 76ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">trip-expense-ledger · 第十六轮 · Hero净额卡 + 我的钱包 视觉方向对比</div>
+  <h1 class="page-title">同一份数据，三种 compact 方向，挑一个（或指出想要哪几个的组合）</h1>
+  <p class="lede">这份不是配色提案（颜色沿用现在线上真实在用的 ink/gold 色板，跟另一条"要不要换整体色系"的讨论无关），只处理"行程主页 Hero 净额卡 + 我的钱包区块能不能再紧凑一点、要不要换个呈现方式"这一件事。左边是现在线上的样子做基准对照，右边三个是新方向。</p>
+  <div class="note-box">
+    钱包区块现在实际是横向可滚动一行卡片（不是网格），第三轮就改过来是为了容纳任意数量的钱包不挤爆版面——这份对比稿延续这个前提，三个方案都没有退回网格布局，只是在"卡片本身多大/多挤"上做文章，方案 A/C 更进一步把卡片换成了更小的胶囊/条目形态。
+  </div>
+
+  <section>
+    <div class="variant-head">
+      <div class="baseline-tag">现在线上的样子（基准）</div>
+      <p class="variant-desc">Hero：p-4(16px) 内边距 + gap-2(8px) 垂直间距 + rounded-hero(22px) + 24px 净额数字 + 三段渐变/阴影/右下角货币水印。钱包：120px 宽卡片，py-2(8px)+px-[9px] 内边距，卡片间 gap-3(12px)。</p>
+    </div>
+    <div class="phone"><div class="phone-notch"></div>
+      <div class="app-screen">
+        <div><div class="app-h1">2026 曼谷出差</div><div class="app-sub">本位币 MYR · 记账中</div></div>
+        <div class="hero-baseline">
+          <span class="wm">M</span>
+          <span class="label">我的净额</span>
+          <span class="num">+RM1,284.50</span>
+          <span class="sub">该收回 · 6 笔消费</span>
+          <span class="cta">查看结算明细 →</span>
+        </div>
+        <div>
+          <div class="app-h2" style="margin-bottom:8px">我的钱包</div>
+          <div class="wallet-baseline-strip">
+            <div class="wallet-baseline-card"><div class="lbl">🏦 汇丰卡</div><div class="val f-serif">RM2,150.00</div><div class="cur">MYR</div></div>
+            <div class="wallet-baseline-card"><div class="lbl">💵 泰铢现金</div><div class="val f-serif">฿3,200.00</div><div class="cur">THB</div></div>
+            <div class="wallet-baseline-add">＋</div>
+          </div>
+        </div>
+      </div>
+      <div class="home-indicator"></div>
+    </div>
+  </section>
+
+  <div class="variants-grid">
+
+    <section style="margin-top:0">
+      <div class="variant-head">
+        <div class="variant-title">方案 A · 极简数字优先</div>
+        <p class="variant-desc">砍掉渐变/阴影/货币水印，Hero 卡改扁平纯色块，净额数字跟 CTA 同一行左右排布省一行高度，"查看结算明细"从胶囊按钮改回文字链接（保留 32px 点击热区，只是视觉上不占胶囊的体积）。钱包从卡片改成一行小胶囊，一眼扫过去能看完更多个钱包，不用横向滚动很远。</p>
+        <div class="variant-diff">
+          <span class="diff-chip">padding 16px→10px/12px</span>
+          <span class="diff-chip">卡片圆角 22px→14px</span>
+          <span class="diff-chip">数字 24px→21px</span>
+          <span class="diff-chip">零渐变/零水印/零阴影</span>
+          <span class="diff-chip">钱包卡→胶囊(120px宽→自适应窄)</span>
+        </div>
+      </div>
+      <div class="phone"><div class="phone-notch"></div>
+        <div class="app-screen">
+          <div><div class="app-h1">2026 曼谷出差</div><div class="app-sub">本位币 MYR · 记账中</div></div>
+          <div class="hero-a">
+            <span class="label">我的净额</span>
+            <div class="row-num">
+              <span class="num">+RM1,284.50</span>
+              <span class="cta-text">明细 →</span>
+            </div>
+            <span class="sub">该收回 · 6 笔消费</span>
+          </div>
+          <div>
+            <div class="app-h2" style="margin-bottom:6px">我的钱包</div>
+            <div class="wallet-a-strip">
+              <span class="wallet-a-chip"><span class="em">🏦</span><span class="val f-serif">RM2,150</span></span>
+              <span class="wallet-a-chip"><span class="em">💵</span><span class="val f-serif">฿3,200</span></span>
+              <span class="wallet-a-add">＋</span>
+            </div>
+          </div>
+        </div>
+        <div class="home-indicator"></div>
+      </div>
+    </section>
+
+    <section style="margin-top:0">
+      <div class="variant-head">
+        <div class="variant-title">方案 B · 保留质感，收紧密度</div>
+        <p class="variant-desc">Remy 认可过的"银行卡质感"（渐变+外阴影+内高光+水印）全部留着，不推翻第十轮的判断，只是把内边距、行间距、水印大小、钱包卡片尺寸整体收紧一档，改动幅度最保守，风险最低。</p>
+        <div class="variant-diff">
+          <span class="diff-chip">padding 16px→11px/12px</span>
+          <span class="diff-chip">垂直间距 8px→4px</span>
+          <span class="diff-chip">水印 140px→108px</span>
+          <span class="diff-chip">钱包卡 120px→96px</span>
+          <span class="diff-chip">卡片间距 12px→8px</span>
+        </div>
+      </div>
+      <div class="phone"><div class="phone-notch"></div>
+        <div class="app-screen">
+          <div><div class="app-h1">2026 曼谷出差</div><div class="app-sub">本位币 MYR · 记账中</div></div>
+          <div class="hero-b">
+            <span class="wm">M</span>
+            <span class="label">我的净额</span>
+            <span class="num">+RM1,284.50</span>
+            <span class="sub">该收回 · 6 笔消费</span>
+            <span class="cta">查看结算明细 →</span>
+          </div>
+          <div>
+            <div class="app-h2" style="margin-bottom:6px">我的钱包</div>
+            <div class="wallet-b-strip">
+              <div class="wallet-b-card"><div class="lbl">🏦 汇丰卡</div><div class="val f-serif">RM2,150.00</div><div class="cur">MYR</div></div>
+              <div class="wallet-b-card"><div class="lbl">💵 泰铢现金</div><div class="val f-serif">฿3,200.00</div><div class="cur">THB</div></div>
+              <div class="wallet-b-add">＋</div>
+            </div>
+          </div>
+        </div>
+        <div class="home-indicator"></div>
+      </div>
+    </section>
+
+    <section style="margin-top:0">
+      <div class="variant-head">
+        <div class="variant-title">方案 C · 净额卡 + 钱包合并成一张卡</div>
+        <p class="variant-desc">两个区块本来是各自独立的卡片，中间隔着标题行+外边距，这版把钱包直接并进 Hero 卡底部（同一张深色卡片里分两层，中间一条细分隔线），省掉的是"两个区块之间的间距 + 钱包区块自己的标题行占的高度"，视觉上变成一个更"仪表盘"感的整体，钱包用深色底上的小方块胶囊呈现，跟主卡配色统一。</p>
+        <div class="variant-diff">
+          <span class="diff-chip">两张卡→一张卡</span>
+          <span class="diff-chip">省一个 app-h2 标题行(~20px)</span>
+          <span class="diff-chip">省区块间 gap(~14-24px)</span>
+          <span class="diff-chip">钱包胶囊嵌深色卡内</span>
+        </div>
+      </div>
+      <div class="phone"><div class="phone-notch"></div>
+        <div class="app-screen">
+          <div><div class="app-h1">2026 曼谷出差</div><div class="app-sub">本位币 MYR · 记账中</div></div>
+          <div class="combo-c">
+            <div class="top-row">
+              <div>
+                <div class="label">我的净额</div>
+                <div class="num">+RM1,284.50</div>
+              </div>
+              <span class="cta">明细 →</span>
+            </div>
+            <div class="divider"></div>
+            <div class="wallet-zone">
+              <span class="wallet-zone-label">我的钱包</span>
+              <div class="wallet-c-strip">
+                <div class="wallet-c-chip"><span class="lbl">🏦 汇丰卡</span><span class="val">RM2,150</span></div>
+                <div class="wallet-c-chip"><span class="lbl">💵 泰铢现金</span><span class="val">฿3,200</span></div>
+                <div class="wallet-c-add">＋</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="home-indicator"></div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer>
+    三个方案的净额数字都维持 21-24px 区间（没有为了 compact 牺牲"一眼看清欠多少"这个核心可读性），"查看结算明细"的可点击范围都保留 min-height 32px（第八轮 ui-auditor 标过热区太矮的教训，这轮没有退步）。方案 A/C 改动幅度较大（换掉了 Hero 卡的质感手法/钱包卡片形态），方案 B 改动最保守。选定方向后再落地到 <span style="font-family:'IBM Plex Mono',monospace">app/trips/[tripId]/page.tsx</span> + <span style="font-family:'IBM Plex Mono',monospace">wallet-grid.tsx</span> 真实代码，这轮只出对比稿，不动真实 app。
+  </footer>
+</div>
+</body>
+</html>
