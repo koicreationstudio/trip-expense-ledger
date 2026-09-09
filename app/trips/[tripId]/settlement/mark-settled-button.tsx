@@ -2,16 +2,16 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 export function MarkSettledButton({ tripId }: { tripId: string }) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
-  async function handleClick() {
-    if (!confirm('确定要标记这个行程为已结算吗？之后这份净额清单会被冻结，明细改动也不会再影响它。')) {
-      return;
-    }
+  async function handleConfirm() {
+    setConfirming(false);
     setSubmitting(true);
     setError(null);
     try {
@@ -30,13 +30,21 @@ export function MarkSettledButton({ tripId }: { tripId: string }) {
     <div className="flex flex-col gap-1">
       <button
         type="button"
-        onClick={handleClick}
+        onClick={() => setConfirming(true)}
         disabled={submitting}
         className="btn-primary"
       >
         {submitting ? '处理中…' : '标记已结算'}
       </button>
       {error && <p className="text-sm text-coral">{error}</p>}
+      <ConfirmDialog
+        open={confirming}
+        message="确定要标记这个行程为已结算吗？之后这份净额清单会被冻结，明细改动也不会再影响它。"
+        confirmLabel="标记已结算"
+        variant="default"
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirming(false)}
+      />
     </div>
   );
 }

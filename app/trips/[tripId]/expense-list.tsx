@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Pencil, Trash2 } from 'lucide-react';
 import { formatMoney } from '@/lib/money';
 import { Avatar } from '@/components/avatar';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 export interface ExpenseListItem {
   id: string;
@@ -35,9 +36,10 @@ export function ExpenseList({
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
-  async function handleDelete(expenseId: string) {
-    if (!confirm('确定要删除这笔消费记录吗？这个操作不能撤销。')) return;
+  async function performDelete(expenseId: string) {
+    setConfirmingId(null);
     setError(null);
     setDeletingId(expenseId);
     try {
@@ -58,7 +60,7 @@ export function ExpenseList({
 
   return (
     <div className="flex flex-col gap-2">
-      {error && <p className="text-base text-red-600">{error}</p>}
+      {error && <p className="text-base text-coral">{error}</p>}
       <ul className="flex flex-col gap-2">
         {expenses.map((e) => {
           const mine = e.enteredByParticipantId === myParticipantId;
@@ -81,10 +83,10 @@ export function ExpenseList({
                   </Link>
                   <button
                     type="button"
-                    onClick={() => handleDelete(e.id)}
+                    onClick={() => setConfirmingId(e.id)}
                     disabled={deletingId === e.id}
                     aria-label="删除这笔消费"
-                    className="inline-flex min-h-[28px] min-w-[28px] items-center justify-center text-red-600 disabled:opacity-50"
+                    className="inline-flex min-h-[28px] min-w-[28px] items-center justify-center text-coral disabled:opacity-50"
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>
@@ -110,6 +112,13 @@ export function ExpenseList({
           );
         })}
       </ul>
+      <ConfirmDialog
+        open={confirmingId !== null}
+        message="确定要删除这笔消费记录吗？这个操作不能撤销。"
+        confirmLabel="删除"
+        onConfirm={() => confirmingId && performDelete(confirmingId)}
+        onCancel={() => setConfirmingId(null)}
+      />
     </div>
   );
 }

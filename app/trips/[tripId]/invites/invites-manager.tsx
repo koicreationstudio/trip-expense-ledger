@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Avatar } from '@/components/avatar';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 interface Invite {
   id: string;
@@ -25,6 +26,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<{ type: 'revoke' | 'reset'; id: string } | null>(null);
 
   async function loadAll() {
     const [tripRes, invitesRes] = await Promise.all([
@@ -67,14 +69,14 @@ export function InvitesManager({ tripId }: { tripId: string }) {
     }
   }
 
-  async function handleRevoke(inviteId: string) {
-    if (!confirm('确定要撤销这个邀请链接吗？撤销后这个链接就不能再用来认领了。')) return;
+  async function performRevoke(inviteId: string) {
+    setConfirming(null);
     await fetch(`/api/trips/${tripId}/invites/${inviteId}`, { method: 'DELETE' });
     await loadAll();
   }
 
-  async function handleResetClaim(participantId: string) {
-    if (!confirm('确定要重置这个人的认领状态吗？重置后他之前的登录会失效，需要重新用邀请链接认领。')) return;
+  async function performResetClaim(participantId: string) {
+    setConfirming(null);
     await fetch(`/api/trips/${tripId}/participants/${participantId}/reset-claim`, { method: 'POST' });
     await loadAll();
   }
@@ -158,7 +160,11 @@ export function InvitesManager({ tripId }: { tripId: string }) {
                       {copiedCode === invite.code ? '已复制' : '复制链接'}
                     </button>
                     {!isRevoked && (
-                      <button type="button" onClick={() => handleRevoke(invite.id)} className="tap-link text-coral">
+                      <button
+                        type="button"
+                        onClick={() => setConfirming({ type: 'revoke', id: invite.id })}
+                        className="tap-link text-coral"
+                      >
                         撤销
                       </button>
                     )}
@@ -195,7 +201,11 @@ export function InvitesManager({ tripId }: { tripId: string }) {
                   </span>
                 </span>
                 {p.claimed && !p.isOwner && (
-                  <button type="button" onClick={() => handleResetClaim(p.id)} className="tap-link text-sm text-muted">
+                  <button
+                    type="button"
+                    onClick={() => setConfirming({ type: 'reset', id: p.id })}
+                    className="tap-link text-sm text-muted"
+                  >
                     重置认领
                   </button>
                 )}
@@ -204,6 +214,21 @@ export function InvitesManager({ tripId }: { tripId: string }) {
           </ul>
         )}
       </section>
+      <ConfirmDialog
+        open={confirming !== null}
+        message={
+          confirming?.type === 'revoke'
+            ? '确定要撤销这个邀请链接吗？撤销后这个链接就不能再用来认领了。'
+            : '确定要重置这个人的认领状态吗？重置后他之前的登录会失效，需要重新用邀请链接认领。'
+        }
+        confirmLabel={confirming?.type === 'revoke' ? '撤销' : '重置'}
+        onConfirm={() => {
+          if (!confirming) return;
+          if (confirming.type === 'revoke') performRevoke(confirming.id);
+          else performResetClaim(confirming.id);
+        }}
+        onCancel={() => setConfirming(null)}
+      />
     </div>
   );
 }

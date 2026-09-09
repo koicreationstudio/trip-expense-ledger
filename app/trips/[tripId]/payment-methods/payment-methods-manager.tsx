@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { PAYMENT_METHOD_SETTLEMENT_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, formatMoney } from '@/lib/money';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 interface PaymentMethod {
   id: string;
@@ -32,6 +33,7 @@ export function PaymentMethodsManager() {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   async function loadMethods() {
     const res = await fetch('/api/payment-methods');
@@ -78,8 +80,8 @@ export function PaymentMethodsManager() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('确定要删除这个支付方式吗？')) return;
+  async function performDelete(id: string) {
+    setConfirmingId(null);
     await fetch(`/api/payment-methods/${id}`, { method: 'DELETE' });
     await loadMethods();
   }
@@ -115,7 +117,7 @@ export function PaymentMethodsManager() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleDelete(m.id)}
+                  onClick={() => setConfirmingId(m.id)}
                   className="btn-secondary shrink-0"
                 >
                   删除
@@ -247,6 +249,13 @@ export function PaymentMethodsManager() {
           </button>
         </form>
       </section>
+      <ConfirmDialog
+        open={confirmingId !== null}
+        message="确定要删除这个支付方式吗？"
+        confirmLabel="删除"
+        onConfirm={() => confirmingId && performDelete(confirmingId)}
+        onCancel={() => setConfirmingId(null)}
+      />
     </div>
   );
 }
