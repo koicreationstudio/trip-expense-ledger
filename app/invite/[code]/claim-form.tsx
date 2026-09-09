@@ -92,7 +92,7 @@ export function ClaimForm({
         </select>
       </div>
 
-      {error && <p className="text-base text-red-600">{error}</p>}
+      {error && <p className="text-base text-coral">{error}</p>}
 
       <button
         type="submit"

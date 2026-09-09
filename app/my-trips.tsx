@@ -55,7 +55,7 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {error && <p className="text-base text-red-600">{error}</p>}
+      {error && <p className="text-base text-coral">{error}</p>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {trips.map((trip) => (
           <button
