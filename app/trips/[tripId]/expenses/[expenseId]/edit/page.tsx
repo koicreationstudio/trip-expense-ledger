@@ -1,8 +1,9 @@
 import { and, eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { getDb } from '@/lib/db/client';
-import { expenses, participants, trips } from '@/lib/db/schema';
+import { expenses, participants, paymentMethods, trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
+import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 import { ExpenseForm } from '../../expense-form';
 
 /**
@@ -36,6 +37,11 @@ export default async function EditExpensePage({
 
   const tripParticipants = await db.select().from(participants).where(eq(participants.tripId, params.tripId));
 
+  const myPaymentMethods = await db
+    .select()
+    .from(paymentMethods)
+    .where(paymentMethodOwnerFilter(identity));
+
   return (
     <main className="flex flex-col gap-6">
       <h1 className="text-base font-semibold text-ink">编辑消费</h1>
@@ -44,6 +50,7 @@ export default async function EditExpensePage({
         baseCurrency={trip.baseCurrency}
         myParticipantId={identity.participantId}
         participants={tripParticipants.map((p) => ({ id: p.id, displayName: p.displayName }))}
+        hasPaymentMethods={myPaymentMethods.length > 0}
         initialExpense={{
           id: expense.id,
           amount: expense.amount,

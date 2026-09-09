@@ -18,6 +18,20 @@ function SignupForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!displayName.trim()) {
+      setError('称呼不能空着');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('邮箱格式不对');
+      return;
+    }
+    if (password.length < 8) {
+      setError('密码至少要 8 位');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch('/api/account/signup', {
@@ -48,7 +62,7 @@ function SignupForm() {
   return (
     <main className="flex flex-col gap-6">
       <h1 className="text-base font-semibold text-ink">注册</h1>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <div className="flex flex-col gap-1">
           <label className="field-label" htmlFor="display-name">
             你的称呼

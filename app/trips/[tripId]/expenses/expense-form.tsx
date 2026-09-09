@@ -75,12 +75,14 @@ export function ExpenseForm({
   baseCurrency,
   myParticipantId,
   participants,
+  hasPaymentMethods,
   initialExpense,
 }: {
   tripId: string;
   baseCurrency: string;
   myParticipantId: string;
   participants: Participant[];
+  hasPaymentMethods: boolean;
   initialExpense?: InitialExpense;
 }) {
   const router = useRouter();
@@ -140,6 +142,10 @@ export function ExpenseForm({
   async function handleCompare() {
     setCompareError(null);
     setRecommendations(null);
+    if (!hasPaymentMethods) {
+      setCompareError('no_payment_methods');
+      return;
+    }
     const amount = Number(amountYuan);
     if (!amount || amount <= 0) {
       setCompareError('先填金额再比价');
@@ -326,13 +332,13 @@ export function ExpenseForm({
           <button
             type="button"
             onClick={handleCompare}
-            disabled={comparing}
+            disabled={comparing || !hasPaymentMethods}
             className="btn-secondary"
           >
             {comparing ? '比价中…' : '比价'}
           </button>
         </div>
-        {compareError === 'no_payment_methods' && (
+        {(!hasPaymentMethods || compareError === 'no_payment_methods') && (
           <p className="text-sm text-muted">
             还没配置支付方式，先去{' '}
             <Link href={`/trips/${tripId}/payment-methods`} className="tap-link">
