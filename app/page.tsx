@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth/current-user';
 import { loadUserTripsWithBalance } from '@/lib/db/user-trips-query';
 import { MyTrips } from './my-trips';
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams?: { identity_invalid?: string } }) {
   // ① tel_session 有效 → 跟今天一样直接跳进那个 trip，guest 零摩擦流程原样保留。
   const identity = await getCurrentIdentity();
   if (identity) {
@@ -26,7 +26,9 @@ export default async function HomePage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-base font-semibold text-ink">我的行程</h1>
-            <p className="mt-1 text-[10px] text-muted">{user.displayName}，欢迎回来。</p>
+            <Link href="/account" className="mt-1 inline-block text-[10px] text-muted hover:text-ink hover:underline">
+              我的账号
+            </Link>
           </div>
           <Link
             href="/trips/new"
@@ -40,9 +42,15 @@ export default async function HomePage() {
     );
   }
 
-  // ③ 都没有 → 现在这个空首页，两个入口都要求先登录/注册。
+  // ③ 都没有 → 2026-09-09 第十六轮登录系统换血：不再要求先跳 /login，
+  // 直接进 /trips/new，没账号会在那里自动开号（见 ProvisionGate）。
   return (
     <main className="flex flex-col gap-6">
+      {searchParams?.identity_invalid && (
+        <p className="rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] text-xs text-coral">
+          这条身份链接无效或已失效，请重新确认链接是否正确。
+        </p>
+      )}
       <div>
         <h1 className="text-base font-semibold text-ink">消费记录</h1>
         <p className="mt-2 text-[10px] text-muted">
@@ -50,17 +58,12 @@ export default async function HomePage() {
         </p>
       </div>
       <Link
-        href="/login?next=/trips/new"
+        href="/trips/new"
         className="btn-primary"
       >
         创建新行程
       </Link>
-      <p className="text-[10px] text-muted">
-        已经有账号？
-        <Link href="/login" className="tap-link ml-1">
-          登录
-        </Link>
-      </p>
+      <p className="text-[10px] text-muted">已经有专属身份链接？直接打开那条链接就能回到你的账号。</p>
       <p className="text-[10px] text-muted">已经有同行人分享给你的邀请链接？直接打开那个链接就能认领身份。</p>
     </main>
   );

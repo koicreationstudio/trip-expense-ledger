@@ -1,24 +1,24 @@
 import { NextRequest } from 'next/server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { getDb, type Db } from '@/lib/db/client';
 import { setupTestDb, teardownTestDb } from '@/lib/db/test-client';
+import { participants } from '@/lib/db/schema';
 
 /**
- * Layer 2 账号系统的路由测试，照抄
- * app/api/trips/[tripId]/expenses/[expenseId]/route.test.ts 的写法：
- * 每个测试文件用 getPlatformProxy() 换一套独立的本地 miniflare D1 binding
- * （persist: false，全新空库），迁移在 beforeAll 里跑一次。
- *
- * switch-trip 是这次新增的唯一一条跨 trip 权限边界：userId 没有关联到目标 trip
- * 的 participant，一律 404，测试要求跟现有"越权 404"原则一样严格。
+ * Layer 2 账号系统的路由测试。2026-09-09 第十六轮登录系统换血：邮箱密码
+ * signup/login 两条路由砍掉，改测 provision（首次自动开号）+ /id/[token]
+ * （明文身份直连链接登录）这两条新路径。switch-trip 是账号系统唯一新增的
+ * 跨 trip 权限边界，逻辑完全没变，只是"建账号"这一步的手段换成新流程。
  */
 
 let db: Db;
 let SESSION_COOKIE_NAME: string;
 let USER_SESSION_COOKIE_NAME: string;
 let resolveIdentity: typeof import('@/lib/auth/session').resolveIdentity;
-let signupHandler: typeof import('@/app/api/account/signup/route').POST;
-let loginHandler: typeof import('@/app/api/account/login/route').POST;
+let createSession: typeof import('@/lib/auth/session').createSession;
+let provisionHandler: typeof import('@/app/api/account/provision/route').POST;
+let identityLinkHandler: typeof import('@/app/id/[token]/route').GET;
 let switchTripHandler: typeof import('@/app/api/account/switch-trip/route').POST;
 let tripsPostHandler: typeof import('@/app/api/trips/route').POST;
 
@@ -40,14 +40,23 @@ function jsonRequest(
   });
 }
 
+function getRequest(url: string, cookies?: { token?: string; userToken?: string }) {
+  const headers = new Headers();
+  const cookieParts: string[] = [];
+  if (cookies?.token) cookieParts.push(`${SESSION_COOKIE_NAME}=${cookies.token}`);
+  if (cookies?.userToken) cookieParts.push(`${USER_SESSION_COOKIE_NAME}=${cookies.userToken}`);
+  if (cookieParts.length > 0) headers.set('cookie', cookieParts.join('; '));
+  return new NextRequest(url, { method: 'GET', headers });
+}
+
 beforeAll(async () => {
   await setupTestDb();
   db = await getDb();
 
-  ({ SESSION_COOKIE_NAME, resolveIdentity } = await import('@/lib/auth/session'));
+  ({ SESSION_COOKIE_NAME, resolveIdentity, createSession } = await import('@/lib/auth/session'));
   ({ USER_SESSION_COOKIE_NAME } = await import('@/lib/auth/user-session'));
-  ({ POST: signupHandler } = await import('@/app/api/account/signup/route'));
-  ({ POST: loginHandler } = await import('@/app/api/account/login/route'));
+  ({ POST: provisionHandler } = await import('@/app/api/account/provision/route'));
+  ({ GET: identityLinkHandler } = await import('@/app/id/[token]/route'));
   ({ POST: switchTripHandler } = await import('@/app/api/account/switch-trip/route'));
   ({ POST: tripsPostHandler } = await import('@/app/api/trips/route'));
 });
@@ -56,98 +65,102 @@ afterAll(async () => {
   await teardownTestDb();
 });
 
-describe('signup', () => {
-  it('建号成功种 tel_user_session cookie，响应体不带 passwordHash', async () => {
-    const res = await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', {
-        email: 'signup-ok@example.com',
-        password: 'correct-horse-battery',
-        displayName: 'Remy',
-      })
-    );
-    expect(res.status).toBe(201);
-    expect(res.cookies.get(USER_SESSION_COOKIE_NAME)?.value).toBeTruthy();
-
+describe('provision：首次开号', () => {
+  it('没有账号时开号成功，种下 tel_user_session cookie，返回明文身份链接', async () => {
+    const res = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    expect(res.status).toBe(200);
     const body = (await res.json()) as any;
-    expect(body.user.email).toBe('signup-ok@example.com');
-    expect(body.user.displayName).toBe('Remy');
-    expect(body.user.passwordHash).toBeUndefined();
+    expect(body.alreadyProvisioned).toBe(false);
+    expect(body.identityUrl).toContain('/id/');
+    expect(res.cookies.get(USER_SESSION_COOKIE_NAME)?.value).toBeTruthy();
   });
 
-  it('重复邮箱拒绝（大小写/空格规范化后比对）', async () => {
-    await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', {
-        email: 'dup@example.com',
-        password: 'correct-horse-battery',
-        displayName: 'A',
-      })
-    );
+  it('已经有账号时幂等，不重复开号、不返回新链接', async () => {
+    const first = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const userToken = first.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
 
-    const second = await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', {
-        email: '  Dup@Example.com  ',
-        password: 'another-password',
-        displayName: 'B',
-      })
+    const second = await provisionHandler(
+      jsonRequest('http://localhost/api/account/provision', 'POST', undefined, { userToken })
     );
-    expect(second.status).toBe(409);
+    expect(second.status).toBe(200);
+    const body = (await second.json()) as any;
+    expect(body.alreadyProvisioned).toBe(true);
+    expect(body.identityUrl).toBeUndefined();
   });
 });
 
-describe('login', () => {
-  it('密码错一律 401，找不到邮箱也一律 401（不区分两种情况）', async () => {
-    await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', {
-        email: 'login-test@example.com',
-        password: 'correct-horse-battery',
-        displayName: 'C',
-      })
-    );
+describe('身份直连链接 /id/[token]：邮箱密码登录砍掉后唯一的登录入口', () => {
+  it('token 正确：种下新的 tel_user_session cookie，跳回首页', async () => {
+    const provisionRes = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const identityUrl: string = ((await provisionRes.json()) as any).identityUrl;
+    const token = identityUrl.split('/id/')[1]!;
 
-    const wrongPassword = await loginHandler(
-      jsonRequest('http://localhost/api/account/login', 'POST', {
-        email: 'login-test@example.com',
-        password: 'wrong-password',
-      })
-    );
-    expect(wrongPassword.status).toBe(401);
-    const wrongPasswordBody = (await wrongPassword.json()) as any;
-
-    const unknownEmail = await loginHandler(
-      jsonRequest('http://localhost/api/account/login', 'POST', {
-        email: 'nobody-here@example.com',
-        password: 'whatever',
-      })
-    );
-    expect(unknownEmail.status).toBe(401);
-    const unknownEmailBody = (await unknownEmail.json()) as any;
-
-    expect(unknownEmailBody.error).toBe(wrongPasswordBody.error);
+    const res = await identityLinkHandler(getRequest(`http://localhost/id/${token}`), {
+      params: { token },
+    });
+    expect(res.status).toBeGreaterThanOrEqual(300);
+    expect(res.status).toBeLessThan(400);
+    expect(res.headers.get('location')).not.toContain('identity_invalid');
+    expect(res.cookies.get(USER_SESSION_COOKIE_NAME)?.value).toBeTruthy();
   });
 
-  it('密码对种下 tel_user_session cookie', async () => {
-    const res = await loginHandler(
-      jsonRequest('http://localhost/api/account/login', 'POST', {
-        email: 'login-test@example.com',
-        password: 'correct-horse-battery',
-      })
+  it('token 错误：跳回首页带错误参数，不种 cookie', async () => {
+    const res = await identityLinkHandler(getRequest('http://localhost/id/not-a-real-token'), {
+      params: { token: 'not-a-real-token' },
+    });
+    expect(res.headers.get('location')).toContain('identity_invalid=1');
+    expect(res.cookies.get(USER_SESSION_COOKIE_NAME)?.value).toBeFalsy();
+  });
+
+  it('带着活跃 tel_session 打开身份链接：顺手把这个 participant 关联到链接对应的账号（跟 link-current-trip 同一份共享逻辑）', async () => {
+    // 建一个独立账号 + trip，只是用来产出一个真实 tripId，不直接用它的 owner participant。
+    const ownerProvision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const ownerUserToken = ownerProvision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    const tripRes = await tripsPostHandler(
+      jsonRequest(
+        'http://localhost/api/trips',
+        'POST',
+        { name: 'Link Test Trip', baseCurrency: 'MYR', ownerDisplayName: 'Owner', participantNames: [] },
+        { userToken: ownerUserToken }
+      )
     );
-    expect(res.status).toBe(200);
-    expect(res.cookies.get(USER_SESSION_COOKIE_NAME)?.value).toBeTruthy();
+    const tripBody = (await tripRes.json()) as any;
+
+    // 手动建一个未绑账号的 participant，铸一个 tel_session 指向它——模拟
+    // "游客刚认领完邀请，浏览器带着 tel_session，但还没关联任何账号"这个场景。
+    const guestParticipantId = crypto.randomUUID();
+    await db.insert(participants).values({
+      id: guestParticipantId,
+      tripId: tripBody.trip.id,
+      displayName: 'Guest',
+      isOwner: false,
+      claimedAt: new Date(),
+    });
+    const guestSessionToken = await createSession(db, guestParticipantId, 'test-agent');
+
+    // 这个游客现在去点开另一个全新账号的身份链接（比如自己之前在别的设备上
+    // 建过号，这次换设备用身份链接登录）。
+    const secondProvision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const secondIdentityUrl: string = ((await secondProvision.json()) as any).identityUrl;
+    const secondToken = secondIdentityUrl.split('/id/')[1]!;
+
+    const res = await identityLinkHandler(
+      getRequest(`http://localhost/id/${secondToken}`, { token: guestSessionToken }),
+      { params: { token: secondToken } }
+    );
+    expect(res.status).toBeGreaterThanOrEqual(300);
+    expect(res.status).toBeLessThan(400);
+
+    const updated = await db.query.participants.findFirst({ where: eq(participants.id, guestParticipantId) });
+    expect(updated?.userId).toBeTruthy();
   });
 });
 
 describe('switch-trip：账号系统唯一新增的跨 trip 权限边界', () => {
   it('userId 关联的 trip 能切进去，没关联的 trip 一律 404（不是 403）', async () => {
     // U1 建 trip T1
-    const u1Signup = await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', {
-        email: 'u1@example.com',
-        password: 'correct-horse-battery',
-        displayName: 'U1',
-      })
-    );
-    const u1Token = u1Signup.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    const u1Provision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const u1Token = u1Provision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
 
     const t1Response = await tripsPostHandler(
       jsonRequest(
@@ -161,14 +174,8 @@ describe('switch-trip：账号系统唯一新增的跨 trip 权限边界', () =>
     const t1Id: string = ((await t1Response.json()) as any).trip.id;
 
     // U2 建 trip T2，跟 U1 完全无关
-    const u2Signup = await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', {
-        email: 'u2@example.com',
-        password: 'correct-horse-battery',
-        displayName: 'U2',
-      })
-    );
-    const u2Token = u2Signup.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    const u2Provision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const u2Token = u2Provision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
 
     const t2Response = await tripsPostHandler(
       jsonRequest(

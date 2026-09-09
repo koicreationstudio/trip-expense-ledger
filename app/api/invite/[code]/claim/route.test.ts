@@ -15,12 +15,15 @@ import { participants } from '@/lib/db/schema';
  * 正确行为：认领本身绝不碰 userId，账号关联只能通过用户登录/注册后显式调用
  * app/api/account/link-current-trip/route.ts 完成（该路由只认*当前请求自己
  * 的* tel_session 指向的 participant，不接受 ambient cookie 隐式生效）。
+ *
+ * 2026-09-09 第十六轮登录系统换血：建账号的手段从 signup 换成 provision
+ * （首次自动开号），测试断言的核心行为完全没变。
  */
 
 let db: Db;
 let SESSION_COOKIE_NAME: string;
 let USER_SESSION_COOKIE_NAME: string;
-let signupHandler: typeof import('@/app/api/account/signup/route').POST;
+let provisionHandler: typeof import('@/app/api/account/provision/route').POST;
 let tripsPostHandler: typeof import('@/app/api/trips/route').POST;
 let invitesPostHandler: typeof import('@/app/api/trips/[tripId]/invites/route').POST;
 let claimHandler: typeof import('./route').POST;
@@ -50,7 +53,7 @@ beforeAll(async () => {
 
   ({ SESSION_COOKIE_NAME } = await import('@/lib/auth/session'));
   ({ USER_SESSION_COOKIE_NAME } = await import('@/lib/auth/user-session'));
-  ({ POST: signupHandler } = await import('@/app/api/account/signup/route'));
+  ({ POST: provisionHandler } = await import('@/app/api/account/provision/route'));
   ({ POST: tripsPostHandler } = await import('@/app/api/trips/route'));
   ({ POST: invitesPostHandler } = await import('@/app/api/trips/[tripId]/invites/route'));
   ({ POST: claimHandler } = await import('./route'));
@@ -66,14 +69,8 @@ afterAll(async () => {
 describe('邀请认领不该悄悄绑定 ambient 账号 cookie', () => {
   it('认领时浏览器带着别人的 tel_user_session，认领到的 participant 的 userId 必须保持 null', async () => {
     // Owner A 建行程 + 一个未认领占位 Wang
-    const aSignup = await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', {
-        email: 'claim-owner-a@example.com',
-        password: 'correct-horse-battery',
-        displayName: 'A',
-      })
-    );
-    const aUserToken = aSignup.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    const aProvision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const aUserToken = aProvision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
 
     const createTripResponse = await tripsPostHandler(
       jsonRequest(
@@ -98,14 +95,8 @@ describe('邀请认领不该悄悄绑定 ambient 账号 cookie', () => {
     const inviteCode: string = ((await inviteResponse.json()) as any).code;
 
     // 跟 A 完全无关的另一个账号 B——模拟"浏览器恰好带着别的登录态"这个 ambient 场景
-    const bSignup = await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', {
-        email: 'claim-ambient-b@example.com',
-        password: 'correct-horse-battery',
-        displayName: 'B',
-      })
-    );
-    const bUserToken = bSignup.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    const bProvision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const bUserToken = bProvision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
     expect(bUserToken).toBeTruthy();
 
     // Wang 认领这个占位，但请求 cookie 里混着 B 的 tel_user_session
@@ -127,14 +118,8 @@ describe('邀请认领不该悄悄绑定 ambient 账号 cookie', () => {
 
 describe('reset-claim 必须连 userId 一起清掉', () => {
   it('reset 之后 claimedAt 和 userId 都变 null，不会让下一个认领的人继承旧账号的支付方式', async () => {
-    const aSignup = await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', {
-        email: 'reset-owner-a@example.com',
-        password: 'correct-horse-battery',
-        displayName: 'A',
-      })
-    );
-    const aUserToken = aSignup.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    const aProvision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const aUserToken = aProvision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
 
     const createTripResponse = await tripsPostHandler(
       jsonRequest(

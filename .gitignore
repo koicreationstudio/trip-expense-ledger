@@ -9,6 +9,12 @@
 *credentials*.json
 *token*
 *secret*
+# 上面 *token* 这条本来是为了挡密钥/token 文件，但会连带把 Next.js 动态路由目录
+# app/id/[token]/ 也误判成要忽略的敏感文件（第十六轮登录换血新增的身份直连路由），
+# 显式加白名单，不然这个真实源码文件会被静默排除在版本控制之外。
+!app/id/
+!app/id/\[token\]/
+!app/id/\[token\]/route.ts
 *.crt
 
 # --- Cloudflare / OpenNext ---

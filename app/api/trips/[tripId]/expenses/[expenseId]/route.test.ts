@@ -16,7 +16,7 @@ let db: Db;
 let createSession: typeof import('@/lib/auth/session').createSession;
 let SESSION_COOKIE_NAME: string;
 let USER_SESSION_COOKIE_NAME: string;
-let signupHandler: typeof import('@/app/api/account/signup/route').POST;
+let provisionHandler: typeof import('@/app/api/account/provision/route').POST;
 let tripsPostHandler: typeof import('@/app/api/trips/route').POST;
 let expensesPostHandler: typeof import('@/app/api/trips/[tripId]/expenses/route').POST;
 let expenseGetHandler: typeof import('@/app/api/trips/[tripId]/expenses/[expenseId]/route').GET;
@@ -48,7 +48,7 @@ beforeAll(async () => {
 
   ({ createSession, SESSION_COOKIE_NAME } = await import('@/lib/auth/session'));
   ({ USER_SESSION_COOKIE_NAME } = await import('@/lib/auth/user-session'));
-  ({ POST: signupHandler } = await import('@/app/api/account/signup/route'));
+  ({ POST: provisionHandler } = await import('@/app/api/account/provision/route'));
   ({ POST: tripsPostHandler } = await import('@/app/api/trips/route'));
   ({ POST: expensesPostHandler } = await import('@/app/api/trips/[tripId]/expenses/route'));
   ({
@@ -64,16 +64,13 @@ afterAll(async () => {
 
 describe('expense 权限边界：entered_by 之外一律 404', () => {
   it('B 看不到 A 录入的消费，A 自己能看，DELETE/PATCH 同样对 B 返回 404', async () => {
-    // 建行程现在要求先登录（Layer 2 账号），先给 A 注册一个账号拿 tel_user_session。
-    const signupResponse = await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', undefined, {
-        email: 'a-expense-boundary@example.com',
-        password: 'correct-horse-battery',
-        displayName: 'A',
-      })
+    // 建行程现在要求先有账号（Layer 2），先给 A 开号拿 tel_user_session
+    // （2026-09-09 第十六轮登录换血：signup 换成 provision，行为等价）。
+    const provisionResponse = await provisionHandler(
+      jsonRequest('http://localhost/api/account/provision', 'POST', undefined)
     );
-    expect(signupResponse.status).toBe(201);
-    const aUserToken = signupResponse.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    expect(provisionResponse.status).toBe(200);
+    const aUserToken = provisionResponse.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
     expect(aUserToken).toBeTruthy();
 
     const createTripResponse = await tripsPostHandler(

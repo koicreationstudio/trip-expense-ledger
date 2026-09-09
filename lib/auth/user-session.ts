@@ -35,7 +35,8 @@ export async function createUserSession(
 
 export interface AuthenticatedUser {
   userId: string;
-  email: string;
+  // 已废弃：邮箱密码登录砍掉后这个字段不再有意义来源，只读旧数据可能是 null
+  email: string | null;
   displayName: string;
 }
 

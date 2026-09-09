@@ -17,7 +17,7 @@ let db: Db;
 let SESSION_COOKIE_NAME: string;
 let USER_SESSION_COOKIE_NAME: string;
 let createSession: typeof import('@/lib/auth/session').createSession;
-let signupHandler: typeof import('@/app/api/account/signup/route').POST;
+let provisionHandler: typeof import('@/app/api/account/provision/route').POST;
 let tripsPostHandler: typeof import('@/app/api/trips/route').POST;
 let paymentMethodsGetHandler: typeof import('@/app/api/payment-methods/route').GET;
 let paymentMethodsPostHandler: typeof import('@/app/api/payment-methods/route').POST;
@@ -51,7 +51,7 @@ beforeAll(async () => {
 
   ({ SESSION_COOKIE_NAME, createSession } = await import('@/lib/auth/session'));
   ({ USER_SESSION_COOKIE_NAME } = await import('@/lib/auth/user-session'));
-  ({ POST: signupHandler } = await import('@/app/api/account/signup/route'));
+  ({ POST: provisionHandler } = await import('@/app/api/account/provision/route'));
   ({ POST: tripsPostHandler } = await import('@/app/api/trips/route'));
   ({ GET: paymentMethodsGetHandler, POST: paymentMethodsPostHandler } = await import('@/app/api/payment-methods/route'));
 });
@@ -62,14 +62,8 @@ afterAll(async () => {
 
 describe('有账号的人：支付方式跨行程终身可见', () => {
   it('在 trip A 建的支付方式，切到同一账号的 trip B 依然查得到', async () => {
-    const signupRes = await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', {
-        email: 'cross-trip@example.com',
-        password: 'correct-horse-battery',
-        displayName: 'Remy',
-      })
-    );
-    const userToken = signupRes.cookies.get(USER_SESSION_COOKIE_NAME)?.value!;
+    const provisionRes = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const userToken = provisionRes.cookies.get(USER_SESSION_COOKIE_NAME)?.value!;
 
     const tripATokenA = await createTripAndGetSessionToken(userToken, '曼谷');
     const tripBToken = await createTripAndGetSessionToken(userToken, '清迈');
@@ -96,14 +90,8 @@ describe('guest(没账号)：支付方式只在当趟行程内有效', () => {
     // 造一趟有账号的 trip 拿到合法 tripId，再手动插一个没有 userId 的 guest
     // participant（模拟认领邀请链接、没注册账号的场景），直接用 createSession
     // 发一张 session token，跳过完整的邀请认领 HTTP 流程。
-    const signupRes = await signupHandler(
-      jsonRequest('http://localhost/api/account/signup', 'POST', {
-        email: 'guest-owner@example.com',
-        password: 'correct-horse-battery',
-        displayName: 'Remy',
-      })
-    );
-    const userToken = signupRes.cookies.get(USER_SESSION_COOKIE_NAME)?.value!;
+    const provisionRes = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const userToken = provisionRes.cookies.get(USER_SESSION_COOKIE_NAME)?.value!;
     const tripRes = await tripsPostHandler(
       jsonRequest('http://localhost/api/trips', 'POST', { name: '新加坡', baseCurrency: 'MYR', ownerDisplayName: 'Remy' }, {
         [USER_SESSION_COOKIE_NAME]: userToken,

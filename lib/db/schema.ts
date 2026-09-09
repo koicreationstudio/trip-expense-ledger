@@ -28,21 +28,30 @@ export const trips = sqliteTable('trip', {
 });
 
 // ---------------------------------------------------------------------------
-// user：Layer 2 账号系统，邮箱+密码，只负责「记住这个人建过/认领过哪些行程」，
+// user：Layer 2 账号系统，只负责「记住这个人建过/认领过哪些行程」，
 // 完全不参与 Layer 1（session/participant）的任何权限判断。
+// 2026-09-09 第十六轮登录系统换血：邮箱密码登录砍掉，改成明文存储的专属身份
+// 链接（identity_token，形如 invite.code 那种不可猜测随机 token，直接明文存，
+// 不哈希——这条链接本身就是凭证）。email/password_hash 两列保留物理字段(旧
+// 数据不丢)但代码从此不再读写，允许为空；新建号一律走 identity_token 这条路。
 // ---------------------------------------------------------------------------
 export const users = sqliteTable(
   'user',
   {
     id: id(),
-    // 存小写去空格后的邮箱，查重/登录都按这个规范化形式比对
-    email: text('email').notNull(),
-    passwordHash: text('password_hash').notNull(),
+    // 已废弃：邮箱密码登录砍掉后不再写入，只读旧数据用，允许为空
+    email: text('email'),
+    // 已废弃：同上
+    passwordHash: text('password_hash'),
     displayName: text('display_name').notNull(),
+    // 专属身份直连链接的 token，明文存储（同 invites.code 的存储哲学），
+    // 32 字节随机数 base64url 编码，出现在 /id/[token] 这个 URL 里。
+    identityToken: text('identity_token'),
     createdAt: createdAt(),
   },
   (table) => ({
     emailIdx: uniqueIndex('user_email_idx').on(table.email),
+    identityTokenIdx: uniqueIndex('user_identity_token_idx').on(table.identityToken),
   })
 );
 

@@ -58,7 +58,12 @@ export default async function TripLayout({
             <TripSwitcher currentTripId={trip.id} currentTripName={trip.name} otherTrips={otherTrips} />
             <p className="text-[10px] text-muted">本位币 {trip.baseCurrency}</p>
           </div>
-          <LogoutButton />
+          <div className="flex items-center gap-3">
+            <Link href="/account" className="text-[10px] text-muted hover:text-ink hover:underline">
+              我的账号
+            </Link>
+            <LogoutButton />
+          </div>
         </div>
         <nav className="flex flex-wrap gap-x-4 gap-y-2 text-[12.5px]">
           {navLinks.map((link) => (
