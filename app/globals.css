@@ -15,12 +15,16 @@ body {
   /* 主操作按钮：DESIGN-BRIEF 第三版圆角尺度改 pill；min-h 44px 是 Apple HIG 最小触控热区（触控热区不算视觉密度，不跟着字号收）。
      字号 2026-09-08 从 text-sm(14px) 收到 12.5px：这个 class 从建库起就没跟上其它模块历轮的紧凑化，是全站字号不一致的公共 chokepoint 之一。 */
   .btn-primary {
-    @apply inline-flex min-h-[44px] items-center justify-center rounded-full bg-accent-700 px-[14px] text-[12.5px] font-medium text-white transition-colors hover:bg-accent-800 disabled:opacity-50;
+    @apply inline-flex min-h-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[14px] text-[12.5px] font-medium text-white transition-colors hover:bg-accent-800 disabled:opacity-50;
   }
 
-  /* 次要操作按钮：比价/平均分摊/移除这类不需要抢主按钮风头的动作，触控高度跟主 CTA/FAB 拉开一级 */
+  /* 次要操作按钮：比价/平均分摊/移除这类不需要抢主按钮风头的动作，触控高度跟主 CTA/FAB 拉开一级。
+     第十六轮：min-h 36px→32px 再收紧一档（跟 .tap-link 的 32px 同档，靠背景/边框区分不靠高度）；
+     shrink-0+whitespace-nowrap 这次提到全局 class 层（原本只在 payment-methods-manager.tsx/
+     expense-form.tsx/invites-manager.tsx 三处零散补了 shrink-0，这次收成 chokepoint 一次性覆盖全部
+     调用点，防止以后新页面再漏加）。 */
   .btn-secondary {
-    @apply inline-flex min-h-[36px] items-center justify-center rounded-full border border-sand bg-white px-3 text-[12.5px] font-medium text-ink transition-colors hover:bg-slate-50 disabled:opacity-50;
+    @apply inline-flex min-h-[32px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[10px] text-[12.5px] font-medium text-ink transition-colors hover:bg-slate-50 disabled:opacity-50;
   }
 
   /* 行内文字链接型操作（编辑/删除/撤销/复制）：纯文字链接不需要 44px 按钮级触控热区 */
