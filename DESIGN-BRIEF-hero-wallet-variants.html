@@ -1,8 +1,4 @@
-<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<title>行程主页 Hero净额卡 + 我的钱包 · 三个 compact 风格对比</title>
+<title>净额卡密度方案</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -12,11 +8,23 @@
     --text: #23232E; --text-muted: #6B6B78; --text-faint: #9A9AA4;
     --accent: #1A1A2E; --accent-soft: #E9E8EE;
   }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1C1B20; --surface: #26252B; --border: #38363E;
+      --text: #EDEAE2; --text-muted: #A29DA8; --text-faint: #726D79;
+      --accent: #D2B375; --accent-soft: #332C1D;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1C1B20; --surface: #26252B; --border: #38363E;
+    --text: #EDEAE2; --text-muted: #A29DA8; --text-faint: #726D79;
+    --accent: #D2B375; --accent-soft: #332C1D;
+  }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, sans-serif; line-height: 1.5; }
   .wrap { max-width: 1320px; margin: 0 auto; padding: 44px 24px 80px; }
   .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
-  h1.page-title { font-family: 'Fraunces', serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px); margin: 10px 0 12px; letter-spacing: -.01em; }
+  h1.page-title { font-family: 'Fraunces', serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px); margin: 10px 0 12px; letter-spacing: -.01em; text-wrap: balance; }
   .lede { max-width: 70ch; color: var(--text-muted); font-size: 14px; }
   .note-box {
     margin: 16px 0 0; padding: 12px 16px; background: var(--accent-soft);
@@ -25,7 +33,7 @@
   }
   section { margin-top: 44px; }
   .variant-head { margin-bottom: 14px; }
-  .variant-title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; margin: 0 0 4px; }
+  .variant-title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; margin: 0 0 4px; text-wrap: balance; }
   .variant-desc { font-size: 12.5px; color: var(--text-muted); max-width: 60ch; }
   .variant-diff {
     margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px;
@@ -63,7 +71,7 @@
     font-size: 140px; line-height: 1; color: rgba(255,255,255,.05); pointer-events: none; user-select: none;
   }
   .hero-baseline .label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
-  .hero-baseline .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 24px; letter-spacing: -.01em; color: #6ee7b7; }
+  .hero-baseline .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 24px; letter-spacing: -.01em; color: #6ee7b7; font-variant-numeric: tabular-nums; }
   .hero-baseline .sub { font-size: 12px; color: #94a3b8; }
   .hero-baseline .cta {
     margin-top: 4px; display: inline-flex; width: fit-content; align-items: center; gap: 4px;
@@ -82,8 +90,8 @@
     border: 1px dashed #EDE8DA; border-radius: 12px; font-size: 20px; color: #8A7A6A;
   }
   .baseline-tag {
-    display: inline-flex; align-self: flex-start; font-size: 10.5px; font-weight: 600; color: #6B6B78;
-    background: #E9E8EE; padding: 3px 10px; border-radius: 999px; margin-bottom: 10px;
+    display: inline-flex; align-self: flex-start; font-size: 10.5px; font-weight: 600; color: var(--text-muted);
+    background: var(--accent-soft); padding: 3px 10px; border-radius: 999px; margin-bottom: 10px;
   }
 
   /* ============ 方案 A：极简数字优先（砍水印/渐变，扁平色块，最大化压缩） ============ */
@@ -93,7 +101,7 @@
   }
   .hero-a .label { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
   .hero-a .row-num { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-  .hero-a .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 21px; letter-spacing: -.01em; color: #6ee7b7; }
+  .hero-a .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 21px; letter-spacing: -.01em; color: #6ee7b7; font-variant-numeric: tabular-nums; }
   .hero-a .cta-text { font-size: 10px; color: #cbd5e1; text-decoration: underline; text-underline-offset: 2px; min-height: 32px; display: inline-flex; align-items: center; }
   .hero-a .sub { font-size: 10px; color: #94a3b8; margin-top: -1px; }
 
@@ -121,7 +129,7 @@
     font-size: 108px; line-height: 1; color: rgba(255,255,255,.045); pointer-events: none;
   }
   .hero-b .label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
-  .hero-b .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; letter-spacing: -.01em; color: #6ee7b7; }
+  .hero-b .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; letter-spacing: -.01em; color: #6ee7b7; font-variant-numeric: tabular-nums; }
   .hero-b .sub { font-size: 11px; color: #94a3b8; }
   .hero-b .cta {
     margin-top: 2px; display: inline-flex; width: fit-content; align-items: center; gap: 4px;
@@ -150,7 +158,7 @@
     display: flex; align-items: baseline; justify-content: space-between; padding: 12px 12px 10px; gap: 8px;
   }
   .combo-c .label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
-  .combo-c .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; letter-spacing: -.01em; color: #6ee7b7; }
+  .combo-c .num { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; letter-spacing: -.01em; color: #6ee7b7; font-variant-numeric: tabular-nums; }
   .combo-c .cta { font-size: 9.5px; color: #cbd5e1; text-decoration: underline; text-underline-offset: 2px; min-height: 32px; display: inline-flex; align-items: center; }
   .combo-c .divider { height: 1px; background: rgba(255,255,255,.08); margin: 0 12px; }
   .combo-c .wallet-zone { padding: 9px 12px 11px; display: flex; flex-direction: column; gap: 5px; }
@@ -169,8 +177,6 @@
 
   footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-faint); max-width: 76ch; }
 </style>
-</head>
-<body>
 <div class="wrap">
   <div class="eyebrow">trip-expense-ledger · 第十六轮 · Hero净额卡 + 我的钱包 视觉方向对比</div>
   <h1 class="page-title">同一份数据，三种 compact 方向，挑一个（或指出想要哪几个的组合）</h1>
@@ -323,5 +329,3 @@
     三个方案的净额数字都维持 21-24px 区间（没有为了 compact 牺牲"一眼看清欠多少"这个核心可读性），"查看结算明细"的可点击范围都保留 min-height 32px（第八轮 ui-auditor 标过热区太矮的教训，这轮没有退步）。方案 A/C 改动幅度较大（换掉了 Hero 卡的质感手法/钱包卡片形态），方案 B 改动最保守。选定方向后再落地到 <span style="font-family:'IBM Plex Mono',monospace">app/trips/[tripId]/page.tsx</span> + <span style="font-family:'IBM Plex Mono',monospace">wallet-grid.tsx</span> 真实代码，这轮只出对比稿，不动真实 app。
   </footer>
 </div>
-</body>
-</html>

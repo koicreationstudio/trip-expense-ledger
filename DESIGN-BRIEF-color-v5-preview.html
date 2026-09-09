@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>橄榄自然调全屏走查</title>
+<title>配色方向全屏走查</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -77,6 +77,35 @@
     --a-ok: #4C7A50; --a-ok-bg: #E3ECE0;
     --a-live: #3E7787; --a-live-bg: #DFEAEC;
     --a-seafoam: #2DAA85; --a-sf-lt: #D0F0E5;
+  }
+
+  /* ---- 候选 B：暖阳蓝调（333 × Sunny Stripes 融合，Remy 第二轮反馈后重调）----
+     第一版候选 B 直接把 333 五色套进候选 A 的角色分工，Remy 反馈"文字色感觉直接套用候选A"+"黄色太少"；
+     这版重新设计：ink/muted 是候选B专属新配色（不是候选A文字token的换皮），card-tint/sand/gold-lt
+     全面转暖调，Sunny Stripes 的 Eggshell/Glaucous/Harvest Gold 混入原本的 333 色板，做出"晴朗海岸"的清新感。
+     语义色（coral/negative/positive/ok/seafoam）跟配色方向无关，两版保持一致；
+     live（进行中态徽章）是 Remy 点名要保留的「青色那版」，这里刻意不覆盖，两版共用同一个青色。 */
+  .variant-333 .app-screen {
+    --a-paper: #F6F2E4;
+    --a-sand: #DCCFA0;
+    --a-field-border: #ECE4CC;
+    --a-card-tint: rgba(223,160,30,.09);
+    --a-ink: #33566E;
+    --a-accent-800: #21394A;
+    --a-muted: #5F6F7A;
+    --a-gold-dk: #9C6A12;
+    --a-gold-lt: #F6DFAA;
+    --a-gold: #DFA01E;
+    --a-hero-label: #CFE3EE;
+  }
+  .variant-333 .hero {
+    background:
+      radial-gradient(130px 100px at 90% 6%, rgba(223,160,30,.38), transparent 70%),
+      linear-gradient(165deg, #4F80A0 0%, #33566E 45%, #21394A 100%);
+  }
+  .variant-333 .hero-cta {
+    background: rgba(223,160,30,.26);
+    color: #FFF3D9;
   }
 
   * { box-sizing: border-box; }
@@ -300,7 +329,29 @@
 
   <section>
     <div class="section-head">
-      <h2 class="sec-title">全部 12 个真实界面</h2>
+      <h2 class="sec-title">候选 B · 暖阳蓝调色板速查（333 × Sunny Stripes 融合，第二轮重调）</h2>
+      <p class="section-note">第一版候选 B 被 Remy 指出文字色像直接套用候选 A、黄色太少；这版重新设计文字层级 + 追加 Sunny Stripes 色板融合，语义色仍跟着候选 A 不变</p>
+    </div>
+    <div class="quote">这版不再是简单换色：<b>#33566E</b> 是候选B专属新标题色（由 333 的 #486D87 与 Sunny Stripes 的 Glaucous #627EAB 融合后加深而来，不是候选A文字token的换皮），<b>#5F6F7A</b> 是专属次要文字色（冷石板蓝灰，跟候选A暖棕灰 #685C50 刻意区分开）。黄色这次铺得更广：卡片浅底 <span class="f-mono" style="font-size:12px">card-tint</span> 从蓝色调雾改成 <b>Harvest Gold #DFA01E</b> 的暖金薄雾（几乎全站卡片都在用这个类，一次换掉分量足够）、头像圈/未认领徽章底色换成 Sunny Stripes 的 Sunset #F1CA81 融合出的蜜金色 <b>#F6DFAA</b>、Hero 卡右上角加了一层柔和的金色光晕、Hero 里的"查看结算明细"药丸也改成金色半透明底。卡片边框 <span class="f-mono" style="font-size:12px">sand</span> 也从偏蓝改成暖沙金色，呼应"清新海岸"的整体气质。</div>
+    <div class="token-grid">
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#F6F2E4"></span><span class="token-name">paper</span></div><span class="token-hex">#F6F2E4</span><span class="token-role">全站背景（333 米白 + Sunny Stripes Eggshell 融合，更暖）</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#33566E"></span><span class="token-name">ink / hero（候选B专属）</span></div><span class="token-hex">#33566E</span><span class="token-role">标题文字+Hero/CTA/选中态，融合 #486D87+Glaucous #627EAB 后加深，非套用候选A</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#21394A"></span><span class="token-name">accent-800</span></div><span class="token-hex">#21394A</span><span class="token-role">Hero 渐变深端</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#DCCFA0"></span><span class="token-name">sand</span></div><span class="token-hex">#DCCFA0</span><span class="token-role">卡片/tx-item 边框，改暖沙金色（原来偏蓝，这版转暖）</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#ECE4CC"></span><span class="token-name">field-border</span></div><span class="token-hex">#ECE4CC</span><span class="token-role">输入框专属边框，比 sand 更淡更细</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#5F6F7A"></span><span class="token-name">muted（候选B专属）</span></div><span class="token-hex">#5F6F7A</span><span class="token-role">次要说明文字，冷石板蓝灰，跟候选A暖棕灰刻意区分</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#9C6A12"></span><span class="token-name">gold-dk（文字专用）</span></div><span class="token-hex">#9C6A12</span><span class="token-role">行程标题/待定态文字，加深保证在浅底上可读</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#DFA01E"></span><span class="token-name">gold（强调，Sunny Stripes Harvest Gold）</span></div><span class="token-hex">#DFA01E</span><span class="token-role">Hero 光晕/CTA 药丸底色，只作强调不作文字色</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#F6DFAA"></span><span class="token-name">gold-lt（融合 Sunset）</span></div><span class="token-hex">#F6DFAA</span><span class="token-role">头像圆圈底色/未认领徽章底色，比第一版更饱和更"黄"</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:rgba(223,160,30,.35)"></span><span class="token-name">card-tint（改暖）</span></div><span class="token-hex">rgba(223,160,30,.09)</span><span class="token-role">卡片浅底，从蓝色雾改成暖金雾——全站卡片都在用，是加黄色分量最有效的一处</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#CFE3EE"></span><span class="token-name">hero-label</span></div><span class="token-hex">#CFE3EE</span><span class="token-role">Hero 深底次要标签文字</span></div>
+      <div class="token-card"><div class="token-swatch-row"><span class="token-swatch" style="background:#3E7787"></span><span class="token-name">live（保留的青色）</span></div><span class="token-hex">#3E7787</span><span class="token-role">进行中态徽章，跟候选 A 完全一样，不受这版影响</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2 class="sec-title">候选 A · Wild Thyme 橄榄自然调 · 全部 12 个真实界面</h2>
       <p class="section-note">按真实文案/字段/组件结构还原，文件路径标在每张截图上方，不是随便编的内容</p>
     </div>
 
@@ -626,8 +677,336 @@
     </div>
   </section>
 
+  <section>
+    <div class="section-head">
+      <h2 class="sec-title">候选 B · 暖阳蓝调（333 × Sunny Stripes 融合）· 全部 12 个真实界面</h2>
+      <p class="section-note">跟候选 A 完全同一套界面结构和文案，只切换配色 token；live 青色徽章两版共用同一个颜色</p>
+    </div>
+
+    <div class="screens-grid variant-333">
+
+      <!-- 1 首页·我的行程 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">① 首页 · 我的行程</span>
+        <span class="screen-path">app/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen">
+            <div class="row" style="justify-content:space-between;align-items:flex-start">
+              <div><h1 class="app-h1 t-ink">我的行程</h1><p class="app-sub">Remy，欢迎回来。</p></div>
+              <span class="btn-primary">创建新行程</span>
+            </div>
+            <div class="col" style="gap:10px">
+              <div class="card-tint col" style="gap:2px">
+                <span style="font-size:13px;font-weight:500" class="t-ink">2026 曼谷出差</span>
+                <span style="font-size:10px" class="t-muted">本位币 MYR · 创建者 · 记账中</span>
+                <span style="font-size:12px" class="t-positive">该收 <span class="f-serif">RM1,284.50</span></span>
+              </div>
+              <div class="card-tint col" style="gap:2px">
+                <span style="font-size:13px;font-weight:500" class="t-ink">2025 清迈毕业旅行</span>
+                <span style="font-size:10px" class="t-muted">本位币 MYR · 同行人 · 已结算</span>
+                <span style="font-size:12px" class="t-negative">该付 <span class="f-serif">RM320.00</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+      <!-- 2 登录 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">② 登录</span>
+        <span class="screen-path">app/login/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen">
+            <h1 class="app-h1 t-ink" style="font-size:15px">登录</h1>
+            <div class="col">
+              <div class="col" style="gap:3px"><span class="field-label">邮箱</span><span class="field-input">remy@example.com</span></div>
+              <div class="col" style="gap:3px"><span class="field-label">密码</span><span class="field-input">••••••••</span></div>
+              <span class="btn-primary" style="margin-top:4px">登录</span>
+            </div>
+            <p style="font-size:12px" class="t-muted">还没有账号？<span class="tap-link">注册一个</span></p>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+      <!-- 3 注册 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">③ 注册</span>
+        <span class="screen-path">app/signup/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen">
+            <h1 class="app-h1 t-ink" style="font-size:15px">注册</h1>
+            <div class="col">
+              <div class="col" style="gap:3px"><span class="field-label">你的称呼</span><span class="field-input">Remy</span></div>
+              <div class="col" style="gap:3px"><span class="field-label">邮箱</span><span class="field-input"></span></div>
+              <div class="col" style="gap:3px"><span class="field-label">密码（至少 8 位）</span><span class="field-input"></span></div>
+              <span class="btn-primary" style="margin-top:4px">注册</span>
+            </div>
+            <p style="font-size:12px" class="t-muted">已经有账号？<span class="tap-link">登录</span></p>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+      <!-- 4 邀请认领 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">④ 邀请认领</span>
+        <span class="screen-path">app/invite/[code]/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen">
+            <div><h1 class="app-h1 t-ink">加入「2026 曼谷出差」</h1><p class="app-sub">选一下你是名单里的哪一位，认领后就能开始记账了。</p></div>
+            <div class="col">
+              <div class="col" style="gap:3px"><span class="field-label">我是</span><span class="field-input">Alex ▾</span></div>
+              <span class="btn-primary">认领这个身份</span>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+      <!-- 5 创建新行程 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">⑤ 创建新行程</span>
+        <span class="screen-path">app/trips/new/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen">
+            <h1 class="app-h1 t-ink" style="font-size:15px">创建新行程</h1>
+            <div class="col">
+              <div class="col" style="gap:3px"><span class="field-label">行程名称</span><span class="field-input">2026 曼谷出差</span></div>
+              <div class="col" style="gap:3px"><span class="field-label">本位币（结算/比较用的币种）</span><span class="field-input">MYR ▾</span></div>
+              <div class="col" style="gap:3px"><span class="field-label">你的称呼</span><span class="field-input">Remy</span></div>
+              <div class="col" style="gap:5px">
+                <span class="field-label">同行人（先占位，之后发邀请链接给他们各自认领）</span>
+                <div class="row"><span class="field-input" style="flex:1">Alex</span><span class="btn-secondary">移除</span></div>
+                <span class="tap-link" style="font-size:12px">＋ 加一位同行人</span>
+              </div>
+              <span class="btn-primary" style="margin-top:2px">创建行程</span>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+      <!-- 6 行程详情主页 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">⑥ 行程详情主页</span>
+        <span class="screen-path">app/trips/[tripId]/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen" style="padding-top:20px">
+            <div><h1 class="app-h1 t-gold-dk">2026 曼谷出差</h1><p class="app-sub">本位币 MYR · 记账中</p></div>
+            <div class="hero">
+              <span class="hero-label">我的净额</span>
+              <span class="hero-num" style="color:var(--a-positive-dk)">+RM1,284.50</span>
+              <span class="hero-sub">该收回 · 6 笔消费</span>
+              <span class="hero-cta">查看结算明细 →</span>
+              <svg class="hero-icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
+            </div>
+            <div class="card-tint col" style="gap:5px">
+              <div class="row" style="justify-content:space-between"><span style="font-size:12.5px;font-weight:600" class="t-ink">💱 当前汇率比价</span><span style="font-size:10px" class="t-muted">收起 ▲</span></div>
+              <div class="row" style="gap:5px">
+                <span class="badge f-mono" style="background:var(--a-ink);color:#fff">THB</span>
+                <span class="badge f-mono t-muted" style="background:var(--a-paper)">HKD</span>
+                <span class="badge f-mono t-muted" style="background:var(--a-paper)">SGD</span>
+              </div>
+              <span class="field-input" style="width:90px">฿ 100</span>
+            </div>
+            <div class="col" style="gap:6px">
+              <div class="row" style="justify-content:space-between"><span class="app-h2">我的钱包</span><span style="font-size:10px" class="t-muted">仅自己可见</span></div>
+              <div class="wallet-strip">
+                <div class="wallet-chip"><div class="lbl">💵 现金 THB</div><div class="val f-serif">฿2,400</div><div class="cur f-mono">THB</div></div>
+                <div class="wallet-chip"><div class="lbl">💳 信用卡</div><div class="val f-serif">RM890</div><div class="cur f-mono">MYR</div><div style="font-size:10px;margin-top:3px" class="t-gold-dk">🔗 HSBC 万事达卡</div></div>
+                <div class="wallet-add">＋</div>
+              </div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+      <!-- 7 记一笔消费 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">⑦ 记一笔消费</span>
+        <span class="screen-path">app/trips/[tripId]/expenses/new/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen">
+            <h1 class="app-h1 t-ink" style="font-size:15px">记一笔消费</h1>
+            <div class="col">
+              <div class="row">
+                <div class="col" style="gap:3px;flex:1"><span class="field-label">金额</span><span class="field-input f-serif">450.00</span></div>
+                <div class="col" style="gap:3px;flex:1"><span class="field-label">币种</span><span class="field-input">THB ▾</span></div>
+              </div>
+              <div class="card-tint col" style="gap:6px">
+                <div class="row" style="justify-content:space-between"><span class="field-label">这笔用哪张卡最划算？</span><span class="btn-secondary">比价</span></div>
+                <div style="border:1px solid var(--a-seafoam);background:var(--a-sf-lt);border-radius:10px;padding:7px 8px" class="col">
+                  <div class="row" style="justify-content:space-between">
+                    <span class="row t-ink" style="font-size:12px;font-weight:600">HSBC 万事达卡 <span class="badge" style="background:var(--a-seafoam);color:#fff">✓ 最划算</span></span>
+                    <span class="f-serif" style="font-size:12.5px">RM451.20</span>
+                  </div>
+                  <div class="divider-dashed t-muted" style="font-size:9.5px">汇率 4.5231</div>
+                </div>
+              </div>
+              <div class="col" style="gap:3px"><span class="field-label">谁代垫的</span><span class="field-input">Remy ▾</span></div>
+              <div class="col" style="gap:3px"><span class="field-label">分类</span><span class="field-input">餐饮</span></div>
+              <div class="col" style="gap:3px"><span class="field-label">日期</span><span class="field-input">2026-09-14</span></div>
+              <div class="row t-ink" style="align-items:center;gap:6px;font-size:12px"><span style="width:14px;height:14px;border:1px solid var(--a-sand);border-radius:3px;display:inline-block"></span>自定义分摊（不勾选默认全员等分）</div>
+              <span class="btn-primary">记这笔账</span>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+      <!-- 8 换汇/取款 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">⑧ 取款 / 换汇</span>
+        <span class="screen-path">app/trips/[tripId]/exchange/new/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen">
+            <h1 class="app-h1 t-ink" style="font-size:15px">取款 / 换汇</h1>
+            <div class="col">
+              <span class="field-label">从哪个钱包（不选＝纯充值，没有来源）</span>
+              <div class="row"><span class="seg-btn active">充值（无来源）</span><span class="seg-btn">💳 信用卡</span></div>
+              <span class="field-label">充值到哪个钱包</span>
+              <div class="row"><span class="seg-btn active">💵 现金 THB</span></div>
+              <div class="row">
+                <div class="col" style="gap:3px;flex:1"><span class="field-label">来源金额（MYR）</span><span class="field-input f-serif">500.00</span></div>
+                <span style="align-self:flex-end;padding-bottom:8px" class="t-muted">→</span>
+                <div class="col" style="gap:3px;flex:1"><span class="field-label">目标金额（THB）</span><span class="field-input f-serif">3,400.00</span></div>
+              </div>
+              <p style="font-size:11px" class="t-muted">隐含汇率：1 MYR ≈ 6.8000 THB</p>
+              <span class="btn-primary">保存充值记录</span>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+      <!-- 9 邀请管理 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">⑨ 邀请管理</span>
+        <span class="screen-path">app/trips/[tripId]/invites/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen">
+            <h1 class="app-h1 t-ink" style="font-size:15px">邀请管理</h1>
+            <div class="col" style="gap:6px">
+              <span class="app-h2">生成新邀请链接</span>
+              <div class="row"><span class="field-input" style="width:70px">7</span><span class="btn-primary">生成邀请链接</span></div>
+            </div>
+            <div class="col" style="gap:6px">
+              <span class="app-h2">现有邀请链接</span>
+              <div class="card-tint col" style="gap:3px">
+                <span style="font-size:11px" class="f-mono t-muted">🔗 …/invite/a8x91K…</span>
+                <div class="row" style="justify-content:space-between">
+                  <span class="badge t-live" style="background:var(--a-live-bg)">有效</span>
+                  <span class="row" style="gap:8px;font-size:11px"><span class="tap-link">复制链接</span><span class="tap-link t-coral">撤销</span></span>
+                </div>
+              </div>
+            </div>
+            <div class="col" style="gap:6px">
+              <span class="app-h2">参与者认领状态</span>
+              <div class="card-tint row" style="justify-content:space-between">
+                <span class="row t-ink" style="font-size:12.5px"><span class="avatar">R</span>Remy<span style="font-size:10px" class="t-muted">创建者</span><span class="badge t-ok" style="background:var(--a-ok-bg)">已认领</span></span>
+              </div>
+              <div class="card-tint row" style="justify-content:space-between">
+                <span class="row t-ink" style="font-size:12.5px"><span class="avatar">A</span>Alex<span class="badge t-gold-dk" style="background:var(--a-gold-lt)">未认领</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+      <!-- 10 支付方式设置 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">⑩ 支付方式设置</span>
+        <span class="screen-path">app/trips/[tripId]/payment-methods/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen">
+            <div><h1 class="app-h1 t-ink">支付方式设置</h1><p class="app-sub">支付方式挂在你自己身上，跟人走不跟行程走，用来算记账时哪张卡/现金最划算。</p></div>
+            <div class="col" style="gap:6px">
+              <span class="app-h2">已配置的支付方式</span>
+              <div class="card-tint row" style="justify-content:space-between">
+                <span class="row" style="gap:8px">
+                  <span class="icon-circle">💳</span>
+                  <span class="col" style="gap:1px"><span style="font-size:12.5px;font-weight:500" class="t-ink">HSBC 万事达卡（卡 · MYR）</span><span class="divider-dashed t-muted" style="font-size:9.5px">汇率加点 1.5% · 境外手续费 0% · 返现 2%</span></span>
+                </span>
+                <span class="btn-secondary">删除</span>
+              </div>
+            </div>
+            <div class="col" style="gap:6px">
+              <span class="app-h2">新增支付方式</span>
+              <div class="col">
+                <div class="row"><div class="col" style="gap:3px;flex:1"><span class="field-label">名称</span><span class="field-input">例如：HSBC 万事达卡</span></div><div class="col" style="gap:3px;flex:1"><span class="field-label">类型</span><span class="field-input">卡 ▾</span></div></div>
+                <div class="col" style="gap:3px"><span class="field-label">结算币种</span><span class="field-input">MYR ▾</span></div>
+                <span class="btn-primary">添加支付方式</span>
+              </div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+      <!-- 11 结算 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">⑪ 结算（该收该付试金石）</span>
+        <span class="screen-path">app/trips/[tripId]/settlement/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen">
+            <div class="row" style="justify-content:space-between">
+              <h1 class="app-h1 t-ink" style="font-size:15px">结算</h1>
+              <span class="btn-primary">标记已结算</span>
+            </div>
+            <div class="col" style="gap:6px">
+              <span class="app-h2">每人净值</span>
+              <div class="card-tint col" style="gap:6px">
+                <div class="row" style="justify-content:space-between"><span class="row" style="font-size:12.5px"><span class="avatar">R</span>Remy</span><span class="t-positive" style="font-size:12.5px">该收 <span class="f-serif">RM640.00</span></span></div>
+                <div class="row" style="justify-content:space-between"><span class="row" style="font-size:12.5px"><span class="avatar">A</span>Alex</span><span class="t-negative" style="font-size:12.5px">该付 <span class="f-serif">RM320.00</span></span></div>
+                <div class="row" style="justify-content:space-between"><span class="row" style="font-size:12.5px"><span class="avatar">M</span>Mei</span><span class="t-negative" style="font-size:12.5px">该付 <span class="f-serif">RM320.00</span></span></div>
+              </div>
+            </div>
+            <div class="col" style="gap:6px">
+              <span class="app-h2">转账清单</span>
+              <div class="card-tint col" style="gap:6px">
+                <div class="row" style="justify-content:space-between;font-size:12.5px"><span class="row" style="gap:6px"><span class="avatar">A</span>Alex<span class="t-muted">→</span><span class="avatar">R</span>Remy</span><span class="f-serif">RM320.00</span></div>
+                <div class="row" style="justify-content:space-between;font-size:12.5px"><span class="row" style="gap:6px"><span class="avatar">M</span>Mei<span class="t-muted">→</span><span class="avatar">R</span>Remy</span><span class="f-serif">RM320.00</span></div>
+              </div>
+            </div>
+            <p style="font-size:10.5px" class="t-muted">「该收」不管哪个配色方向都固定用森林绿 #3D6141，是财务语义色不是装饰色，不随主色调整。</p>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+      <!-- 12 编辑消费 -->
+      <div class="screen-slot">
+        <span class="screen-title-chip">⑫ 编辑消费</span>
+        <span class="screen-path">app/trips/[tripId]/expenses/[expenseId]/edit/page.tsx</span>
+        <div class="phone"><div class="phone-notch"></div>
+          <div class="app-screen">
+            <h1 class="app-h1 t-ink" style="font-size:15px">编辑消费</h1>
+            <p style="font-size:10.5px" class="t-muted">结构跟「记一笔消费」完全一样，差别只在字段已预填 + 底部按钮换成保存/取消：</p>
+            <div class="col">
+              <div class="row">
+                <div class="col" style="gap:3px;flex:1"><span class="field-label">金额</span><span class="field-input f-serif">450.00</span></div>
+                <div class="col" style="gap:3px;flex:1"><span class="field-label">币种</span><span class="field-input">THB ▾</span></div>
+              </div>
+              <div class="col" style="gap:3px"><span class="field-label">分类</span><span class="field-input">餐饮</span></div>
+              <div class="row" style="gap:10px;align-items:center">
+                <span class="btn-primary">保存修改</span>
+                <span class="tap-link t-muted">取消</span>
+              </div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
   <footer>
-    静态模拟图，非真实截图；表单为示例数据非真实用户信息。这版沿用第四提案定案的 Hero 呈现方式（贴边通栏、方形直角、右下角线稿图标），主色 Wild Thyme 颜色方向不变。第六轮改动只涉及密度（间距/按钮尺寸/输入框边框宽度与颜色），完整颜色 token 判断依据见 <span class="f-mono" style="font-size:11px">DESIGN-BRIEF-color-directions.md</span> 第五提案，本轮密度调整未写入该文档（属于尺寸不是配色决策）。
+    静态模拟图，非真实截图；表单为示例数据非真实用户信息。这版沿用第四提案定案的 Hero 呈现方式（贴边通栏、方形直角、右下角线稿图标）。候选 A（Wild Thyme 橄榄自然调）第六轮改动只涉及密度（间距/按钮尺寸/输入框边框宽度与颜色），完整颜色 token 判断依据见 <span class="f-mono" style="font-size:11px">DESIGN-BRIEF-color-directions.md</span> 第五提案。候选 B（暖阳蓝调，333 × Sunny Stripes 融合）是这轮新增的第二个配色方向，第二次调整后文字色改为候选B专属配色（不再套用候选A的token）、并追加 Sunny Stripes 色板加重黄色分量，颜色映射逻辑写在候选 B 色板速查区块里；两版共用同一套 live 青色徽章、财务语义色（该收该付/完成态/比价最优）也都不随配色方向变动。
   </footer>
 
 </div>
