@@ -6,7 +6,7 @@ import { exchangeRecords, expenses, participants, paymentMethods, trips, wallets
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadSettlementInput } from '@/lib/db/settlement-query';
 import { computeNetBalances } from '@/lib/domain/settlement';
-import { formatMoney, getCurrencySymbol } from '@/lib/money';
+import { formatMoney } from '@/lib/money';
 import { Avatar } from '@/components/avatar';
 import { ExpenseList } from './expense-list';
 import { WalletGrid } from './wallet-grid';
@@ -84,12 +84,6 @@ export default async function TripPage({ params }: { params: { tripId: string } 
       </div>
 
       <section className="relative flex flex-col gap-2 overflow-hidden rounded-hero bg-hero-gradient p-4 text-white shadow-hero">
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-4 -right-2 select-none font-serif text-[140px] italic leading-none text-white/[.05]"
-        >
-          {getCurrencySymbol(trip.baseCurrency)}
-        </span>
         <span className="text-[10px] uppercase tracking-wide text-hero-label">我的净额</span>
         <span
           className={`font-serif text-2xl font-medium tabular-nums tracking-tight ${
@@ -104,7 +98,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         </span>
         <Link
           href={`/trips/${trip.id}/settlement`}
-          className="relative mt-1 inline-flex min-h-[32px] w-fit items-center gap-1 rounded-full bg-white/10 px-[9px] py-[3px] text-[10px] text-hero-label"
+          className="relative mt-1 inline-flex min-h-[32px] w-fit items-center gap-1 rounded-full bg-[rgba(219,218,214,.22)] px-[9px] py-[3px] text-[10px] text-hero-label"
         >
           查看结算明细 →
         </Link>

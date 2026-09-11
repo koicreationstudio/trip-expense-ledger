@@ -66,7 +66,10 @@ const config: Config = {
       backgroundImage: {
         // 候选D落地：Hero 渐变改灰阶三段式(Mountain Mist → Welded Iron → Black Olive 82%压暗)，
         // 取值来源 v6-preview.html .variant-grayscale .hero 区块。
-        'hero-gradient': 'linear-gradient(165deg, #A4A3A0 0%, #6E6E6C 55%, color-mix(in srgb, #373736 82%, black) 100%)',
+        // 补漏(2026-09-11配色走查)：右上角光晕层(radial-gradient)首轮落地时漏抄，只落了线性
+        // 渐变主体，现在补上，两层顺序跟色值原样照抄 v6-preview.html 246-249 行。
+        'hero-gradient':
+          'radial-gradient(130px 100px at 90% 6%, rgba(219,218,214,.30), transparent 70%), linear-gradient(165deg, #A4A3A0 0%, #6E6E6C 55%, color-mix(in srgb, #373736 82%, black) 100%)',
       },
       boxShadow: {
         // 外层两组阴影让卡片浮起来，inset 高光模拟顶部打光——银行卡/钱包类 UI 常见手法。
