@@ -97,7 +97,7 @@ export function TripSwitcher({
                   </span>
                   <span
                     className={`shrink-0 text-[10px] font-medium ${
-                      trip.netBalance >= 0 ? 'text-emerald-600' : 'text-red-600'
+                      trip.netBalance >= 0 ? 'text-positive' : 'text-negative'
                     }`}
                   >
                     {trip.netBalance >= 0 ? '该收' : '该付'}{' '}

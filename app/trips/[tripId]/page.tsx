@@ -87,7 +87,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         <span className="text-[10px] uppercase tracking-wide text-hero-label">我的净额</span>
         <span
           className={`font-serif text-2xl font-medium tabular-nums tracking-tight ${
-            myNet >= 0 ? 'text-emerald-400' : 'text-red-400'
+            myNet >= 0 ? 'text-positive-dk' : 'text-negative-dk'
           }`}
         >
           {myNet >= 0 ? '+' : '-'}
@@ -162,7 +162,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
                   <span className="text-[12.5px] text-muted">我自己</span>
                 ) : (
                   <span
-                    className={`text-[12.5px] font-medium ${net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                    className={`text-[12.5px] font-medium ${net >= 0 ? 'text-positive' : 'text-negative'}`}
                   >
                     {net >= 0 ? '该收' : '该付'}{' '}
                     <span className="font-serif tabular-nums">{formatMoney(Math.abs(net), trip.baseCurrency)}</span>

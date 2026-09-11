@@ -490,7 +490,7 @@ export function ExpenseForm({
               >
                 平均分给已勾选的人
               </button>
-              <span className={`text-sm tabular-nums ${splitMismatch ? 'text-coral' : 'text-emerald-700'}`}>
+              <span className={`text-sm tabular-nums ${splitMismatch ? 'text-coral' : 'text-ok'}`}>
                 已分配 {formatMoney(splitCentsTotal, currency)} / 共 {formatMoney(amountCentsTotal, currency)}
               </span>
             </div>

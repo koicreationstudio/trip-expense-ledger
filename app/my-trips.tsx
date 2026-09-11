@@ -137,7 +137,7 @@ function TripCard({
       </span>
       <span
         className={`text-sm font-medium ${
-          trip.netBalance >= 0 ? 'text-emerald-600' : 'text-red-600'
+          trip.netBalance >= 0 ? 'text-positive' : 'text-negative'
         }`}
       >
         {trip.netBalance >= 0 ? '该收' : '该付'}{' '}

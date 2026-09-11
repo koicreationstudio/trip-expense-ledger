@@ -52,7 +52,7 @@ export default async function SettlementPage({ params }: { params: { tripId: str
               <li key={participantId} className="flex items-center gap-2 py-1">
                 <Avatar name={name} size={24} />
                 <span className="flex-1 text-[12.5px]">{name}</span>
-                <span className={`text-[12.5px] ${amount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                <span className={`text-[12.5px] ${amount >= 0 ? 'text-positive' : 'text-negative'}`}>
                   {amount >= 0 ? '该收' : '该付'}{' '}
                   <span className="font-serif tabular-nums">{formatMoney(Math.abs(amount), trip.baseCurrency)}</span>
                 </span>

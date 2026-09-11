@@ -43,7 +43,23 @@ const config: Config = {
         // 跟 gold 同值)，但语义上跟 sand/gold-lt 解耦，以后要单独调头像圈/图标圈颜色不会
         // 牵动 sand/gold-lt 的其它引用处。分段按钮这次代码库里还没实体组件，先不接。
         'accent-circle': '#A4A3A0',
-        coral: '#E8554E',
+        // 共用语义色板收尾落地（2026-09-11）：DESIGN-BRIEF-color-v6-preview.html 519-533行
+        // 「共用语义色板速查」表定义好三轮却一直没真正接进 tailwind、代码里净额正负色
+        // 一直在借用泛用 Tailwind emerald-*/red-*。这批 token 是候选 B/C/D 三个候选共用
+        // 的财务语义色，不随主色调整（DESIGN-BRIEF.md 绝对禁止第12条：该收绿/该付红要
+        // 保持稳定可辨识）。
+        // coral 这次是更新：旧值 #E8554E 是更早候选版本的值，现在改成设计稿第525行定案
+        // 的 #991B14（表单错误提示，固定色）。
+        coral: '#991B14',
+        // negative/positive 浅底文字色，来源设计稿第526-527行。
+        negative: '#A63926',
+        positive: '#3D6141',
+        // negative-dk/positive-dk 是同一语义色配 Hero 深底用的浅色变体，一对一配对。
+        // positive-dk 来源设计稿第528行；negative-dk 那份可视化色板表格漏列了，但文件顶部
+        // :root CSS 变量区（77-80行 --a-negative-dk）有定义，跟 --a-positive-dk 是配对关系，
+        // 一并补上。
+        'negative-dk': '#E6B1A8',
+        'positive-dk': '#B7D1A8',
         seafoam: '#2DAA85',
         'sf-lt': '#D0F0E5',
         muted: '#6E6E6C',

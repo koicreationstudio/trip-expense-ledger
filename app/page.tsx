@@ -44,7 +44,7 @@ export default async function HomePage({ searchParams }: { searchParams?: { iden
                   <span key={currency}>
                     {' · '}
                     {net >= 0 ? '净该收' : '净该付'}{' '}
-                    <span className={net >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                    <span className={net >= 0 ? 'text-positive' : 'text-negative'}>
                       {formatMoney(Math.abs(net), currency)}
                     </span>
                   </span>
