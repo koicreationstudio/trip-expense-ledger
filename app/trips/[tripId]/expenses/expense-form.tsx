@@ -7,10 +7,9 @@ import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { equalSplit, rescaleSplitToBaseCurrency } from '@/lib/domain/split';
 import type { SplitShare } from '@/lib/domain/split';
+import { COMMON_CATEGORIES } from '@/lib/domain/categories';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
 import { FxCompareList } from '../fx-compare-list';
-
-const COMMON_CATEGORIES = ['餐饮', '交通', '住宿', '门票', '购物', '其他'];
 
 interface Participant {
   id: string;
@@ -268,7 +267,11 @@ export function ExpenseForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    // noValidate: 理由跟 quick-add-expense.tsx 一样——金额输入框的 min="0.01"/required
+    // 这类 HTML5 constraint 会在 preventDefault 生效前被浏览器抢先拦截弹原生英文气泡
+    // （"填 0"这个具体数值就是被 min 挡住，只有"留空"能落到下面 JS 校验），关掉原生
+    // 校验统一交给已经写好的中文错误提示处理。
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">
           <label className="field-label" htmlFor="amount">

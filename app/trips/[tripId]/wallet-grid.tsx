@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, formatMoney } from '@/lib/money';
@@ -32,11 +33,17 @@ export function WalletGrid({
   tripId,
   wallets,
   paymentMethods,
+  variant = 'default',
 }: {
   tripId: string;
   wallets: WalletItem[];
   paymentMethods: WalletPaymentMethodOption[];
+  // 'embedded-dark'：塞进方案C 合并卡（深色渐变底）时用，只换钱包胶囊本身的配色
+  // （套 DESIGN-BRIEF-hero-wallet-variants.html .wallet-c-chip 规格），不影响「新建钱包」
+  // 表单——那段设计稿完全没提规格，继续用现有浅色表单样式渲染在深色卡外面。
+  variant?: 'default' | 'embedded-dark';
 }) {
+  const isDark = variant === 'embedded-dark';
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [label, setLabel] = useState('');
@@ -50,6 +57,16 @@ export function WalletGrid({
   // 只有跟当前选的钱包币种完全一致的支付方式才有意义绑——扣款逻辑要求币种精确匹配，
   // 列出币种不一致的选项只会让人绑了也白绑（app/api/trips/[tripId]/expenses/route.ts）。
   const eligibleMethods = paymentMethods.filter((m) => m.settlementCurrency === currency);
+
+  // embedded-dark 时「新建钱包」表单不跟着做深色版本（设计稿没规格），而是原样保留浅色
+  // 表单外观，用 portal 挂到 page.tsx 在合并卡下方留的 #wallet-form-slot 插槽，让它渲染在
+  // 深色卡外面（而不是塞进卡内部看不清）。default 模式没有这个插槽，表单照旧就地渲染。
+  const [formSlot, setFormSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (isDark) {
+      setFormSlot(document.getElementById('wallet-form-slot'));
+    }
+  }, [isDark]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -85,30 +102,122 @@ export function WalletGrid({
     }
   }
 
+  const formNode = creating && (
+    <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] p-3">
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          className="field-input"
+          placeholder="钱包名（比如：泰铢现金）"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
+        <select
+          className="field-input"
+          value={currency}
+          onChange={(e) => {
+            setCurrency(e.target.value);
+            setPaymentMethodId(NO_LINK);
+          }}
+        >
+          {COMMON_CURRENCIES.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </div>
+      {eligibleMethods.length > 0 && (
+        <select className="field-input" value={paymentMethodId} onChange={(e) => setPaymentMethodId(e.target.value)}>
+          <option value={NO_LINK}>不绑定支付方式（可以之后再绑）</option>
+          {eligibleMethods.map((m) => (
+            <option key={m.id} value={m.id}>
+              记账选「{m.label}」时自动扣这个钱包
+            </option>
+          ))}
+        </select>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          className="field-input"
+          placeholder="起始余额（可选）"
+          value={initialBalanceYuan}
+          onChange={(e) => setInitialBalanceYuan(e.target.value)}
+        />
+        <div className="flex items-center gap-1">
+          {EMOJI_CHOICES.map((em) => (
+            <button
+              key={em}
+              type="button"
+              onClick={() => setEmoji(em)}
+              className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${
+                emoji === em ? 'bg-ink text-paper' : 'bg-white'
+              }`}
+              aria-label={`选 ${em} 图标`}
+            >
+              {em}
+            </button>
+          ))}
+        </div>
+      </div>
+      {error && <p className="text-sm text-coral">{error}</p>}
+      <div className="flex items-center gap-2">
+        <button type="submit" disabled={submitting} className="btn-primary text-sm">
+          {submitting ? '建立中…' : '建立钱包'}
+        </button>
+        <button type="button" onClick={() => setCreating(false)} className="tap-link text-sm text-muted">
+          取消
+        </button>
+      </div>
+    </form>
+  );
+
   return (
+    <>
     <div className="flex flex-col gap-2">
-      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1">
-        {wallets.map((w) => (
-          <div key={w.id} className="w-[120px] shrink-0 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-2">
-            <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-muted">
-              <span aria-hidden="true">{w.emoji}</span>
-              <span className="truncate">{w.label}</span>
+      <div className={isDark ? 'flex gap-[7px] overflow-x-auto' : '-mx-4 flex gap-3 overflow-x-auto px-4 pb-1'}>
+        {wallets.map((w) =>
+          isDark ? (
+            <div
+              key={w.id}
+              className="flex min-w-[64px] shrink-0 flex-col gap-[1px] rounded-[9px] bg-white/[.08] px-2 py-[5px]"
+            >
+              <div className="flex items-center gap-[3px] text-[8.5px] text-hero-label">
+                <span aria-hidden="true">{w.emoji}</span>
+                <span className="truncate">{w.label}</span>
+              </div>
+              <div className="font-serif text-[11.5px] tabular-nums text-white">
+                {formatMoney(w.currentBalance, w.currency)}
+              </div>
             </div>
-            <div className="mt-1 font-serif text-sm font-medium tabular-nums">
-              {formatMoney(w.currentBalance, w.currency)}
+          ) : (
+            <div key={w.id} className="w-[120px] shrink-0 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-2">
+              <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-muted">
+                <span aria-hidden="true">{w.emoji}</span>
+                <span className="truncate">{w.label}</span>
+              </div>
+              <div className="mt-1 font-serif text-sm font-medium tabular-nums">
+                {formatMoney(w.currentBalance, w.currency)}
+              </div>
+              <div className="font-mono text-[10px] text-muted">{w.currency}</div>
+              {w.linkedPaymentMethodLabel && (
+                <div className="mt-1 truncate text-[10px] text-gold-dk">🔗 {w.linkedPaymentMethodLabel}</div>
+              )}
             </div>
-            <div className="font-mono text-[10px] text-muted">{w.currency}</div>
-            {w.linkedPaymentMethodLabel && (
-              <div className="mt-1 truncate text-[10px] text-gold-dk">🔗 {w.linkedPaymentMethodLabel}</div>
-            )}
-          </div>
-        ))}
+          ),
+        )}
 
         {!creating && (
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="flex w-[120px] shrink-0 items-center justify-center rounded-xl border border-dashed border-sand text-xl text-muted"
+            className={
+              isDark
+                ? 'flex w-[30px] shrink-0 items-center justify-center rounded-[9px] bg-white/[.06] text-sm text-hero-label'
+                : 'flex w-[120px] shrink-0 items-center justify-center rounded-xl border border-dashed border-sand text-xl text-muted'
+            }
             aria-label="新建钱包"
           >
             ＋
@@ -116,81 +225,10 @@ export function WalletGrid({
         )}
       </div>
 
-      {creating && (
-        <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] p-3">
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              className="field-input"
-              placeholder="钱包名（比如：泰铢现金）"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-            />
-            <select
-              className="field-input"
-              value={currency}
-              onChange={(e) => {
-                setCurrency(e.target.value);
-                setPaymentMethodId(NO_LINK);
-              }}
-            >
-              {COMMON_CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-          {eligibleMethods.length > 0 && (
-            <select
-              className="field-input"
-              value={paymentMethodId}
-              onChange={(e) => setPaymentMethodId(e.target.value)}
-            >
-              <option value={NO_LINK}>不绑定支付方式（可以之后再绑）</option>
-              {eligibleMethods.map((m) => (
-                <option key={m.id} value={m.id}>
-                  记账选「{m.label}」时自动扣这个钱包
-                </option>
-              ))}
-            </select>
-          )}
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              className="field-input"
-              placeholder="起始余额（可选）"
-              value={initialBalanceYuan}
-              onChange={(e) => setInitialBalanceYuan(e.target.value)}
-            />
-            <div className="flex items-center gap-1">
-              {EMOJI_CHOICES.map((em) => (
-                <button
-                  key={em}
-                  type="button"
-                  onClick={() => setEmoji(em)}
-                  className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${
-                    emoji === em ? 'bg-ink text-paper' : 'bg-white'
-                  }`}
-                  aria-label={`选 ${em} 图标`}
-                >
-                  {em}
-                </button>
-              ))}
-            </div>
-          </div>
-          {error && <p className="text-sm text-coral">{error}</p>}
-          <div className="flex items-center gap-2">
-            <button type="submit" disabled={submitting} className="btn-primary text-sm">
-              {submitting ? '建立中…' : '建立钱包'}
-            </button>
-            <button type="button" onClick={() => setCreating(false)} className="tap-link text-sm text-muted">
-              取消
-            </button>
-          </div>
-        </form>
-      )}
+      {/* default 模式表单原地渲染；embedded-dark 模式表单改走下面的 portal，挂到深色卡外面的插槽 */}
+      {!isDark && formNode}
     </div>
+    {isDark && formNode && formSlot ? createPortal(formNode, formSlot) : null}
+    </>
   );
 }

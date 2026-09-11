@@ -10,6 +10,7 @@ import { formatMoney } from '@/lib/money';
 import { Avatar } from '@/components/avatar';
 import { ExpenseList } from './expense-list';
 import { WalletGrid } from './wallet-grid';
+import { QuickAddExpense } from './quick-add-expense';
 import { ExchangeRecordList } from './exchange-record-list';
 import { FxRateCard } from './fx-rate-card';
 import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
@@ -83,55 +84,78 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         </p>
       </div>
 
-      <section className="relative flex flex-col gap-2 overflow-hidden rounded-hero bg-hero-gradient p-4 text-white shadow-hero">
-        <span className="text-[10px] uppercase tracking-wide text-hero-label">我的净额</span>
-        <span
-          className={`font-serif text-2xl font-medium tabular-nums tracking-tight ${
-            myNet >= 0 ? 'text-positive-dk' : 'text-negative-dk'
-          }`}
-        >
-          {myNet >= 0 ? '+' : '-'}
-          {formatMoney(Math.abs(myNet), trip.baseCurrency)}
-        </span>
-        <span className="text-xs text-hero-label">
-          {myNet >= 0 ? '该收回' : '该付出'} · {unsettledCount} 笔消费
-        </span>
-        <Link
-          href={`/trips/${trip.id}/settlement`}
-          className="relative mt-1 inline-flex min-h-[32px] w-fit items-center gap-1 rounded-full bg-[rgba(219,218,214,.22)] px-[9px] py-[3px] text-[10px] text-hero-label"
-        >
-          查看结算明细 →
-        </Link>
+      {/* 方案C（DESIGN-BRIEF-hero-wallet-variants.html 第151-176/300-324行，第十六轮拍板）：
+          净额卡+我的钱包合并成一张深色卡，中间一条细分隔线分两层，钱包胶囊嵌在卡片底部，
+          省掉两个区块之间的外边距和钱包自己的标题行。颜色沿用既有 hero-gradient/hero-label
+          等 token，不新增颜色。 */}
+      <section className="relative flex flex-col overflow-hidden rounded-hero bg-hero-gradient text-white shadow-hero">
+        <div className="flex items-baseline justify-between gap-2 px-3 pb-2.5 pt-3">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-wide text-hero-label">我的净额</span>
+            <span
+              className={`font-serif text-2xl font-medium tabular-nums tracking-tight ${
+                myNet >= 0 ? 'text-positive-dk' : 'text-negative-dk'
+              }`}
+            >
+              {myNet >= 0 ? '+' : '-'}
+              {formatMoney(Math.abs(myNet), trip.baseCurrency)}
+            </span>
+            <span className="text-[10px] text-hero-label">
+              {myNet >= 0 ? '该收回' : '该付出'} · {unsettledCount} 笔消费
+            </span>
+          </div>
+          <Link
+            href={`/trips/${trip.id}/settlement`}
+            className="inline-flex min-h-[32px] shrink-0 items-center text-[9.5px] text-hero-label underline underline-offset-2"
+          >
+            查看结算明细 →
+          </Link>
+        </div>
+        <div className="mx-3 h-px bg-white/[.08]" />
+        <div className="flex flex-col gap-[5px] px-3 pb-[11px] pt-[9px]">
+          <div className="flex items-baseline justify-between">
+            <span className="text-[9px] uppercase tracking-wide text-hero-label">我的钱包</span>
+            <span className="text-[9px] text-hero-label">仅自己可见</span>
+          </div>
+          <WalletGrid
+            variant="embedded-dark"
+            tripId={trip.id}
+            wallets={myWallets.map((w) => ({
+              id: w.id,
+              label: w.label,
+              currency: w.currency,
+              emoji: w.emoji,
+              currentBalance: w.currentBalance,
+              paymentMethodId: w.paymentMethodId,
+              linkedPaymentMethodLabel: w.paymentMethodId ? paymentMethodLabelById.get(w.paymentMethodId) ?? null : null,
+            }))}
+            paymentMethods={myPaymentMethods.map((m) => ({
+              id: m.id,
+              label: m.label,
+              settlementCurrency: m.settlementCurrency,
+            }))}
+          />
+          <Link href={`/trips/${trip.id}/exchange/new`} className="tap-link self-start text-[11px] text-hero-label">
+            💱 取款 / 换汇
+          </Link>
+          <QuickAddExpense
+            tripId={trip.id}
+            baseCurrency={trip.baseCurrency}
+            myParticipantId={identity.participantId}
+            participants={tripParticipants.map((p) => ({ id: p.id, displayName: p.displayName }))}
+          />
+        </div>
       </section>
+
+      {/* 「新建钱包」表单的落点：WalletGrid 在 embedded-dark 模式下把表单 portal 到这里，
+          让它渲染在深色合并卡外面（浅色表单塞进深色卡里会看不清），设计稿没规格这段所以
+          维持现有浅色表单样式，别自己发明深色版本。default 模式的 WalletGrid 用不到这个插槽。
+          data-fab-avoid：表单展开时（尤其 375px 窄屏）emoji 选择行会落进右下角 FAB 常驻的
+          危险区，打上跟「参与者」列表同样的标记，让 FAB 侦测到重叠自动上移让开；表单收起时
+          这个 div 是空的，不占实际高度，不会误触发 FAB 上移。 */}
+      <div id="wallet-form-slot" data-fab-avoid />
 
       <FxRateCard tripId={trip.id} baseCurrency={trip.baseCurrency} hasPaymentMethods={myPaymentMethods.length > 0} />
-
-      <section className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-[12.5px] font-semibold text-ink">我的钱包</h2>
-          <span className="text-[10px] text-muted">仅自己可见</span>
-        </div>
-        <WalletGrid
-          tripId={trip.id}
-          wallets={myWallets.map((w) => ({
-            id: w.id,
-            label: w.label,
-            currency: w.currency,
-            emoji: w.emoji,
-            currentBalance: w.currentBalance,
-            paymentMethodId: w.paymentMethodId,
-            linkedPaymentMethodLabel: w.paymentMethodId ? paymentMethodLabelById.get(w.paymentMethodId) ?? null : null,
-          }))}
-          paymentMethods={myPaymentMethods.map((m) => ({
-            id: m.id,
-            label: m.label,
-            settlementCurrency: m.settlementCurrency,
-          }))}
-        />
-        <Link href={`/trips/${trip.id}/exchange/new`} className="tap-link self-start text-sm text-gold-dk">
-          💱 取款 / 换汇
-        </Link>
-      </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-ink">参与者</h2>
