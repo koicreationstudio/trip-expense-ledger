@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { getDb, type Db } from './client';
 import { setupTestDb, teardownTestDb } from './test-client';
 import { trips, users, participants } from './schema';
@@ -74,5 +74,58 @@ describe('loadUserTripsWithBalance 去重', () => {
 
     expect(result).toHaveLength(2);
     expect(ids).toEqual([tripA.id, tripB.id].sort());
+  });
+});
+
+describe('loadUserTripsWithBalance expenseTotals 聚合查询容错', () => {
+  it('聚合查询抛错时降级为 0，行程列表/净额照常返回，且 console.error 留痕', async () => {
+    const trip = requireOne(
+      await db.insert(trips).values({ name: '容错测试行程', baseCurrency: 'MYR' }).returning()
+    );
+    const user = requireOne(
+      await db
+        .insert(users)
+        .values({ email: 'fallback-test@example.com', passwordHash: 'x', displayName: 'Fallback Tester' })
+        .returning()
+    );
+    await db.insert(participants).values([
+      { tripId: trip.id, displayName: 'Fallback Tester', isOwner: true, userId: user.id },
+    ]);
+
+    // 只伪造 expenseTotals 那条聚合查询（select 字段里带 total/count 是它独有的
+    // 特征，跟同函数里 trips/participants join 那条、以及 loadSettlementInput
+    // 里的两条查询都不冲突），其余 select 调用原样转发给真实 db，走真实 miniflare
+    // D1，不整条链路都换成假数据。
+    const originalSelect = db.select.bind(db);
+    const selectSpy = vi.spyOn(db, 'select').mockImplementation(((fields: unknown) => {
+      if (fields && typeof fields === 'object' && 'total' in fields && 'count' in fields) {
+        return {
+          from: () => ({
+            where: () => ({
+              groupBy: () => Promise.reject(new Error('模拟 expenseTotals 聚合查询瞬时故障')),
+            }),
+          }),
+        };
+      }
+      return originalSelect(fields as Parameters<typeof originalSelect>[0]);
+    }) as typeof db.select);
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const result = await loadUserTripsWithBalance(db, user.id);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]?.id).toBe(trip.id);
+      // 净额走的是 loadSettlementInput 那条独立查询，没被伪造，照常算出来。
+      expect(result[0]?.netBalance).toBe(0);
+      // 聚合查询失败 → 降级成 0，不是 undefined、也不该把异常往上抛。
+      expect(result[0]?.totalExpenseBaseCurrency).toBe(0);
+      expect(result[0]?.expenseCount).toBe(0);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    } finally {
+      selectSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
   });
 });
