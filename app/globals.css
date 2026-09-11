@@ -7,8 +7,8 @@ html {
 }
 
 body {
-  background-color: #FEFCF7;
-  color: #23232E;
+  background-color: #F7F7F6;
+  color: #373736;
 }
 
 @layer components {
@@ -50,6 +50,6 @@ body {
      "卡片比页面深一档"的双层背景层次（吸收 brand-pm paper/paper-raised 分层
      思路，但取值继续用本系统已验证的 sand，不引入未验证的新 hex）。 */
   .tx-item {
-    @apply flex items-center gap-2 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[5px] shadow-card;
+    @apply flex items-center gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] shadow-card;
   }
 }

@@ -31,7 +31,7 @@ export function ExchangeRecordList({ records }: { records: ExchangeRecordItem[] 
         return (
           <li key={r.id} className="tx-item">
             <span
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-lt text-sm"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-circle text-sm"
               aria-hidden="true"
             >
               🔁

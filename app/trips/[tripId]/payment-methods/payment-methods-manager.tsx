@@ -100,7 +100,7 @@ export function PaymentMethodsManager() {
               <li key={m.id} className="tx-item justify-between">
                 <div className="flex min-w-0 items-center gap-2">
                   <span
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-lt text-sm"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-circle text-sm"
                     aria-hidden="true"
                   >
                     {m.kind === 'card' ? '💳' : '💵'}

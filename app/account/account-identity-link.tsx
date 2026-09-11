@@ -20,7 +20,7 @@ export function AccountIdentityLink({ url }: { url: string }) {
       <p className="text-[10px] text-muted">
         这条链接是你重新登录这个账号唯一的方式，没有邮箱密码。换设备、清了浏览器数据时，打开这条链接就能回来。
       </p>
-      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[9px] shadow-card">
+      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[9px] shadow-card">
         <code className="break-all font-mono text-xs text-ink">{url}</code>
         <button type="button" onClick={handleCopy} className="btn-secondary self-start shrink-0 whitespace-nowrap">
           {copied ? '已复制' : '复制链接'}

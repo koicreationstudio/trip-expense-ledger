@@ -32,7 +32,7 @@ export function FxCompareList({
             onClick={() => onSelect?.(r.paymentMethodId)}
             className={`flex flex-col gap-1 rounded-xl border px-[9px] py-2 text-left disabled:cursor-not-allowed ${
               !onSelect ? '' : 'disabled:opacity-60'
-            } ${isBest ? 'border-seafoam bg-sf-lt' : 'border-sand bg-[#EDE8DA]/35'} ${
+            } ${isBest ? 'border-seafoam bg-sf-lt' : 'border-sand bg-[rgba(164,163,160,.14)]'} ${
               isSelected ? 'ring-2 ring-ink' : ''
             }`}
           >

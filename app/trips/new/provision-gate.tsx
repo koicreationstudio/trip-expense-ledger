@@ -55,7 +55,7 @@ export function ProvisionGate() {
             这条链接是你以后唯一能重新登录这个账号的方式——没有邮箱密码，链接丢了就找不回账号。建议现在复制存到备忘录或密码管理器，之后随时能在&ldquo;我的账号&rdquo;页面里再看一次。
           </p>
         </div>
-        <div className="flex flex-col gap-2 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-[9px] shadow-card">
+        <div className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[9px] shadow-card">
           <code className="break-all font-mono text-xs text-ink">{identityUrl}</code>
           <button type="button" onClick={handleCopy} className="btn-secondary self-start shrink-0 whitespace-nowrap">
             {copied ? '已复制' : '复制链接'}

@@ -118,7 +118,7 @@ function TripCard({
       onClick={() => onOpen(trip.id)}
       disabled={switching}
       className={`flex flex-col gap-1 rounded-xl border border-sand px-[9px] py-2 text-left text-base hover:border-muted disabled:opacity-50 ${
-        ended ? 'bg-paper opacity-70' : 'bg-[#EDE8DA]/35 shadow-card'
+        ended ? 'bg-paper opacity-70' : 'bg-[rgba(164,163,160,.14)] shadow-card'
       }`}
     >
       <span className="font-medium">{trip.name}</span>

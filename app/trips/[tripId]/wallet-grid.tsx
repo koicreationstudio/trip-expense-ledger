@@ -89,7 +89,7 @@ export function WalletGrid({
     <div className="flex flex-col gap-2">
       <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1">
         {wallets.map((w) => (
-          <div key={w.id} className="w-[120px] shrink-0 rounded-xl border border-sand bg-[#EDE8DA]/35 px-[9px] py-2">
+          <div key={w.id} className="w-[120px] shrink-0 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-2">
             <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-muted">
               <span aria-hidden="true">{w.emoji}</span>
               <span className="truncate">{w.label}</span>
@@ -117,7 +117,7 @@ export function WalletGrid({
       </div>
 
       {creating && (
-        <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[#EDE8DA]/35 p-3">
+        <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] p-3">
           <div className="grid grid-cols-2 gap-2">
             <input
               className="field-input"

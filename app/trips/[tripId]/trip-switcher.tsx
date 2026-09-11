@@ -79,7 +79,7 @@ export function TripSwitcher({
           <p className="px-[9px] pt-[9px] text-[9.5px] uppercase tracking-wide text-muted">切换行程</p>
           {error && <p className="px-[9px] pb-1 text-xs text-coral">{error}</p>}
           <ul className="flex flex-col">
-            <li className="border-t border-sand px-[9px] py-[5px] bg-[#EDE8DA]/35">
+            <li className="border-t border-sand px-[9px] py-[5px] bg-[rgba(164,163,160,.14)]">
               <span className="text-[12.5px] font-medium text-ink">{currentTripName}</span>
               <span className="ml-2 text-[10px] text-muted">当前行程</span>
             </li>
