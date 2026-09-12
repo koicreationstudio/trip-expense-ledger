@@ -47,18 +47,17 @@ export function ClaimForm({
   }
 
   if (claimed) {
-    const nextParam = encodeURIComponent(`/trips/${tripId}`);
     return (
       <div className="flex flex-col gap-4">
         <p className="text-[10px] text-muted">认领成功，可以直接开始记账了。</p>
         <p className="text-[10px] text-muted">
-          要不要顺手注册账号，这样以后能在任何设备找到这个行程？
-          <Link href={`/login?next=${nextParam}`} className="tap-link ml-1">
-            登录
-          </Link>
-          {' / '}
-          <Link href={`/signup?next=${nextParam}`} className="tap-link">
-            注册
+          要不要顺手开个账号，这样以后能在任何设备找到这个行程？
+          {/* fix(2026-09-12 死路走查)：这里原本链到 /login /signup，但 2026-09-09
+              第十六轮登录系统换血后这两个路由早就不存在了，是遗留死链接。开号/恢复
+              账号唯一的实际入口是 /trips/new 的 ProvisionGate（没账号会先问"新用户
+              开号"还是"用身份链接恢复"），两种意图都在那一个页面里覆盖到，直接指过去。 */}
+          <Link href="/trips/new" className="tap-link ml-1">
+            去开号
           </Link>
         </p>
         <button
