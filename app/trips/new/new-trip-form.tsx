@@ -117,7 +117,7 @@ export function NewTripForm() {
         <button
           type="button"
           onClick={() => setParticipantNames((prev) => [...prev, ''])}
-          className="tap-link text-muted"
+          className="tap-link text-[12.5px] text-muted"
         >
           + 加一位同行人
         </button>

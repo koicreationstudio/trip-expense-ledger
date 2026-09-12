@@ -22,7 +22,20 @@ export interface WalletPaymentMethodOption {
   settlementCurrency: string;
 }
 
-const EMOJI_CHOICES = ['🏦', '💵', '🌐', '📱', '🟠', '💳', '💰'];
+// fix(2026-09-12 走查)：原本是纯 emoji 按钮，选了哪个类型全靠猜。改成 {emoji, label}
+// 数组，配合下面「已选：xx」常显小字 + 每颗按钮的 title 悬浮提示，两条腿一起解决
+// 「看不懂选的是什么」——常显文字满足手机触屏（没有 hover），title 顺手满足桌面。
+// 没在按钮旁边逐个摆文字标签：7 个类型都要摆的话（"银行卡"/"网络钱包"这种 2-4 字）
+// 横向空间不够摆一整排还不换行，压缩比 compact 目标更糟。
+const ICON_CHOICES = [
+  { emoji: '🏦', label: '银行' },
+  { emoji: '💵', label: '现金' },
+  { emoji: '🌐', label: '网络钱包' },
+  { emoji: '📱', label: '手机支付' },
+  { emoji: '🟠', label: '电子钱包' },
+  { emoji: '💳', label: '信用卡' },
+  { emoji: '💰', label: '零钱' },
+] as const;
 const NO_LINK = '__none__';
 
 /**
@@ -48,11 +61,13 @@ export function WalletGrid({
   const [creating, setCreating] = useState(false);
   const [label, setLabel] = useState('');
   const [currency, setCurrency] = useState<string>(COMMON_CURRENCIES[0]);
-  const [emoji, setEmoji] = useState(EMOJI_CHOICES[0]);
+  const [emoji, setEmoji] = useState<string>(ICON_CHOICES[0].emoji);
   const [initialBalanceYuan, setInitialBalanceYuan] = useState('');
   const [paymentMethodId, setPaymentMethodId] = useState(NO_LINK);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedIconLabel = ICON_CHOICES.find((c) => c.emoji === emoji)?.label ?? '';
 
   // 只有跟当前选的钱包币种完全一致的支付方式才有意义绑——扣款逻辑要求币种精确匹配，
   // 列出币种不一致的选项只会让人绑了也白绑（app/api/trips/[tripId]/expenses/route.ts）。
@@ -102,72 +117,114 @@ export function WalletGrid({
     }
   }
 
+  // fix(2026-09-12 走查)：compact 化对齐 expense-form.tsx 的记账表单——字段一律
+  // field-label(10px)+field-input(12.5px/px-[9px] py-2/rounded-xl) 这套已定案的
+  // token，不新造尺寸；每个字段都带常显标签（原本纯靠 placeholder，输入后标签就
+  // 消失，看不出这格是什么）。账户类型图标原本跟起始余额挤同一个 grid-cols-2 半栏
+  // （只有约 155px 宽却要塞 7 颗 28px 圆钮），flex 没设 shrink-0 导致被压扁成
+  // 20×28 的椭圆；这次让图标行独占一整行宽度，够摆下 7 颗不用挤。
   const formNode = creating && (
     <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] p-3">
-      <div className="grid grid-cols-2 gap-2">
-        <input
-          className="field-input"
-          placeholder="钱包名（比如：泰铢现金）"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-        />
-        <select
-          className="field-input"
-          value={currency}
-          onChange={(e) => {
-            setCurrency(e.target.value);
-            setPaymentMethodId(NO_LINK);
-          }}
-        >
-          {COMMON_CURRENCIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="field-label" htmlFor="wallet-label">
+            钱包名
+          </label>
+          <input
+            id="wallet-label"
+            className="field-input"
+            placeholder="比如：泰铢现金"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="field-label" htmlFor="wallet-currency">
+            币种
+          </label>
+          <select
+            id="wallet-currency"
+            className="field-input"
+            value={currency}
+            onChange={(e) => {
+              setCurrency(e.target.value);
+              setPaymentMethodId(NO_LINK);
+            }}
+          >
+            {COMMON_CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       {eligibleMethods.length > 0 && (
-        <select className="field-input" value={paymentMethodId} onChange={(e) => setPaymentMethodId(e.target.value)}>
-          <option value={NO_LINK}>不绑定支付方式（可以之后再绑）</option>
-          {eligibleMethods.map((m) => (
-            <option key={m.id} value={m.id}>
-              记账选「{m.label}」时自动扣这个钱包
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-col gap-1">
+          <label className="field-label" htmlFor="wallet-payment-method">
+            绑定支付方式
+          </label>
+          <select
+            id="wallet-payment-method"
+            className="field-input"
+            value={paymentMethodId}
+            onChange={(e) => setPaymentMethodId(e.target.value)}
+          >
+            <option value={NO_LINK}>不绑定支付方式（可以之后再绑）</option>
+            {eligibleMethods.map((m) => (
+              <option key={m.id} value={m.id}>
+                记账选「{m.label}」时自动扣这个钱包
+              </option>
+            ))}
+          </select>
+        </div>
       )}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="wallet-balance">
+          起始余额（可选）
+        </label>
         <input
+          id="wallet-balance"
           type="number"
           min="0"
           step="0.01"
           className="field-input"
-          placeholder="起始余额（可选）"
+          placeholder="0.00"
           value={initialBalanceYuan}
           onChange={(e) => setInitialBalanceYuan(e.target.value)}
         />
-        <div className="flex items-center gap-1">
-          {EMOJI_CHOICES.map((em) => (
+      </div>
+      <div className="flex flex-col gap-1">
+        <span className="field-label">账户类型</span>
+        <div className="flex flex-wrap items-center gap-1">
+          {ICON_CHOICES.map(({ emoji: em, label: emLabel }) => (
             <button
               key={em}
               type="button"
+              title={emLabel}
               onClick={() => setEmoji(em)}
-              className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${
+              aria-pressed={emoji === em}
+              aria-label={`账户类型：${emLabel}`}
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm ${
                 emoji === em ? 'bg-ink text-paper' : 'bg-white'
               }`}
-              aria-label={`选 ${em} 图标`}
             >
               {em}
             </button>
           ))}
         </div>
+        <span className="text-[10px] text-muted">已选：{selectedIconLabel}</span>
       </div>
-      {error && <p className="text-sm text-coral">{error}</p>}
+      {/* 没套 expense-form.tsx 那个 rounded-xl+bg 提示盒——那个盒子的浅灰底色是靠反衬
+          page.tsx 的纯 bg-paper 页面底色出效果的；这个表单本身就是 bg-[rgba(164,163,160,.14)]
+          底，同色盒子叠同色底会看不出盒子只剩边框，索性跟 quick-add-expense.tsx 的错误提示
+          一样只用纯文字，字号仍收到跟其它说明性小字同一档 10px。 */}
+      {error && <p className="text-[10px] text-coral">{error}</p>}
       <div className="flex items-center gap-2">
-        <button type="submit" disabled={submitting} className="btn-primary text-sm">
+        <button type="submit" disabled={submitting} className="btn-primary">
           {submitting ? '建立中…' : '建立钱包'}
         </button>
-        <button type="button" onClick={() => setCreating(false)} className="tap-link text-sm text-muted">
+        <button type="button" onClick={() => setCreating(false)} className="tap-link text-[12.5px] text-muted">
           取消
         </button>
       </div>
