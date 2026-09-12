@@ -342,7 +342,7 @@ export function ExpenseForm({
           </button>
         </div>
         {(!hasPaymentMethods || compareError === 'no_payment_methods') && (
-          <p className="text-sm text-muted">
+          <p className="text-[10px] text-muted">
             还没配置支付方式，先去{' '}
             <Link href={`/trips/${tripId}/payment-methods`} className="tap-link">
               支付方式设置
@@ -350,8 +350,15 @@ export function ExpenseForm({
             配一下。
           </p>
         )}
+        {/* fix(2026-09-12 走查)：之前是裸红字文字直接摆在浅色边框盒子里（text-base 16px
+            + text-coral，没有自己的容器），很原生很粗糙。改用 app/page.tsx 第75行「身份链接
+            失效」提示已经在用的盒子写法（rounded-xl border-sand + card-tint 底，跟 .tx-item
+            同一套容器语言，只是文字换成 coral），不新发明一套错误样式；字号按这个文件字号
+            走查统一到 10px（副信息/caption 档），跟下面"点一张卡标记…"同一档。 */}
         {compareError && compareError !== 'no_payment_methods' && (
-          <p className="text-base text-coral">{compareError}</p>
+          <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+            {compareError}
+          </p>
         )}
         {recommendations && (
           <div className="flex flex-col gap-2">
@@ -361,7 +368,7 @@ export function ExpenseForm({
               selectedPaymentMethodId={selectedPaymentMethodId}
               onSelect={setSelectedPaymentMethodId}
             />
-            <p className="text-xs text-muted">点一张卡标记「这笔实际用它」，记账时会自动扣对应钱包余额。</p>
+            <p className="text-[10px] text-muted">点一张卡标记「这笔实际用它」，记账时会自动扣对应钱包余额。</p>
           </div>
         )}
       </div>
@@ -440,12 +447,17 @@ export function ExpenseForm({
           type="file"
           accept=".jpg,.jpeg,.png,.webp,.pdf"
           onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-          className="text-sm"
+          className="text-[12.5px]"
         />
       </div>
 
+      {/* fix(2026-09-12 字号走查)：这个盒子内部原本 text-base(16px)/text-sm(14px)/
+          text-xs(12px) 三种字号混着用，逐个对齐 DESIGN-SYSTEM-INTERNAL.md 字号阶梯：
+          "自定义分摊"是这个盒子的小节标题，跟上面"这笔用哪张卡最划算？"同类角色，改用
+          field-label 同款 10px；同行人姓名/金额是清单主内容，对齐 field-input 的
+          12.5px；说明性小字（默认平分提示/币种单位/已分配汇总）统一收进 10px 副信息档。 */}
       <div className="flex flex-col gap-2 rounded-xl border border-sand bg-paper p-3">
-        <label className="flex items-center gap-2 text-base font-medium">
+        <label className="field-label flex items-center gap-2">
           <input
             type="checkbox"
             checked={customSplit}
@@ -454,7 +466,7 @@ export function ExpenseForm({
           自定义分摊（不勾选默认全员等分）
         </label>
 
-        {!customSplit && <p className="text-xs text-muted">默认所有参与者平均分摊这笔消费。</p>}
+        {!customSplit && <p className="text-[10px] text-muted">默认所有参与者平均分摊这笔消费。</p>}
 
         {customSplit && (
           <div className="flex flex-col gap-2">
@@ -468,7 +480,7 @@ export function ExpenseForm({
                       setSplitIncluded((prev) => ({ ...prev, [p.id]: e.target.checked }))
                     }
                   />
-                  <span className="w-24 shrink-0 text-base">{p.displayName}</span>
+                  <span className="w-24 shrink-0 text-[12.5px]">{p.displayName}</span>
                   <input
                     type="number"
                     min="0"
@@ -481,7 +493,7 @@ export function ExpenseForm({
                     placeholder="0.00"
                     className="field-input w-28"
                   />
-                  <span className="text-xs text-muted">{currency}</span>
+                  <span className="text-[10px] text-muted">{currency}</span>
                 </div>
               ))}
             </div>
@@ -493,18 +505,24 @@ export function ExpenseForm({
               >
                 平均分给已勾选的人
               </button>
-              <span className={`text-sm tabular-nums ${splitMismatch ? 'text-coral' : 'text-ok'}`}>
+              <span className={`text-[10px] tabular-nums ${splitMismatch ? 'text-coral' : 'text-ok'}`}>
                 已分配 {formatMoney(splitCentsTotal, currency)} / 共 {formatMoney(amountCentsTotal, currency)}
               </span>
             </div>
             {splitMismatch && (
-              <p className="text-base text-coral">分摊总和要跟消费总金额完全一致才能提交。</p>
+              <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+                分摊总和要跟消费总金额完全一致才能提交。
+              </p>
             )}
           </div>
         )}
       </div>
 
-      {error && <p className="text-base text-coral">{error}</p>}
+      {error && (
+        <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+          {error}
+        </p>
+      )}
 
       <div className="flex items-center gap-3">
         <button

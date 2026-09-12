@@ -84,8 +84,17 @@ const config: Config = {
         // 取值来源 v6-preview.html .variant-grayscale .hero 区块。
         // 补漏(2026-09-11配色走查)：右上角光晕层(radial-gradient)首轮落地时漏抄，只落了线性
         // 渐变主体，现在补上，两层顺序跟色值原样照抄 v6-preview.html 246-249 行。
+        // fix(2026-09-12 净额色协调度走查)：v6-preview.html 自己的注释写的是"最浅两档灰只留
+        // 给右上角光晕，深色落在文字叠加区域，避开 positive-dk 浅绿字对比度问题"，但照抄下来的
+        // 这版渐变第一站是 Mountain Mist(#A4A3A0)，恰好是净额数字所在的卡片顶部——实测这段位置
+        // 背景色约 rgb(144,144,141)，positive-dk(#B7D1A8) 在其上对比度只有 2.12:1（WCAG 大字号
+        // 门槛 3:1 都不过），这也是"浅绿字显得廉价刺眼"的直接原因。改法不动 positive-dk/negative-dk
+        // 这两个共用语义 token 本身（文件里定义值跟色板速查表逐值一致，没有错），只把 Mountain Mist
+        // 从渐变主体里去掉、只留在右上角光晕，渐变主体压缩成 Welded Iron→82%压暗两段，早早在卡片
+        // 顶部就到暗色——这才是真正落实文档自己说的"深色落在文字叠加区域"。钱包区(卡片底部)本来
+        // 就在暗段，不受影响。
         'hero-gradient':
-          'radial-gradient(130px 100px at 90% 6%, rgba(219,218,214,.30), transparent 70%), linear-gradient(165deg, #A4A3A0 0%, #6E6E6C 55%, color-mix(in srgb, #373736 82%, black) 100%)',
+          'radial-gradient(130px 100px at 90% 6%, rgba(219,218,214,.30), transparent 70%), linear-gradient(165deg, #6E6E6C 0%, color-mix(in srgb, #373736 82%, black) 30%, color-mix(in srgb, #373736 82%, black) 100%)',
       },
       boxShadow: {
         // 外层两组阴影让卡片浮起来，inset 高光模拟顶部打光——银行卡/钱包类 UI 常见手法。

@@ -65,7 +65,12 @@ export default async function TripLayout({
             <LogoutButton />
           </div>
         </div>
-        <nav className="flex flex-wrap gap-x-4 gap-y-2 text-[12.5px]">
+        {/* fix(2026-09-12 字号走查)：这几个是次级导航链接，不是分节标题，之前用
+            text-[12.5px]（DESIGN-SYSTEM-INTERNAL.md「强调/小标题/卡片标题」这一档）偏大，
+            跟"参与者"/"活动流"这类真正的区块标题长得一样大分不出主次。改用同一份阶梯里
+            低一档的「正文基准」10.5px（Remy 反馈"还是没变小"，历史提交记录里这个 class
+            从 331159d 引入起就一直是 12.5px，没有被真的调小过）。 */}
+        <nav className="flex flex-wrap gap-x-4 gap-y-2 text-[10.5px]">
           {navLinks.map((link) => (
             <Link
               key={link.href}
