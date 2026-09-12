@@ -69,22 +69,20 @@ export default async function TripLayout({
             text-[12.5px]（DESIGN-SYSTEM-INTERNAL.md「强调/小标题/卡片标题」这一档）偏大，
             跟"参与者"/"活动流"这类真正的区块标题长得一样大分不出主次。改用同一份阶梯里
             低一档的「正文基准」10.5px（Remy 反馈"还是没变小"，历史提交记录里这个 class
-            从 331159d 引入起就一直是 12.5px，没有被真的调小过）。 */}
+            从 331159d 引入起就一直是 12.5px，没有被真的调小过）。
+            fix(2026-09-12 触控高度走查)：这几个是纯文字链接，不是独立按钮块，之前手写
+            min-h-[44px] 是 DESIGN-BRIEF.md 第四版补丁明确推翻的旧规则（"次要按钮/纯文字
+            链接沿用主 CTA 同款 44px"），全站其它纯文字链接早就走 .tap-link(min-h-32px)
+            这个 chokepoint，这里当初手写 class 没接上，漏成了孤例。改用 .tap-link，
+            触控高度回到跟"查看结算明细→"/"取消"这批文字链接一致的 32px。 */}
         <nav className="flex flex-wrap gap-x-4 gap-y-2 text-[10.5px]">
           {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="inline-flex min-h-[44px] items-center text-muted hover:text-ink hover:underline"
-            >
+            <Link key={link.href} href={link.href} className="tap-link text-muted hover:text-ink">
               {link.label}
             </Link>
           ))}
           {identity.isOwner && (
-            <Link
-              href={`/trips/${trip.id}/invites`}
-              className="inline-flex min-h-[44px] items-center text-muted hover:text-ink hover:underline"
-            >
+            <Link href={`/trips/${trip.id}/invites`} className="tap-link text-muted hover:text-ink">
               邀请管理
             </Link>
           )}
