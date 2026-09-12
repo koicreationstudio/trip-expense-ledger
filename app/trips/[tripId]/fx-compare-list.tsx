@@ -46,10 +46,14 @@ export function FxCompareList({
                   </span>
                 )}
               </span>
-              <span className="font-serif text-sm font-medium tabular-nums">
-                {r.unavailable || r.costInCompareCurrency === null
-                  ? '缺汇率'
-                  : formatMoney(r.costInCompareCurrency, compareCurrency)}
+              <span className="text-sm font-medium">
+                {r.unavailable || r.costInCompareCurrency === null ? (
+                  '缺汇率'
+                ) : (
+                  <span className="font-serif tabular-nums">
+                    {formatMoney(r.costInCompareCurrency, compareCurrency)}
+                  </span>
+                )}
               </span>
             </span>
             <span className="border-t border-dashed border-sand pt-1 text-[10px] text-muted">

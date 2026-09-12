@@ -151,7 +151,11 @@ function TripCard({
       </span>
       {trip.expenseCount > 0 && (
         <span className="text-[10px] text-muted">
-          总消费 {formatMoney(trip.totalExpenseBaseCurrency, trip.baseCurrency)} · {trip.expenseCount} 笔
+          总消费{' '}
+          <span className="font-serif tabular-nums">
+            {formatMoney(trip.totalExpenseBaseCurrency, trip.baseCurrency)}
+          </span>{' '}
+          · {trip.expenseCount} 笔
         </span>
       )}
       {switching && <span className="text-[10px] text-muted">打开中…</span>}
