@@ -45,6 +45,14 @@ export function RecordExpenseFab({ tripId }: { tripId: string }) {
       document.querySelectorAll('[data-fab-avoid]').forEach((el) => {
         const rect = el.getBoundingClientRect();
         if (rect.bottom <= 0 || rect.top >= window.innerHeight) return; // 不在视口内，不用管
+        // 这块内容的可见部分（rect.bottom）已经完全滚到 FAB 落点（fabTopAtBase）
+        // 上方、安全区之外了，就不用再让位——哪怕它还有一条边没完全离开视口。
+        // 这一步必须看 rect.bottom，不能看 rect.top：区块一旦滚出视口上方，
+        // rect.top 会变成很负的数（负到跟区块实际高度成正比），如果拿它去算
+        // neededTop，会算出离谱的负值，把 lift 撑到封顶——这正是"FAB 卡在
+        // 贴近顶栏的位置直到滚到底才松开"这个 bug 的根因：区块明明早就已经
+        // 滚走、不挡 FAB 了，只因为 rect.top 还很负，就被误判成"还要用力避让"。
+        if (rect.bottom + AVOID_GAP_PX <= fabTopAtBase) return;
         // 目标：FAB 的新底边完全在这个区块的上边缘之上（entirely 让开，
         // 不是刚好贴着重叠边界——贴边界只是把"挡下半行"变成"挡上半行"）。
         const neededTop = rect.top - AVOID_GAP_PX - FAB_HEIGHT_PX;
