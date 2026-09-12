@@ -139,15 +139,21 @@ export function TripSwitcher({
 
   return (
     <div ref={containerRef} className="relative">
+      {/* 2026-09-13：Remy 指认参照一份设计稿截图，触发器从"大号粗体文字"改成深色小胶囊，
+          跟 .btn-primary 同一套 accent-700/rounded-full 语言。**已知偏离**：截图里胶囊显示
+          的是缩短过的行程名（"曼谷"），这里保留完整行程名——缩写规则没有明确定义（比如
+          没有可识别地名子串的行程名该怎么截），没有把握就不猜，原样全名放进胶囊里，长
+          名字胶囊会变宽，需要 Remy 看了实际效果再定要不要加缩写规则。另外这个按钮从
+          2026-09-12 起是页面唯一的"行程标题"（那次顺手拿掉了下面重复的 <h1>），改小之后
+          页面不再有大号标题文字，只剩这颗胶囊——如果想要"大标题+独立小胶囊"两层，需要
+          在 layout.tsx 里另外加一个静态标题，这次没有擅自加。 */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-[32px] items-center gap-1 text-lg font-bold text-gold-dk"
+        className="inline-flex min-h-[32px] items-center gap-1 rounded-full bg-accent-700 px-[10px] py-1 text-[12.5px] font-medium text-white transition-colors hover:bg-accent-800"
       >
         {currentTripName}
-        <span className="text-sm text-muted" aria-hidden="true">
-          ▾
-        </span>
+        <span aria-hidden="true">▾</span>
       </button>
 
       {open && (

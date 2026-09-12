@@ -8,8 +8,9 @@ const config: Config = {
       fontFamily: {
         sans: ['var(--font-inter)', ...defaultTheme.fontFamily.sans],
         // 只用在阿拉伯数字金额上（DESIGN-BRIEF.md 第三版「绝对禁止」第6条：
-        // Fraunces 不含中文字形，套在中文标题上会静默回退系统衬线体，两种字体打架）。
-        serif: ['var(--font-fraunces)', ...defaultTheme.fontFamily.serif],
+        // 不含中文字形的衬线体，套在中文标题上会静默回退系统衬线体，两种字体打架）。
+        // 2026-09-13：字体本体从 Fraunces 换成 IBM Plex Serif，token 名和用法不变。
+        serif: ['var(--font-plex-serif)', ...defaultTheme.fontFamily.serif],
         // 第五版补丁：只用在保证纯 ASCII 的场景（货币代码/双语标题英文半段），
         // 绝不碰中文（绝对禁止第14条，同 Fraunces 那条纪律）。
         mono: ['var(--font-plex-mono)', ...defaultTheme.fontFamily.mono],

@@ -59,7 +59,11 @@ export function RecordExpenseBar({ tripId }: { tripId: string }) {
           字号从手写的 14px 换成全站 .btn-primary 这个 chokepoint 的 12.5px），这轮改的是
           它待的地方，不是它长什么样——要不要改成满宽主 CTA 是另一个设计决定，交 Remy 定。 */}
       <div className="mx-auto flex w-full max-w-3xl justify-end px-4">
-        <Link href={`/trips/${tripId}/expenses/new`} className="btn-primary gap-2">
+        {/* 2026-09-13：Remy 反馈按钮在满宽操作条里看着像"浮起来的胶囊"，圆角从全
+            pill 收成 rounded-xl + 加阴影，让它读起来像嵌在操作条里的实心按钮，
+            不是贴在空白处的气泡。只覆盖这一个位置（!important 局部覆盖），
+            不动 .btn-primary 这个全站共用 chokepoint，其它按钮维持原样。 */}
+        <Link href={`/trips/${tripId}/expenses/new`} className="btn-primary gap-2 !rounded-xl shadow-card">
           <Plus className="h-4 w-4" aria-hidden="true" />
           记一笔消费
         </Link>
