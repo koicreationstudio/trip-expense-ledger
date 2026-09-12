@@ -7,7 +7,7 @@ import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { loadUserTripsWithBalance } from '@/lib/db/user-trips-query';
 import { LogoutButton } from './logout-button';
-import { RecordExpenseFab } from './record-expense-fab';
+import { RecordExpenseBar } from './record-expense-bar';
 import { TripSwitcher } from './trip-switcher';
 
 /**
@@ -43,15 +43,19 @@ export default async function TripLayout({
     : [];
 
   // "记一笔消费"是全站最高频动作，不跟其它次要链接混排在这条导航里——
-  // 挪到下面固定在屏幕底部的常驻按钮，单手持机时拇指自然落点就能点到。
+  // 挪到下面固定在屏幕底部的常驻操作条，单手持机时拇指自然落点就能点到。
   const navLinks = [
     { href: `/trips/${trip.id}`, label: '行程主页' },
     { href: `/trips/${trip.id}/settlement`, label: '结算' },
     { href: `/trips/${trip.id}/payment-methods`, label: '支付方式' },
   ];
 
+  // action-bar-reserve：底部操作条是 fixed 的，不占文档流，靠这条 padding 把它那一横带
+  // 从内容区里扣掉。高度跟操作条共用 --action-bar-h，所以"滚到底时操作条底下压的是这段
+  // 空白、不是内容"这条保证不会因为改内边距而漂掉。（替掉了原来那个 pb-28——112px 是当年
+  // 为悬浮胶囊留的估算余量，跟胶囊实际高度没有任何机械关联，胶囊一改高度就失效。）
   return (
-    <div className="flex flex-col gap-8 pb-28">
+    <div className="action-bar-reserve flex flex-col gap-8">
       <header className="flex flex-col gap-4 border-b border-sand pb-4">
         <div className="flex items-center justify-between">
           <div>
@@ -94,7 +98,7 @@ export default async function TripLayout({
         </nav>
       </header>
       {children}
-      <RecordExpenseFab tripId={trip.id} />
+      <RecordExpenseBar tripId={trip.id} />
     </div>
   );
 }
