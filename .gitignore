@@ -67,3 +67,6 @@ Thumbs.db
 
 # --- Docker local overrides ---
 docker-compose.override.yml
+
+# --- D1 数据库人工导出备份 (含真实邮箱/密码哈希/身份链接token,严禁提交) ---
+backups/
