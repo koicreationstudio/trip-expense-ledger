@@ -13,11 +13,16 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
  * 删除入口，哪怕名下只有这一个行程）时才渲染成可点按钮；两者都不满足（没登录
  * 账号，单纯认领邀请进来的非 owner 同行人）退回纯文字，不给一个点了也没用的按钮。
  *
- * fix(2026-09-12 加删除行程)：面板里原本只有"切换行程"一段，现在 owner 视角下
- * 底部多一段"删除此行程"（只有 owner 才渲染，非 owner 完全看不到这个入口，
- * API 层 DELETE /api/trips/[tripId] 也用 withTripOwner 做同样鉴权，不是只在
- * 前端藏按钮）。caption 文字按有没有其它行程可切换动态换：有得切就是"切换行程"，
- * 没有（只剩管理动作）就是"管理行程"。
+ * fix(2026-09-12 加删除行程)：列表里每一行（当前行程 + otherTrips 里的每一项）
+ * 只要那趟行程自己是 owner（当前行程看 isOwner prop，otherTrips 每一项看它自带的
+ * UserTripSummary.isOwner）就带一个 🗑 删除图标，不是 owner 的行程完全看不到这个
+ * 入口。删 otherTrips 里的行程时，浏览器当前的 tel_session 还停在"当前行程"上，
+ * 没切过去——API 层 DELETE /api/trips/[tripId] 相应地补了第二条鉴权路径：不光看
+ * tel_session 是否正好指向这趟 trip，也看 tel_user_session 这个账号在目标 tripId
+ * 下是不是 owner（跟 switch-trip 判断"这个账号是否在这个 trip 里有 participant"
+ * 是同一个模式），前端才能不先切过去就直接删别的行程，不是只在前端藏按钮。
+ * caption 文字按有没有其它行程可切换动态换：有得切就是"切换行程"，没有（只剩
+ * 管理动作）就是"管理行程"。
  */
 export function TripSwitcher({
   currentTripId,
@@ -33,7 +38,7 @@ export function TripSwitcher({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirming, setConfirming] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -78,28 +83,41 @@ export function TripSwitcher({
     }
   }
 
-  // 删除当前行程：DB 记录 + 关联数据（消费/钱包/参与者…）由 schema.ts 的
-  // onDelete: cascade 自动清空，这里只管调 API + 决定删完跳去哪。
-  // 名下还有别的行程就换到其中一个（走现成的 switch-trip，铸一个指向那趟行程
-  // 的新 session——当前这条 tel_session 背后的 participant 行已经跟着 trip
-  // 一起被级联删掉，不能留着继续用）；一个都不剩就退回首页，首页会按账号
-  // （tel_user_session，跟被删的 trip 无关，不受影响）重新查"我的行程"列表。
+  // 删除一趟行程：DB 记录 + 关联数据（消费/钱包/参与者…）由 schema.ts 的
+  // onDelete: cascade 自动清空，这里只管调 API + 决定删完要不要跳转。
+  //
+  // 删的正好是"当前行程"（这个人正待在里面）：当前这条 tel_session 背后的
+  // participant 行已经跟着 trip 一起被级联删掉，不能留着继续用——名下还有别的
+  // 行程就换到其中一个（走现成的 switch-trip，铸一个指向那趟行程的新 session），
+  // 一个都不剩就退回首页，首页会按账号（tel_user_session，跟被删的 trip 无关，
+  // 不受影响）重新查"我的行程"列表。
+  //
+  // 删的是 otherTrips 列表里"不是当前行程"的另一趟：当前这条 tel_session 压根
+  // 不受影响，用不着切换也用不着跳转，刷新一下服务器数据让列表里少一条就行
+  // （router.refresh() 会让 layout.tsx 重新查 otherTrips，这个已删的 id 自然
+  // 不会再出现，不用自己在前端手动拼数组）。
   async function handleDeleteConfirmed() {
-    if (deleting) return; // ConfirmDialog 没有内建 disabled 态，自己挡一下重复点击/双发请求
+    if (!confirming || deleting) return; // ConfirmDialog 没有内建 disabled 态，自己挡一下重复点击/双发请求
+    const target = confirming;
     setError(null);
     setDeleting(true);
     try {
-      const res = await fetch(`/api/trips/${currentTripId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/trips/${target.id}`, { method: 'DELETE' });
       if (!res.ok) {
         setError('删除失败，刷新页面再试一次');
-        setConfirmOpen(false);
+        setConfirming(null);
         return;
       }
 
-      setConfirmOpen(false);
-      setOpen(false);
+      setConfirming(null);
 
-      const nextTrip = otherTrips[0];
+      if (target.id !== currentTripId) {
+        router.refresh();
+        return;
+      }
+
+      setOpen(false);
+      const nextTrip = otherTrips.find((t) => t.id !== target.id);
       if (nextTrip) {
         const switchRes = await fetch('/api/account/switch-trip', {
           method: 'POST',
@@ -139,19 +157,31 @@ export function TripSwitcher({
           </p>
           {error && <p className="px-[9px] pb-1 text-[10px] text-coral">{error}</p>}
           <ul className="flex flex-col">
-            <li className="border-t border-sand px-[9px] py-[5px] bg-[rgba(164,163,160,.14)]">
-              <span className="text-[12.5px] font-medium text-ink">{currentTripName}</span>
-              <span className="ml-2 text-[10px] text-muted">当前行程</span>
+            <li className="flex items-center justify-between gap-2 border-t border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px]">
+              <span className="min-w-0 truncate">
+                <span className="text-[12.5px] font-medium text-ink">{currentTripName}</span>
+                <span className="ml-2 text-[10px] text-muted">当前行程</span>
+              </span>
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => setConfirming({ id: currentTripId, name: currentTripName })}
+                  className="tap-link shrink-0 text-[10px] text-coral"
+                  aria-label={`删除「${currentTripName}」`}
+                >
+                  🗑 删除
+                </button>
+              )}
             </li>
             {otherTrips.map((trip) => (
-              <li key={trip.id} className="border-t border-sand">
+              <li key={trip.id} className="flex items-center gap-1 border-t border-sand px-[9px] py-[5px]">
                 <button
                   type="button"
                   onClick={() => handleSwitch(trip.id)}
                   disabled={switchingId === trip.id}
-                  className="flex w-full items-center justify-between px-[9px] py-[5px] text-left disabled:opacity-50"
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left disabled:opacity-50"
                 >
-                  <span className="text-[12.5px] font-medium text-ink">
+                  <span className="min-w-0 truncate text-[12.5px] font-medium text-ink">
                     {trip.name}
                     {switchingId === trip.id && <span className="ml-2 text-[10px] text-muted">切换中…</span>}
                   </span>
@@ -166,6 +196,16 @@ export function TripSwitcher({
                     </span>
                   </span>
                 </button>
+                {trip.isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirming({ id: trip.id, name: trip.name })}
+                    className="tap-link shrink-0 text-[10px] text-coral"
+                    aria-label={`删除「${trip.name}」`}
+                  >
+                    🗑
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -175,26 +215,17 @@ export function TripSwitcher({
           >
             ＋ 创建新行程
           </Link>
-          {isOwner && (
-            <button
-              type="button"
-              onClick={() => setConfirmOpen(true)}
-              className="block w-full border-t border-sand px-[9px] py-[5px] text-left text-[12.5px] text-coral"
-            >
-              🗑 删除此行程
-            </button>
-          )}
         </div>
       )}
 
       <ConfirmDialog
-        open={confirmOpen}
-        message={`确定要删除「${currentTripName}」吗？这趟行程下所有消费记录、钱包、换汇记录、参与者都会一起永久清空，无法恢复。`}
+        open={confirming !== null}
+        message={`确定要删除「${confirming?.name ?? ''}」吗？这趟行程下所有消费记录、钱包、换汇记录、参与者都会一起永久清空，无法恢复。`}
         confirmLabel={deleting ? '删除中…' : '删除'}
         cancelLabel="取消"
         variant="danger"
         onConfirm={handleDeleteConfirmed}
-        onCancel={() => setConfirmOpen(false)}
+        onCancel={() => setConfirming(null)}
       />
     </div>
   );

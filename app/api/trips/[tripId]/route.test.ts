@@ -217,3 +217,117 @@ describe('DELETE /api/trips/[tripId]：只有 owner 能删，级联清空关联�
     expect(res.status).toBe(401);
   });
 });
+
+/**
+ * 行程切换器面板里，otherTrips 列表每一项旁边也带了删除图标（2026-09-12 加），
+ * 点的是"账号名下另一趟自己是 owner、但当前 tel_session 并没有指向"的行程——
+ * 这时 tel_session 还停在原来那趟行程上，上面那组测试用的"identity.tripId ===
+ * params.tripId"判断法在这个场景下判不出来，DELETE handler 因此补了第二条鉴权
+ * 腿：查 tel_user_session 这个账号在目标 tripId 下是不是 owner。这组测试专门
+ * 盯这条新路径，不跟上面混在一起。
+ */
+describe('DELETE /api/trips/[tripId]：跨行程删除（tel_session 停在别处，改用账号身份鉴权）', () => {
+  it('owner 的 tel_session 停在行程A，靠 tel_user_session 删账号名下的行程B：成功且级联清空，行程A不受影响', async () => {
+    const ownerProvision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST', undefined));
+    const ownerUserToken = ownerProvision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    expect(ownerUserToken).toBeTruthy();
+
+    const tripAResponse = await tripsPostHandler(
+      jsonRequest(
+        'http://localhost/api/trips',
+        'POST',
+        undefined,
+        { name: '行程A', baseCurrency: 'MYR', ownerDisplayName: 'Owner', participantNames: [] },
+        ownerUserToken
+      )
+    );
+    const tripABody = (await tripAResponse.json()) as any;
+    const tripAId: string = tripABody.trip.id;
+    const tokenA = tripAResponse.cookies.get(SESSION_COOKIE_NAME)?.value; // 当前 tel_session 停在 A，不是 B
+    expect(tokenA).toBeTruthy();
+
+    const tripBResponse = await tripsPostHandler(
+      jsonRequest(
+        'http://localhost/api/trips',
+        'POST',
+        undefined,
+        { name: '行程B', baseCurrency: 'MYR', ownerDisplayName: 'Owner', participantNames: ['同行人B'] },
+        ownerUserToken
+      )
+    );
+    const tripBBody = (await tripBResponse.json()) as any;
+    const tripBId: string = tripBBody.trip.id;
+    const tokenB = tripBResponse.cookies.get(SESSION_COOKIE_NAME)?.value;
+
+    // 灌一笔消费到 B，等下验证「不带指向 B 的 tel_session、只靠账号身份」删 B
+    // 时级联清空照样生效，不是这条新路径漏了什么。
+    const expenseResponse = await expensesPostHandler(
+      jsonRequest(`http://localhost/api/trips/${tripBId}/expenses`, 'POST', tokenB, {
+        payerParticipantId: tripBBody.trip.ownerParticipantId,
+        amount: 200,
+        currency: 'MYR',
+        category: '交通',
+        expenseDate: new Date().toISOString(),
+      }),
+      { params: { tripId: tripBId } }
+    );
+    expect(expenseResponse.status).toBe(201);
+
+    const participantsBBefore = await db.select().from(participants).where(eq(participants.tripId, tripBId));
+    expect(participantsBBefore.length).toBe(2); // owner + 同行人B
+
+    // 关键请求：cookie 里 tel_session=tokenA（指向 A，不是 B）+
+    // tel_user_session=ownerUserToken，完全模拟"人正待在行程A里，从切换器面板
+    // 点了列表里行程B旁边的删除图标"这个真实场景，不经过 switch-trip。
+    const deleteB = await tripDeleteHandler(
+      jsonRequest(`http://localhost/api/trips/${tripBId}`, 'DELETE', tokenA, undefined, ownerUserToken),
+      { params: { tripId: tripBId } }
+    );
+    expect(deleteB.status).toBe(204);
+
+    const participantsBAfter = await db.select().from(participants).where(eq(participants.tripId, tripBId));
+    const expensesBAfter = await db.select().from(expenses).where(eq(expenses.tripId, tripBId));
+    expect(participantsBAfter.length).toBe(0);
+    expect(expensesBAfter.length).toBe(0);
+
+    // A 完全没被波及：tel_session=tokenA 依然有效，A 还在。
+    const aStillThere = await tripGetHandler(jsonRequest(`http://localhost/api/trips/${tripAId}`, 'GET', tokenA), {
+      params: { tripId: tripAId },
+    });
+    expect(aStillThere.status).toBe(200);
+  });
+
+  it('账号 C 跟目标行程毫无关系，光带着自己的 tel_user_session 想删：404，行程原封不动', async () => {
+    const ownerBProvision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST', undefined));
+    const ownerBUserToken = ownerBProvision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    const tripResponse = await tripsPostHandler(
+      jsonRequest(
+        'http://localhost/api/trips',
+        'POST',
+        undefined,
+        { name: 'B 的行程', baseCurrency: 'MYR', ownerDisplayName: 'OwnerB', participantNames: [] },
+        ownerBUserToken
+      )
+    );
+    const tripBody = (await tripResponse.json()) as any;
+    const tripId: string = tripBody.trip.id;
+    const ownerBToken = tripResponse.cookies.get(SESSION_COOKIE_NAME)?.value;
+
+    const cProvision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST', undefined));
+    const cUserToken = cProvision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    expect(cUserToken).toBeTruthy();
+
+    // 不带任何 tel_session，只带 C 的 tel_user_session：C 在这趟 trip 下没有
+    // participant 行，两条鉴权腿都通不过，404。
+    const deleteAsC = await tripDeleteHandler(
+      jsonRequest(`http://localhost/api/trips/${tripId}`, 'DELETE', undefined, undefined, cUserToken),
+      { params: { tripId } }
+    );
+    expect(deleteAsC.status).toBe(404);
+
+    const stillThere = await tripGetHandler(jsonRequest(`http://localhost/api/trips/${tripId}`, 'GET', ownerBToken), {
+      params: { tripId },
+    });
+    expect(stillThere.status).toBe(200);
+  });
+});
