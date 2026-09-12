@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { yuanToCents } from '@/lib/money';
 
 export interface WalletOption {
@@ -204,9 +205,14 @@ export function ExchangeForm({ tripId, wallets }: { tripId: string; wallets: Wal
 
       {error && <p className="text-base text-coral">{error}</p>}
 
-      <button type="submit" disabled={submitting} className="btn-primary">
-        {submitting ? '保存中…' : '保存充值记录'}
-      </button>
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={submitting} className="btn-primary">
+          {submitting ? '保存中…' : '保存充值记录'}
+        </button>
+        <Link href={`/trips/${tripId}`} className="tap-link text-[12.5px] text-muted">
+          取消
+        </Link>
+      </div>
     </form>
   );
 }

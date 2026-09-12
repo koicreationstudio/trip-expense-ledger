@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { headers } from 'next/headers';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { getDb } from '@/lib/db/client';
@@ -18,8 +19,17 @@ import { AccountIdentityLink } from './account-identity-link';
  * `identityUrl` 用的是同一个"host+协议拼绝对地址"的思路，只是那边能拿到
  * `request.url`，这里是 Server Component 用 `headers()` 读 `host`/
  * `x-forwarded-proto`（Cloudflare 经过的请求都会带这个头）。
+ *
+ * fix(2026-09-12 死路走查)：这页进来之后原本没有任何返回/退出控件，只能靠
+ * 浏览器物理返回键离开（Remy 实测抓到的问题）。这页本身没有 tripId 上下文
+ * （getCurrentUser() 拿的是账号级信息），没法直接知道"该回哪个行程"——
+ * 靠链接来源自己带 `?from=<tripId>` 传过来（TripLayout 头部"我的账号"链接
+ * 已经带了），带了就退回那个行程主页，没带（比如直接从首页点进来，或者
+ * 直接输网址访问）就退回首页，两种情况都是"回到明确知道能到哪的地方"，
+ * 不去校验 from 是不是当前身份能访问的行程——`/trips/[tripId]` 自己那层
+ * `getCurrentIdentity()` 鉴权会兜底，对不上会自己再跳回首页，这里不用重复判断。
  */
-export default async function AccountPage() {
+export default async function AccountPage({ searchParams }: { searchParams?: { from?: string } }) {
   const user = await getCurrentUser();
   if (!user) {
     redirect('/');
@@ -37,8 +47,14 @@ export default async function AccountPage() {
   const protocol = requestHeaders.get('x-forwarded-proto') ?? 'https';
   const identityUrl = host ? `${protocol}://${host}/id/${row.identityToken}` : `/id/${row.identityToken}`;
 
+  const backHref = searchParams?.from ? `/trips/${searchParams.from}` : '/';
+  const backLabel = searchParams?.from ? '返回行程' : '返回首页';
+
   return (
     <main className="flex flex-col gap-6">
+      <Link href={backHref} className="tap-link self-start text-[10px] text-muted hover:text-ink">
+        ← {backLabel}
+      </Link>
       <h1 className="text-base font-semibold text-ink">我的账号</h1>
       <AccountIdentityLink url={identityUrl} />
     </main>

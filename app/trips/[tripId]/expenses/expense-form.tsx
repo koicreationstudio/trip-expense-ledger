@@ -603,11 +603,9 @@ export function ExpenseForm({
         >
           {submitting ? '保存中…' : isEdit ? '保存修改' : '记这笔账'}
         </button>
-        {isEdit && (
-          <Link href={`/trips/${tripId}`} className="tap-link text-[12.5px] text-muted">
-            取消
-          </Link>
-        )}
+        <Link href={`/trips/${tripId}`} className="tap-link text-[12.5px] text-muted">
+          取消
+        </Link>
       </div>
     </form>
   );
