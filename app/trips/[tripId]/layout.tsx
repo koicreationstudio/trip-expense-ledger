@@ -55,7 +55,12 @@ export default async function TripLayout({
       <header className="flex flex-col gap-4 border-b border-sand pb-4">
         <div className="flex items-center justify-between">
           <div>
-            <TripSwitcher currentTripId={trip.id} currentTripName={trip.name} otherTrips={otherTrips} />
+            <TripSwitcher
+              currentTripId={trip.id}
+              currentTripName={trip.name}
+              otherTrips={otherTrips}
+              isOwner={identity.isOwner}
+            />
             <p className="text-[10px] text-muted">本位币 {trip.baseCurrency}</p>
           </div>
           <div className="flex items-center gap-3">
