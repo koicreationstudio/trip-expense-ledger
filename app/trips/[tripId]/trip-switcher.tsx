@@ -203,7 +203,7 @@ export function TripSwitcher({
                     className="tap-link shrink-0 text-[10px] text-coral"
                     aria-label={`删除「${trip.name}」`}
                   >
-                    🗑
+                    🗑 删除
                   </button>
                 )}
               </li>
