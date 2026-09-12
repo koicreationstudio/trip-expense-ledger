@@ -10,6 +10,7 @@ import type { SplitShare } from '@/lib/domain/split';
 import { COMMON_CATEGORIES } from '@/lib/domain/categories';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
 import { FxCompareList } from '../fx-compare-list';
+import { CategoryCombobox } from '@/components/category-combobox';
 
 interface Participant {
   id: string;
@@ -437,20 +438,15 @@ export function ExpenseForm({
         <label className="field-label" htmlFor="category">
           分类
         </label>
-        <input
+        <CategoryCombobox
           id="category"
-          list="category-options"
           required
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={setCategory}
+          options={COMMON_CATEGORIES}
           placeholder="例如：餐饮"
-          className="field-input"
+          inputClassName="field-input"
         />
-        <datalist id="category-options">
-          {COMMON_CATEGORIES.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
       </div>
 
       <div className="flex flex-col gap-1">

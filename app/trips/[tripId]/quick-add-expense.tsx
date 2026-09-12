@@ -7,6 +7,7 @@ import { COMMON_CATEGORIES } from '@/lib/domain/categories';
 import { equalSplit, rescaleSplitToBaseCurrency } from '@/lib/domain/split';
 import type { SplitShare } from '@/lib/domain/split';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
+import { CategoryCombobox } from '@/components/category-combobox';
 
 interface Participant {
   id: string;
@@ -201,19 +202,14 @@ export function QuickAddExpense({
             aria-label="金额"
             className="field-input-dark w-[74px] font-serif tabular-nums"
           />
-          <input
-            list="quickadd-category-options"
+          <CategoryCombobox
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={setCategory}
+            options={COMMON_CATEGORIES}
             placeholder="分类"
-            aria-label="分类"
-            className="field-input-dark min-w-[64px] flex-1"
+            ariaLabel="分类"
+            inputClassName="field-input-dark min-w-[64px] flex-1"
           />
-          <datalist id="quickadd-category-options">
-            {COMMON_CATEGORIES.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
           <select
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
