@@ -150,26 +150,23 @@ export default async function TripPage({ params }: { params: { tripId: string } 
       {/* 「新建钱包」表单的落点：WalletGrid 在 embedded-dark 模式下把表单 portal 到这里，
           让它渲染在深色合并卡外面（浅色表单塞进深色卡里会看不清），设计稿没规格这段所以
           维持现有浅色表单样式，别自己发明深色版本。default 模式的 WalletGrid 用不到这个插槽。
-          data-fab-avoid：表单展开时（尤其 375px 窄屏）emoji 选择行会落进右下角 FAB 常驻的
-          危险区，打上跟「参与者」列表同样的标记，让 FAB 侦测到重叠自动上移让开；表单收起时
-          这个 div 是空的，不占实际高度，不会误触发 FAB 上移。
-          fix(2026-09-12 间距走查)：上面这句"不占实际高度"只对了一半——它自己 height 确实是 0，
+          （原本这里还挂着一个 data-fab-avoid 标记，给当年那个贴右下角的悬浮胶囊用。2026-09-12
+          悬浮胶囊整个换成底部操作条 + 容器预留空白之后，"哪些区块要打标记"这个会漏的步骤连同
+          标记一起删了，详见 record-expense-bar.tsx 顶部注释。）
+          fix(2026-09-12 间距走查)：这个插槽收起时 height 是 0，但
           但 <main> 是 flex flex-col gap-6，gap 是加在"每一对相邻 flex item 之间"的，这个空插槽
           即使 0 高度依然算一个 item，会在 Hero 卡和它之间、它和 FxRateCard 之间各吃一份 gap-6，
           两份叠起来让"净额卡→汇率比价"这段视觉间距变成其它区块间距的整整两倍（实测 48px vs
           24px，就是 Remy 反馈"两处间距肉眼可见不一样"的那两处）。加 empty:hidden：插槽真的
           空的时候（:empty，无子节点）整个从 flex 布局摘掉，不再吃 gap；portal 挂表单进来后
           不再是 :empty，恢复参与 flex 布局正常显示，行为不变。 */}
-      <div id="wallet-form-slot" data-fab-avoid className="empty:hidden" />
+      <div id="wallet-form-slot" className="empty:hidden" />
 
       <FxRateCard tripId={trip.id} baseCurrency={trip.baseCurrency} hasPaymentMethods={myPaymentMethods.length > 0} />
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-ink">参与者</h2>
-        <ul
-          data-fab-avoid
-          className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] shadow-card"
-        >
+        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] shadow-card">
           {tripParticipants.map((p) => {
             const net = netBalances.get(p.id) ?? 0;
             const isMe = p.id === identity.participantId;

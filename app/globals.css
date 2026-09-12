@@ -11,7 +11,45 @@ body {
   color: #373736;
 }
 
+:root {
+  /* 底部「记一笔消费」操作条的高度。操作条本身和页面容器预留的底部空白都从这一个
+     值算出来（.action-bar / .action-bar-reserve），所以两边不可能对不上——这是
+     "滚到底时操作条盖住的永远是空白、不是内容"这条保证的唯一来源。改高度只改这里。
+     安全区（iPhone 下巴）另外用 env(safe-area-inset-bottom) 叠加，不揉进这个值。 */
+  --action-bar-h: 60px;
+}
+
 @layer components {
+  /* 底部操作条：独占屏幕最下面一条横带，不透明、满宽、顶边一条 hairline。
+     高度写死成 var(--action-bar-h) + 安全区（不是靠内容把它撑开），这样
+     .action-bar-reserve 预留的空白跟它严丝合缝，不会因为哪天改了内边距就漂掉。
+     ⚠️ 不要把它改回 `fixed right-4 bottom-4` 那种贴角悬浮胶囊：那个形态跟内容抢
+     坐标，被 Remy 反馈遮挡过三轮，详见 record-expense-bar.tsx 顶部注释。 */
+  .action-bar {
+    @apply fixed inset-x-0 bottom-0 z-20 flex items-center border-t border-sand bg-paper;
+    height: calc(var(--action-bar-h) + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* 操作条上方 20px 的渐隐带：操作条底色跟页面同为 paper，只有一条 hairline 的话，内容
+     滚到条子下面会像"整行字莫名其妙被切掉一半"。加这层从透明到 paper 的渐变，内容是
+     淡出去的而不是被一刀切断，读起来就是"下面还有，滚一下"，跟手机 App 的惯例一致。
+     纯装饰，pointer-events:none，不吃点击。 */
+  .action-bar::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: -20px;
+    height: 20px;
+    pointer-events: none;
+    background: linear-gradient(to top, #f7f7f6, rgba(247, 247, 246, 0));
+  }
+
+  /* 页面容器给操作条预留的底部空白，跟 .action-bar 同源同高。 */
+  .action-bar-reserve {
+    padding-bottom: calc(var(--action-bar-h) + env(safe-area-inset-bottom));
+  }
+
   /* 主操作按钮：DESIGN-BRIEF 第三版圆角尺度改 pill；min-h 44px 是 Apple HIG 最小触控热区（触控热区不算视觉密度，不跟着字号收）。
      字号 2026-09-08 从 text-sm(14px) 收到 12.5px：这个 class 从建库起就没跟上其它模块历轮的紧凑化，是全站字号不一致的公共 chokepoint 之一。 */
   .btn-primary {
