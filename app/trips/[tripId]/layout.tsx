@@ -59,7 +59,13 @@ export default async function TripLayout({
             <p className="text-[10px] text-muted">本位币 {trip.baseCurrency}</p>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/account" className="text-[10px] text-muted hover:text-ink hover:underline">
+            {/* fix(2026-09-12 死路走查)：带上 ?from=当前行程id，让 /account 页面知道
+                「回去」应该回哪——账号页本身没有 tripId 上下文（getCurrentUser() 是账号级，
+                不是行程级），只能靠链接来源自己传，account/page.tsx 读不到就退回首页。 */}
+            <Link
+              href={`/account?from=${trip.id}`}
+              className="text-[10px] text-muted hover:text-ink hover:underline"
+            >
               我的账号
             </Link>
             <LogoutButton />

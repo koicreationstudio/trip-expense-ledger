@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { extractIdentityToken } from '@/lib/domain/identity-recovery';
 
@@ -75,6 +76,12 @@ export function ProvisionGate() {
   if (step === 'ask') {
     return (
       <main className="flex flex-col gap-6">
+        {/* fix(2026-09-12 死路走查)：这一步没有账号，还没走到"建行程"这个动作本身，
+            改主意想先回首页看看（比如想找找有没有身份链接/邀请链接）应该随时能走，
+            不用被卡在这一步只能物理返回键。 */}
+        <Link href="/" className="tap-link self-start text-[10px] text-muted hover:text-ink">
+          ← 返回首页
+        </Link>
         <div>
           <h1 className="text-base font-semibold text-ink">先确认一下</h1>
           <p className="mt-2 text-[10px] text-muted">
@@ -148,6 +155,15 @@ export function ProvisionGate() {
         <button type="button" onClick={() => router.refresh()} className="btn-primary">
           我已保存，继续创建行程
         </button>
+        {/* fix(2026-09-12 死路走查)：这一步账号其实已经开好了（handleStart 那次
+            POST /api/account/provision 已经写进数据库），"我已保存，继续创建行程"
+            只是确认闸门，不是必须马上点的强制步骤——不想现在就建行程也能先离开，
+            这条链接之后随时能在"我的账号"页面重新看到，不会因为跳走而丢失。
+            故意做成弱化的次级文字链接（不是 btn-secondary），不跟上面的主按钮
+            抢视觉重量，避免看起来像"两个都能选的平级选项"淡化了先复制保存这件事。 */}
+        <Link href="/" className="tap-link self-start text-[10px] text-muted hover:text-ink">
+          稍后再建，先返回首页
+        </Link>
       </main>
     );
   }
