@@ -77,12 +77,12 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
   return (
     <main className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-base font-semibold text-gold-dk">{trip.name}</h1>
-        <p className="mt-0.5 text-[10px] text-muted">
-          本位币 {trip.baseCurrency} · {STATUS_LABEL[trip.status] ?? trip.status}
-        </p>
-      </div>
+      {/* fix(2026-09-12 标题栏走查反馈)：行程名不在这里重复显示了——头部导航的
+          TripSwitcher（layout.tsx）已经是这个行程唯一的大标题+切换入口，这里再放
+          一次同样的名字纯粹是重复信息，删掉只留这页自己的补充信息（本位币/状态）。 */}
+      <p className="text-[10px] text-muted">
+        本位币 {trip.baseCurrency} · {STATUS_LABEL[trip.status] ?? trip.status}
+      </p>
 
       {/* 方案C（DESIGN-BRIEF-hero-wallet-variants.html 第151-176/300-324行，第十六轮拍板）：
           净额卡+我的钱包合并成一张深色卡，中间一条细分隔线分两层，钱包胶囊嵌在卡片底部，

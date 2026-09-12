@@ -31,12 +31,23 @@ export interface InitialExpense {
   paymentMethodId: string | null;
 }
 
+export type SplitMode = 'onlyMe' | 'equal' | 'custom';
+
+const SPLIT_MODE_OPTIONS: { value: SplitMode; label: string }[] = [
+  { value: 'onlyMe', label: '仅我自己' },
+  { value: 'equal', label: '平分' },
+  { value: 'custom', label: '自定义分摊' },
+];
+
 /**
  * 编辑一笔已有消费时，从数据库存的 splits（本位币金额）反推表单要用的原生币种
- * 分摊金额和是否为「自定义分摊」——DB 只存本位币份额，不存用户当初输入的原生
+ * 分摊金额和当初是哪一档分摊模式——DB 只存本位币份额，不存用户当初输入的原生
  * 币种拆法，这里按这笔消费自己的 amount/amountBaseCurrency 比例换算回去，只作
  * 初始展示值，可能有几分钱的舍入误差；真正提交时会用 rescaleSplitToBaseCurrency
  * 重新精确换算，不依赖这里的结果。
+ *
+ * 三档判断顺序：先看是不是全员等分（默认档），再看是不是「只有代垫人自己一个人、
+ * 份额等于全额」（仅我自己档，2026-09-12 新增），剩下的才归自定义分摊。
  */
 function deriveInitialSplitState(initialExpense: InitialExpense, participants: Participant[]) {
   const allIds = participants.map((p) => p.id);
@@ -48,8 +59,21 @@ function deriveInitialSplitState(initialExpense: InitialExpense, participants: P
 
   if (isDefaultEqualSplit) {
     return {
-      customSplit: false,
+      splitMode: 'equal' as const,
       splitIncluded: Object.fromEntries(allIds.map((id) => [id, true])),
+      splitAmounts: {} as Record<string, string>,
+    };
+  }
+
+  const isOnlyPayer =
+    initialExpense.splits.length === 1 &&
+    initialExpense.splits[0]?.participantId === initialExpense.payerParticipantId &&
+    initialExpense.splits[0]?.shareAmountBaseCurrency === initialExpense.amountBaseCurrency;
+
+  if (isOnlyPayer) {
+    return {
+      splitMode: 'onlyMe' as const,
+      splitIncluded: Object.fromEntries(allIds.map((id) => [id, id === initialExpense.payerParticipantId])),
       splitAmounts: {} as Record<string, string>,
     };
   }
@@ -66,7 +90,7 @@ function deriveInitialSplitState(initialExpense: InitialExpense, participants: P
     })
   );
 
-  return { customSplit: true, splitIncluded, splitAmounts };
+  return { splitMode: 'custom' as const, splitIncluded, splitAmounts };
 }
 
 export function ExpenseForm({
@@ -110,7 +134,7 @@ export function ExpenseForm({
     initialExpense?.paymentMethodId ?? null
   );
 
-  const [customSplit, setCustomSplit] = useState(initialSplitState?.customSplit ?? false);
+  const [splitMode, setSplitMode] = useState<SplitMode>(initialSplitState?.splitMode ?? 'equal');
   const [splitIncluded, setSplitIncluded] = useState<Record<string, boolean>>(
     initialSplitState?.splitIncluded ?? Object.fromEntries(participants.map((p) => [p.id, true]))
   );
@@ -124,7 +148,16 @@ export function ExpenseForm({
     (sum, p) => sum + yuanToCents(Number(splitAmounts[p.id]) || 0),
     0
   );
-  const splitMismatch = customSplit && splitCentsTotal !== amountCentsTotal;
+  const splitMismatch = splitMode === 'custom' && splitCentsTotal !== amountCentsTotal;
+
+  function handleSelectSplitMode(mode: SplitMode) {
+    setSplitMode(mode);
+    // 第一次点开自定义分摊且还没填过分摊金额时，先按当前金额平均分好，免得一打开就要
+    // 面对空白/总和为 0 的红字。
+    if (mode === 'custom' && Object.keys(splitAmounts).length === 0 && amountCentsTotal > 0 && includedParticipants.length > 0) {
+      handleEqualizeSplit();
+    }
+  }
 
   function handleEqualizeSplit() {
     if (includedParticipants.length === 0) return;
@@ -202,7 +235,11 @@ export function ExpenseForm({
 
     let splits: SplitShare[] | undefined;
 
-    if (customSplit) {
+    if (splitMode === 'onlyMe') {
+      // 「仅我自己」= 分摊名单收窄成代垫人一个人、份额是全额，复用跟自定义分摊
+      // 一样的 SplitShare[] 结构，不新造数据模型。
+      splits = equalSplit(amountBaseCurrency, [payerParticipantId]);
+    } else if (splitMode === 'custom') {
       const included = participants.filter((p) => splitIncluded[p.id]);
       if (included.length === 0) {
         setError('自定义分摊至少要选一个人');
@@ -455,20 +492,38 @@ export function ExpenseForm({
           text-xs(12px) 三种字号混着用，逐个对齐 DESIGN-SYSTEM-INTERNAL.md 字号阶梯：
           "自定义分摊"是这个盒子的小节标题，跟上面"这笔用哪张卡最划算？"同类角色，改用
           field-label 同款 10px；同行人姓名/金额是清单主内容，对齐 field-input 的
-          12.5px；说明性小字（默认平分提示/币种单位/已分配汇总）统一收进 10px 副信息档。 */}
+          12.5px；说明性小字（默认平分提示/币种单位/已分配汇总）统一收进 10px 副信息档。
+          fix(2026-09-12 分摊逻辑反馈)：原本只有"自定义分摊"勾选框，不勾默认强制全员
+          平分——纯粹自己的消费也被逼着分给同行者。改成三档单选（仅我自己/平分/自定义
+          分摊），"仅我自己"不新造数据结构，复用跟自定义分摊一样的 SplitShare[]。 */}
       <div className="flex flex-col gap-2 rounded-xl border border-sand bg-paper p-3">
-        <label className="field-label flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={customSplit}
-            onChange={(e) => setCustomSplit(e.target.checked)}
-          />
-          自定义分摊（不勾选默认全员等分）
-        </label>
+        <span className="field-label">这笔怎么分摊</span>
+        <div className="flex flex-wrap gap-1.5">
+          {SPLIT_MODE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => handleSelectSplitMode(opt.value)}
+              aria-pressed={splitMode === opt.value}
+              className={
+                splitMode === opt.value
+                  ? 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[10px] text-[10px] font-medium text-white transition-colors'
+                  : 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[10px] text-[10px] font-medium text-muted transition-colors hover:text-ink'
+              }
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
 
-        {!customSplit && <p className="text-[10px] text-muted">默认所有参与者平均分摊这笔消费。</p>}
+        {splitMode === 'equal' && <p className="text-[10px] text-muted">默认所有参与者平均分摊这笔消费。</p>}
+        {splitMode === 'onlyMe' && (
+          <p className="text-[10px] text-muted">
+            这笔只算在「谁代垫的」自己头上，不分给其他同行者——适合纯粹自己的消费。
+          </p>
+        )}
 
-        {customSplit && (
+        {splitMode === 'custom' && (
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-1">
               {participants.map((p) => (

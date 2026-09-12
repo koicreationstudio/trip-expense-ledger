@@ -36,8 +36,12 @@ export function TripSwitcher({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
+  // fix(2026-09-12 标题栏走查反馈)：这是每个子页面顶部唯一真正的"行程标题"（下面
+  // page.tsx 那个重复的 <h1> 已经拿掉），原本 12.5px 跟其它次级文字同一档，读起来
+  // 不像标题。改成 text-lg font-bold，跟 "记一笔消费"这类页面 h1（text-base）比也
+  // 更大更重，撑得起"标题栏"这个角色。
   if (otherTrips.length === 0) {
-    return <p className="text-[12.5px] font-semibold text-gold-dk">{currentTripName}</p>;
+    return <p className="text-lg font-bold text-gold-dk">{currentTripName}</p>;
   }
 
   async function handleSwitch(tripId: string) {
@@ -66,10 +70,10 @@ export function TripSwitcher({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-[32px] items-center gap-1 text-[12.5px] font-semibold text-gold-dk"
+        className="inline-flex min-h-[32px] items-center gap-1 text-lg font-bold text-gold-dk"
       >
         {currentTripName}
-        <span className="text-[10px] text-muted" aria-hidden="true">
+        <span className="text-sm text-muted" aria-hidden="true">
           ▾
         </span>
       </button>

@@ -2,5 +2,9 @@
  * 常用消费分类，够 v0.1 用；完整记账表单（expense-form.tsx）和快速记账
  * （quick-add-expense.tsx）共用同一份，不各自维护一份列表容易慢慢漂移。
  * 不是穷举，用户要的分类不在列表里也可以手动打字（两处都接的是 datalist，不是 select）。
+ *
+ * 每项前面带一个emoji方便下拉时一眼认出来（2026-09-12 走查反馈）。emoji是这份
+ * 列表值本身的一部分，选中即写入这笔消费的category字段——历史上已经记过的、
+ * 没带emoji的旧分类文字不会被这次改动动到，新记的账走下拉才会带上。
  */
-export const COMMON_CATEGORIES = ['餐饮', '交通', '住宿', '门票', '购物', '其他'] as const;
+export const COMMON_CATEGORIES = ['🍜 餐饮', '🚗 交通', '🏨 住宿', '🎫 门票', '🛍️ 购物', '📦 其他'] as const;

@@ -21,6 +21,14 @@ const API_ERROR_LABEL: Record<string, string> = {
   splits_do_not_sum_to_total: '自定义分摊金额总和要等于消费总金额',
 };
 
+type SplitMode = 'onlyMe' | 'equal' | 'custom';
+
+const SPLIT_MODE_OPTIONS: { value: SplitMode; label: string }[] = [
+  { value: 'onlyMe', label: '仅我自己' },
+  { value: 'equal', label: '平分' },
+  { value: 'custom', label: '自定义分摊' },
+];
+
 /**
  * 「我的钱包」区块里的行内快速记账：只填金额/分类/币种（+ 非本位币时的汇率）就能提交，
  * 走的还是完整记账表单同一个 POST /api/trips/{tripId}/expenses 接口（复用同一套
@@ -28,9 +36,12 @@ const API_ERROR_LABEL: Record<string, string> = {
  * 的产品判断（quickadd 是「我的钱包」个人视角区块，不在这里暴露选人），没有对不上
  * 就别改，改法应该是先跟 Remy 确认。
  *
- * 分摊默认全员等分（不传 splits，交给后端 equalSplit 自动分），但保留跟完整表单对等
- * 的自定义分摊能力：点开「自定义分摊」才展出逐人勾选 + 金额输入，渐进式收起，不占
- * 常态下的版面。
+ * 分摊三档（2026-09-12 走查反馈：之前只有"平分/自定义"两档，纯粹自己的消费也被
+ * 强制分给同行者）——「仅我自己」/「平分」/「自定义分摊」。「仅我自己」不新造数据
+ * 结构，复用跟自定义分摊一样的 SplitShare[]，只是参与者收窄成自己一个人、份额是
+ * 全额（等价于 equalSplit(amountBaseCurrency, [myParticipantId])，equalSplit 单人
+ * 时本来就是全额，split.test.ts 已经覆盖这个行为）。「平分」不传 splits，交给后端
+ * equalSplit 自动分。「自定义分摊」点开才展出逐人勾选 + 金额输入。
  */
 export function QuickAddExpense({
   tripId,
@@ -52,7 +63,7 @@ export function QuickAddExpense({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [customSplit, setCustomSplit] = useState(false);
+  const [splitMode, setSplitMode] = useState<SplitMode>('equal');
   const [splitIncluded, setSplitIncluded] = useState<Record<string, boolean>>(
     Object.fromEntries(participants.map((p) => [p.id, true]))
   );
@@ -67,7 +78,7 @@ export function QuickAddExpense({
     (sum, p) => sum + yuanToCents(Number(splitAmounts[p.id]) || 0),
     0
   );
-  const splitMismatch = customSplit && splitCentsTotal !== amountCentsTotal;
+  const splitMismatch = splitMode === 'custom' && splitCentsTotal !== amountCentsTotal;
 
   function handleEqualizeSplit() {
     if (includedParticipants.length === 0) return;
@@ -81,11 +92,11 @@ export function QuickAddExpense({
     });
   }
 
-  function handleOpenCustomSplit() {
-    setCustomSplit(true);
-    // 第一次点开且还没填过分摊金额时，先按当前金额平均分好，免得一打开就要面对空白/总和为
-    // 0 的红字——用户从这份等分基准上再调，比从零开始填更快。
-    if (Object.keys(splitAmounts).length === 0 && amountCentsTotal > 0 && includedParticipants.length > 0) {
+  function handleSelectSplitMode(mode: SplitMode) {
+    setSplitMode(mode);
+    // 第一次点开自定义分摊且还没填过分摊金额时，先按当前金额平均分好，免得一打开就要
+    // 面对空白/总和为 0 的红字——用户从这份等分基准上再调，比从零开始填更快。
+    if (mode === 'custom' && Object.keys(splitAmounts).length === 0 && amountCentsTotal > 0 && includedParticipants.length > 0) {
       handleEqualizeSplit();
     }
   }
@@ -95,7 +106,7 @@ export function QuickAddExpense({
     setCategory('');
     setCurrency(baseCurrency);
     setFxRateUsed('');
-    setCustomSplit(false);
+    setSplitMode('equal');
     setSplitIncluded(Object.fromEntries(participants.map((p) => [p.id, true])));
     setSplitAmounts({});
   }
@@ -122,7 +133,9 @@ export function QuickAddExpense({
     const amountBaseCurrency = needsManualFxRate ? Math.round(amountCents * Number(fxRateUsed)) : amountCents;
 
     let splits: SplitShare[] | undefined;
-    if (customSplit) {
+    if (splitMode === 'onlyMe') {
+      splits = equalSplit(amountBaseCurrency, [myParticipantId]);
+    } else if (splitMode === 'custom') {
       if (includedParticipants.length === 0) {
         setError('自定义分摊至少要选一个人');
         return;
@@ -235,15 +248,24 @@ export function QuickAddExpense({
           />
         )}
 
-        <button
-          type="button"
-          onClick={() => (customSplit ? setCustomSplit(false) : handleOpenCustomSplit())}
-          className="self-start text-[10px] text-hero-label underline underline-offset-2"
-        >
-          {customSplit ? '收起自定义分摊 ▲' : '全员平分 · 展开自定义分摊 ▾'}
-        </button>
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[9.5px] text-hero-label">分摊</span>
+          {SPLIT_MODE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => handleSelectSplitMode(opt.value)}
+              aria-pressed={splitMode === opt.value}
+              className={`inline-flex min-h-[22px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-2 text-[9.5px] font-medium transition-colors ${
+                splitMode === opt.value ? 'bg-white text-ink' : 'bg-white/[.1] text-white hover:bg-white/[.16]'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
 
-        {customSplit && (
+        {splitMode === 'custom' && (
           <div className="flex flex-col gap-1 rounded-[8px] bg-white/[.05] p-1.5">
             {participants.map((p) => (
               <div key={p.id} className="flex items-center gap-1.5">
