@@ -328,7 +328,7 @@ export function ExpenseForm({
             value={amountYuan}
             onChange={(e) => setAmountYuan(e.target.value)}
             placeholder="0.00"
-            className="field-input font-serif text-lg font-medium tabular-nums"
+            className="field-input font-serif font-medium tabular-nums"
           />
         </div>
         <div className="flex flex-col gap-1">
