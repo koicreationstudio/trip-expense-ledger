@@ -111,7 +111,14 @@ export function PaymentMethodsManager() {
                     </span>
                     <span className="mt-0.5 border-t border-dashed border-sand pt-1 text-[10px] text-muted">
                       汇率加点 {m.fxMarkupPercent}% · 境外手续费 {m.foreignTxnFeePercent}% · 返现 {m.cashbackPercent}%
-                      {m.fixedFee > 0 && ` · 固定费 ${formatMoney(m.fixedFee, m.settlementCurrency)}`}
+                      {m.fixedFee > 0 && (
+                        <>
+                          {' · 固定费 '}
+                          <span className="font-serif tabular-nums">
+                            {formatMoney(m.fixedFee, m.settlementCurrency)}
+                          </span>
+                        </>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -219,7 +226,7 @@ export function PaymentMethodsManager() {
                 min="0"
                 value={form.fixedFeeYuan}
                 onChange={(e) => setForm((f) => ({ ...f, fixedFeeYuan: e.target.value }))}
-                className="field-input"
+                className="field-input font-serif tabular-nums"
               />
             </div>
             <div className="flex flex-col gap-1">

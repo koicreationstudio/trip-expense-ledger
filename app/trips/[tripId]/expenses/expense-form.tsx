@@ -560,7 +560,7 @@ export function ExpenseForm({
                       setSplitAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))
                     }
                     placeholder="0.00"
-                    className="field-input w-28"
+                    className="field-input w-28 font-serif tabular-nums"
                   />
                   <span className="text-[10px] text-muted">{currency}</span>
                 </div>
@@ -574,8 +574,10 @@ export function ExpenseForm({
               >
                 平均分给已勾选的人
               </button>
-              <span className={`text-[10px] tabular-nums ${splitMismatch ? 'text-coral' : 'text-ok'}`}>
-                已分配 {formatMoney(splitCentsTotal, currency)} / 共 {formatMoney(amountCentsTotal, currency)}
+              <span className={`text-[10px] ${splitMismatch ? 'text-coral' : 'text-ok'}`}>
+                已分配{' '}
+                <span className="font-serif tabular-nums">{formatMoney(splitCentsTotal, currency)}</span> / 共{' '}
+                <span className="font-serif tabular-nums">{formatMoney(amountCentsTotal, currency)}</span>
               </span>
             </div>
             {splitMismatch && (

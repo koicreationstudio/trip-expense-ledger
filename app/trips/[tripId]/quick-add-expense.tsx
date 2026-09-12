@@ -281,7 +281,7 @@ export function QuickAddExpense({
                   onChange={(e) => setSplitAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))}
                   placeholder="0.00"
                   aria-label={`${p.displayName} 分摊金额`}
-                  className="field-input-dark w-20"
+                  className="field-input-dark w-20 font-serif tabular-nums"
                 />
                 <span className="text-[9px] text-hero-label">{currency}</span>
               </div>
@@ -294,8 +294,10 @@ export function QuickAddExpense({
               >
                 平分给已勾选的人
               </button>
-              <span className={`text-[9.5px] tabular-nums ${splitMismatch ? 'text-negative-dk' : 'text-positive-dk'}`}>
-                已分配 {formatMoney(splitCentsTotal, currency)} / {formatMoney(amountCentsTotal, currency)}
+              <span className={`text-[9.5px] ${splitMismatch ? 'text-negative-dk' : 'text-positive-dk'}`}>
+                已分配{' '}
+                <span className="font-serif tabular-nums">{formatMoney(splitCentsTotal, currency)}</span> /{' '}
+                <span className="font-serif tabular-nums">{formatMoney(amountCentsTotal, currency)}</span>
               </span>
             </div>
           </div>
