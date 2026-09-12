@@ -46,6 +46,7 @@ export function toExpenseDto(row: ExpenseRow) {
     fxRateSource: row.fxRateSource,
     paymentMethodId: row.paymentMethodId,
     category: row.category,
+    merchant: row.merchant,
     note: row.note,
     hasReceipt: row.receiptPath !== null,
     expenseDate: row.expenseDate.toISOString(),

@@ -213,6 +213,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
           expenses={tripExpenses.map((e) => ({
             id: e.id,
             category: e.category,
+            merchant: e.merchant,
             amount: e.amount,
             currency: e.currency,
             expenseDate: e.expenseDate.toISOString(),

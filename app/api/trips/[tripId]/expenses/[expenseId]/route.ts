@@ -113,6 +113,9 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
         // 钱包扣减只在创建那一刻发生一次，这是 v1 明确的简化边界（见 POST handler 注释）。
         paymentMethodId: body.paymentMethodId !== undefined ? body.paymentMethodId : existing.paymentMethodId,
         category: body.category ?? existing.category,
+        // body.merchant === '' 是显式清空（表单把商家名称删空后提交），跟 undefined
+        // 的"没传这个字段，保持原值"分开处理，用 || null 把空字符串归一化成 null。
+        merchant: body.merchant !== undefined ? body.merchant || null : existing.merchant,
         note: body.note !== undefined ? body.note : existing.note,
         expenseDate: body.expenseDate ? new Date(body.expenseDate) : existing.expenseDate,
         updatedAt: new Date(),

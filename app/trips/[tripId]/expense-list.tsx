@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 export interface ExpenseListItem {
   id: string;
   category: string;
+  merchant: string | null;
   amount: number;
   currency: string;
   expenseDate: string; // ISO
@@ -97,7 +98,10 @@ export function ExpenseList({
                   统一单行（不换行）是为了不同卡片之间高度一致，避免有的卡片单行、
                   有的因为名字长换成两行，看起来参差不齐（ui-auditor 走查点名过这个）。 */}
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="text-[12.5px] font-medium">{e.category}</span>
+                <span className="text-[12.5px] font-medium">
+                  {e.category}
+                  {e.merchant && <span className="font-normal text-muted"> · {e.merchant}</span>}
+                </span>
                 <span className="truncate text-[10px] text-muted">
                   {e.payerName} · {e.expenseDate.slice(5, 10)}
                   {e.hasReceipt && ' · 有收据'}

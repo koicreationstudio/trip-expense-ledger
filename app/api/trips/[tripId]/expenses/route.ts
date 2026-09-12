@@ -79,6 +79,7 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
     fxRateSource: 'manual',
     paymentMethodId: body.paymentMethodId ?? null,
     category: body.category,
+    merchant: body.merchant || null,
     note: body.note ?? null,
     expenseDate: new Date(body.expenseDate),
   });

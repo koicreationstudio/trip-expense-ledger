@@ -183,6 +183,9 @@ export const expenses = sqliteTable(
     // 只用于「记账时钱包自动扣减」这一件事，不影响结算计算。
     paymentMethodId: text('payment_method_id').references(() => paymentMethods.id, { onDelete: 'set null' }),
     category: text('category').notNull(),
+    // 商家名称，纯展示用的可选备注性字段，不参与任何计算/校验（2026-09-12 新增，
+    // Remy 反馈同分类下多笔消费光看分类分不清是哪一笔）。
+    merchant: text('merchant'),
     note: text('note'),
     receiptPath: text('receipt_path'),
     expenseDate: integer('expense_date', { mode: 'timestamp_ms' }).notNull(),

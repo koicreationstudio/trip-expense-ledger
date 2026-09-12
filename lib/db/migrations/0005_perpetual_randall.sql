@@ -1,0 +1,1 @@
+ALTER TABLE `expense` ADD `merchant` text;

@@ -57,6 +57,7 @@ export default async function EditExpensePage({
           currency: expense.currency,
           payerParticipantId: expense.payerParticipantId,
           category: expense.category,
+          merchant: expense.merchant,
           note: expense.note,
           expenseDate: expense.expenseDate.toISOString(),
           fxRateUsed: expense.fxRateUsed,

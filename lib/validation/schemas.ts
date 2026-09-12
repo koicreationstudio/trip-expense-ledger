@@ -28,6 +28,9 @@ export const createExpenseSchema = z.object({
   // 比价卡片里选定实际使用的支付方式，可空（不比价/不选也能记账）。
   paymentMethodId: z.string().min(1).optional(),
   category: z.string().trim().min(1).max(100),
+  // 商家名称，纯展示用可选字段；允许空字符串（编辑时借它表达"清空"，跟 note
+  // 的处理方式一致：undefined = 不改这个字段，空字符串 = 显式清空）。
+  merchant: z.string().trim().max(200).optional(),
   note: z.string().trim().max(2000).optional(),
   expenseDate: z.string().datetime(),
   // 不传就在路由里按 trip 全部参与者等分

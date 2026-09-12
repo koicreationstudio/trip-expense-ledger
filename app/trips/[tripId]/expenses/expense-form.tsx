@@ -22,6 +22,7 @@ export interface InitialExpense {
   currency: string;
   payerParticipantId: string;
   category: string;
+  merchant: string | null;
   note: string | null;
   expenseDate: string; // ISO
   fxRateUsed: number;
@@ -116,6 +117,7 @@ export function ExpenseForm({
   const [currency, setCurrency] = useState(initialExpense?.currency ?? baseCurrency);
   const [payerParticipantId, setPayerParticipantId] = useState(initialExpense?.payerParticipantId ?? myParticipantId);
   const [category, setCategory] = useState(initialExpense?.category ?? '');
+  const [merchant, setMerchant] = useState(initialExpense?.merchant ?? '');
   const [expenseDate, setExpenseDate] = useState(
     initialExpense ? initialExpense.expenseDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
   );
@@ -277,6 +279,9 @@ export function ExpenseForm({
           fxRateUsed: needsManualFxRate ? Number(fxRateUsed) : undefined,
           paymentMethodId: selectedPaymentMethodId ?? undefined,
           category: category.trim(),
+          // 一律显式传（不像 note 那样空值转 undefined）：编辑时要能靠传空字符串
+          // 清空已有商家名，undefined 在 PATCH 语义里是「不改这个字段」，两者不能混用。
+          merchant: merchant.trim(),
           note: note.trim() || undefined,
           expenseDate: new Date(expenseDate).toISOString(),
           splits,
@@ -446,6 +451,19 @@ export function ExpenseForm({
             <option key={c} value={c} />
           ))}
         </datalist>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="merchant">
+          商家名称（可选）
+        </label>
+        <input
+          id="merchant"
+          value={merchant}
+          onChange={(e) => setMerchant(e.target.value)}
+          placeholder="例如：星巴克"
+          className="field-input"
+        />
       </div>
 
       <div className="flex flex-col gap-1">
