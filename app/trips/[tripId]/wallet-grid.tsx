@@ -188,7 +188,7 @@ export function WalletGrid({
           type="number"
           min="0"
           step="0.01"
-          className="field-input"
+          className="field-input font-serif tabular-nums"
           placeholder="0.00"
           value={initialBalanceYuan}
           onChange={(e) => setInitialBalanceYuan(e.target.value)}

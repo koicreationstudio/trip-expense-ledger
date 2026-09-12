@@ -564,7 +564,7 @@ export function ExpenseForm({
                       setSplitAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))
                     }
                     placeholder="0.00"
-                    className="field-input w-28"
+                    className="field-input w-28 font-serif tabular-nums"
                   />
                   <span className="text-[10px] text-muted">{currency}</span>
                 </div>

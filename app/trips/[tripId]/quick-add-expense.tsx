@@ -285,7 +285,7 @@ export function QuickAddExpense({
                   onChange={(e) => setSplitAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))}
                   placeholder="0.00"
                   aria-label={`${p.displayName} 分摊金额`}
-                  className="field-input-dark w-20"
+                  className="field-input-dark w-20 font-serif tabular-nums"
                 />
                 <span className="text-[9px] text-hero-label">{currency}</span>
               </div>

@@ -226,7 +226,7 @@ export function PaymentMethodsManager() {
                 min="0"
                 value={form.fixedFeeYuan}
                 onChange={(e) => setForm((f) => ({ ...f, fixedFeeYuan: e.target.value }))}
-                className="field-input"
+                className="field-input font-serif tabular-nums"
               />
             </div>
             <div className="flex flex-col gap-1">
