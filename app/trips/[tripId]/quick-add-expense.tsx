@@ -170,7 +170,7 @@ export function QuickAddExpense({
 
   return (
     <div className="mt-1 flex flex-col gap-1.5 rounded-[10px] bg-white/[.06] p-2">
-      <span className="text-[9px] uppercase tracking-wide text-hero-label">⚡ 快速记账</span>
+      <span className="text-[12.5px] uppercase tracking-wide text-hero-label">⚡ 快速记账</span>
       {/* noValidate: 金额输入框带 min="0.01" 这类 HTML5 constraint，浏览器会在
           onSubmit 的 preventDefault 真正执行前抢先用 reportValidity() 弹出原生
           英文提示气泡（比如"填 0"这个具体数值会被 min 拦截，只有"留空"才轮得到

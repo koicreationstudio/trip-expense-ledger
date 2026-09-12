@@ -75,7 +75,11 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {error && <p className="text-base text-coral">{error}</p>}
+      {error && (
+        <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+          {error}
+        </p>
+      )}
       {activeTrips.length > 0 && (
         <div className="flex flex-col gap-2">
           {showSectionLabels && <h2 className="text-[10px] font-medium text-muted">进行中</h2>}
@@ -150,7 +154,7 @@ function TripCard({
           总消费 {formatMoney(trip.totalExpenseBaseCurrency, trip.baseCurrency)} · {trip.expenseCount} 笔
         </span>
       )}
-      {switching && <span className="text-xs text-muted">打开中…</span>}
+      {switching && <span className="text-[10px] text-muted">打开中…</span>}
     </button>
   );
 }

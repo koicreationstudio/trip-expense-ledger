@@ -74,7 +74,7 @@ export function ProvisionGate() {
         <h1 className="text-base font-semibold text-ink">创建新行程</h1>
         <p className="mt-2 text-[10px] text-muted">第一次建行程要先帮你建一个专属身份，不需要邮箱密码，几秒钟就好。</p>
       </div>
-      {error && <p className="text-sm text-coral">{error}</p>}
+      {error && <p className="text-[10px] text-coral">{error}</p>}
       <button type="button" onClick={handleStart} disabled={provisioning} className="btn-primary">
         {provisioning ? '开号中…' : '开始'}
       </button>

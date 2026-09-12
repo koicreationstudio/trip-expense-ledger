@@ -50,8 +50,8 @@ export function ClaimForm({
     const nextParam = encodeURIComponent(`/trips/${tripId}`);
     return (
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-muted">认领成功，可以直接开始记账了。</p>
-        <p className="text-sm text-muted">
+        <p className="text-[10px] text-muted">认领成功，可以直接开始记账了。</p>
+        <p className="text-[10px] text-muted">
           要不要顺手注册账号，这样以后能在任何设备找到这个行程？
           <Link href={`/login?next=${nextParam}`} className="tap-link ml-1">
             登录
@@ -92,7 +92,11 @@ export function ClaimForm({
         </select>
       </div>
 
-      {error && <p className="text-base text-coral">{error}</p>}
+      {error && (
+        <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+          {error}
+        </p>
+      )}
 
       <button
         type="submit"

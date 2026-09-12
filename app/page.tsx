@@ -72,7 +72,7 @@ export default async function HomePage({ searchParams }: { searchParams?: { iden
   return (
     <main className="flex flex-col gap-6">
       {searchParams?.identity_invalid && (
-        <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-xs text-coral">
+        <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
           这条身份链接无效或已失效，请重新确认链接是否正确。
         </p>
       )}

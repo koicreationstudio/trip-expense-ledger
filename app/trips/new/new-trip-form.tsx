@@ -123,7 +123,11 @@ export function NewTripForm() {
         </button>
       </div>
 
-      {error && <p className="text-base text-coral">{error}</p>}
+      {error && (
+        <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+          {error}
+        </p>
+      )}
 
       <button
         type="submit"
