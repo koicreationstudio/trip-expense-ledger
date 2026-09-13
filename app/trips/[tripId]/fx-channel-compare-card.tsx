@@ -167,6 +167,30 @@ export function FxChannelCompareCard({ enabledCurrencies }: { enabledCurrencies:
                 </p>
               ) : (
                 <>
+                  {/* fix(2026-09-14 Artifact Version 10 走查补做)：Artifact `.fx-base-row` 这
+                      两张「1 MYR=/1 USD=」基准换算卡片，之前联动 enabledCurrencies 的改动
+                      （resolveBaseCandidates/resolveTargetCandidates）做完了，但卡片本身一直
+                      没渲染出来——这两处不是同一件事，这里补上真正的卡片。每个基准候选各出
+                      一张，显示这个基准换算成当前选中目标币种的汇率，跟着 effectiveTarget
+                      变、跟着 baseCandidates（已经收窄过 enabledCurrencies）变，不重新写死。 */}
+                  <div className="flex flex-wrap gap-2">
+                    {baseCandidates.map((b) => {
+                      const rate = FX_RATES[b]?.[effectiveTarget];
+                      if (rate === undefined) return null;
+                      return (
+                        <div
+                          key={b}
+                          className="flex min-w-[100px] flex-1 flex-col items-center gap-0.5 rounded-xl border border-sand bg-paper px-[9px] py-[8px]"
+                        >
+                          <span className="text-[9px] text-muted">1 {b}</span>
+                          <span className="font-serif text-[13px] font-semibold tabular-nums text-ink">
+                            = {rate.toFixed(3)} {FX_SYMBOLS[effectiveTarget] ?? ''}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
                   <div className="flex flex-wrap gap-2">
                     {targetCandidates.map((c) => (
                       <button

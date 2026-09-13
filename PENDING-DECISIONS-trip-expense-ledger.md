@@ -1,5 +1,52 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-14 凌晨，第七轮，ui-auditor 逐屏走查抓出 3 个结构性缺口 + 5 处呈现差异，独立 session 熬夜做完，新 session 从这里读起】
+
+背景：Remy 睡前交代"按 artifacts proposal 里那样部署，明早起来要看到一模一样"，这个 session 独立执行到底、中途不等确认。起手前 ui-auditor 先做过一轮线上页面 vs Artifact Version 10 的逐屏截图比对（`~/Desktop/Claude/live-*.png` / `artifact-*.png`），抓出 10 条差异，这轮逐条核实+修。
+
+**⚠️ 重要事故记录：Artifact Version 10（`https://claude.ai/code/artifact/86772aaa-6ddc-4fd6-bff1-798788f15d1b`）这轮任务开始时已经读不到了**——`Artifact` 工具 `read` 报"not found"，`list`（scope=all，我自己发布过的 11 个 artifact 里没有这个 id）也确认不在，Playwright 直连这个 URL 被重定向到登录页（说明不是我权限问题，是这个 artifact 本身已经不存在/被撤下了）。这不是本轮任务造成的——上一轮（第六轮）落地 Version 10 时这个链接显然还能读（commit 528a9fe），推测是这之后到本轮之间的某个时间点被删除或撤回。**这轮没能读到 Artifact 原文**，全靠两份间接证据代替：①ui-auditor 之前截的 9 张 `artifact-*.png`（今天 00:25-00:53 期间的真实截图，可信度高，逐张肉眼核对过再动手）②本文件历史几轮记录下来的文字说明。如果 Remy 手上还留着这个 Artifact 的其它备份/分享链接，最好重新发一份，后续再有细节要对，现在这个 session 已经没有源头可查了。
+
+### 3 条结构性缺口（做完，已部署）
+
+1. **行程主页删"参与者"卡片**——`app/trips/[tripId]/page.tsx` 整块删掉（原来在"钱包卡→快速记账→汇率比价"之后、"活动流"之前）。`tripParticipants`/`netBalances` 两份数据没变成没用：前者还要喂 WalletCard 的参与者选择器和 ExpenseList 的 nameById，后者还要算 Hero 卡的 myNet，都留着；顺手删掉了变成没用的 `Avatar` import。邀请管理页"参与者认领状态"、结算页净额清单不受影响。
+2. **顶部导航当前页高亮**——新建 `app/trips/[tripId]/nav-links.tsx`（客户端组件，`usePathname()` 判断当前路径），当前 tab 换成 `bg-ink text-white` 深色实底 pill，其它维持纯文字。`layout.tsx` 原来的裸 `<nav>` 换成这个组件，"邀请管理"链接（原来单独判断 `identity.isOwner` 插在 JSX 里）合并进统一的 `navLinks` 数组一起处理，逻辑不变。
+3. **汇率比价卡片补两张基准卡**——`app/trips/[tripId]/fx-channel-compare-card.tsx` 加了 `.fx-base-row` 对应的两张卡（"1 MYR / = 8.120 ฿"这种格式），复用已经联动好的 `baseCandidates`/`effectiveTarget`，不是重新写死。**范围收敛，没有照抄 Artifact 全部**：Artifact 那屏还有一个"MYR→THB / USD→THB"分段切换按钮（替代现有的"我持有"下拉）、头部"🎯目标币种▾/🔄自选渠道/↻刷新"控件、警告提示框——这几个这轮**没有**跟着改，只加了两张基准卡本身。判断依据：任务原话明确说"这条要跟...对上，问题不是没联动，是卡片本身没渲染出来，是更基础的缺失"，范围就是加卡片，不是整屏重做；额外改那几个控件风险更高（要么新增交互要么改变现有"我持有"选择逻辑），没有被明确要求就没有动。
+
+### 5 处呈现差异（做完，已部署）
+
+4. **快速记账字段顺序**——`quick-add-expense.tsx` 从"金额→分类→币种"改成"分类→币种→金额"，纯换位置，两个字段各自的交互（CategoryCombobox / select）没动。
+5. **"记一笔消费"整页字段顺序 + 谁代垫的语义**——`expense-form.tsx` 顺序改成：金额+币种（同一行，原样）→ 手动汇率（条件显示，原样跟着币种行）→ 商家名称 → 日期 → 分类 → 支付方式 → 备注 → 收据 → 分摊区块（最下面）。**分摊语义这次真的彻底改了**：原来"这笔怎么分摊"是三段式按钮 + 下面单独一个按条件显隐的"谁代垫的"下拉（半保留状态，任务原话说的"若隐若现"），现在改成一个"跟其他人 split 这笔"开关（`.switch` 组件），关掉时开关下面**完全不出现任何内容**（不是灰掉/收起动画，是真的不渲染），打开才展开"谁垫的钱？"统一区块（里面先是"平分/自定义分摊"两个按钮，紧跟"谁代垫的"下拉，选自定义分摊才再展开逐人编辑器）。底层数据模型（`splitMode: onlyMe/equal/custom`）完全没动，`handleSelectSplitMode`/`handleSubmit` 这些既有函数原样复用，只是 UI 呈现变了——开关"关"对应 `onlyMe`，"开"默认落到 `equal`。收据字段（Artifact 静态稿没画）保留没删，按任务要求挪到了备注之后、分摊区块之前的位置。
+6. **头部拆成"大标题+独立胶囊"两层**——`layout.tsx` 加了静态 `<h1>{trip.name}</h1>`（跟"记一笔消费"页 h1 同款 `text-base font-semibold`），`TripSwitcher` 的胶囊不再兼职当标题：`trip-switcher.tsx` 里"没有下拉可开就退回大字文本"这个 fallback 分支改成直接 `return null`（因为标题那边已经显示了行程名，不用再重复一份）。
+7. **"支付方式"字段——保留比价功能，只改标签**：`expense-form.tsx` 里原来叫"这笔用哪张卡最划算？"的卡片，**判断依据**：`git log --diff-filter=A` 查到这个比价功能（`fx-compare-list.tsx`/`fx-recommendation`）是 v0.1（commit `59e69bf`，项目第一个版本）就有的真实功能，不是这轮视觉改版顺手夹带的复杂化，阉割成 Artifact 那种不比价的简单下拉不合适。这轮只做了"简化外观向 Artifact 靠拢"这一步：标签文字改成 Artifact 用的"支付方式"，位置挪到 Artifact 骨架该在的位置（分类之后、备注之前）；"比价"按钮、比价结果列表、点选逻辑一个字节都没动。**这是我自己的判断，没有跟 Remy 二次确认**——如果 Remy 就是想要那种极简的静态下拉、宁可牺牲比价功能，这条需要回头再改。
+8. **分摊控件按屏幕区分，不是同一个东西要统一**：行程主页"快速记账"维持三段式按钮（`.seg3`，仅我自己/平分/自定义分摊，这个之前就是对的，没有改）；"记一笔消费"整页这次改成了开关（`.switch`，见第 5 点）——两个屏幕分别对应 Artifact 各自该用的组件，之前的 bug 是"记一笔消费"页误用了跟行程主页一样的三段式按钮，这轮是修这一处，不是新增什么统一逻辑。
+9. **支付方式页"设置当前余额"收进底部按钮**——`payment-methods-manager.tsx`：原来常驻在页面最上面的"设置当前余额"整块区域（含钱包列表+编辑表单）搬到页面最下面（"新增支付方式"表单之后），收进一颗 `⚙ 设置当前余额` 按钮，点了才展开钱包余额清单。新增 `balancePanelOpen` state 控制展开/收起，钱包数据获取（`loadWallets`）逻辑没动。
+10. **邀请管理页"直接添加参与者"收成文字链接**——`invites-manager.tsx`：原来常驻的"直接添加参与者"整块表单区域，改成"生成新邀请链接"区块下面一行文字链接"或者：＋ 直接添加参与者（暂不需要邀请链接）"，点了才展开姓名输入框+添加按钮。新增 `addParticipantOpen` state，`handleAddParticipant`/API 调用逻辑没动。
+
+### 涉及文件
+`app/trips/[tripId]/page.tsx`、`app/trips/[tripId]/layout.tsx`（新建 `nav-links.tsx`）、`app/trips/[tripId]/trip-switcher.tsx`、`app/trips/[tripId]/fx-channel-compare-card.tsx`、`app/trips/[tripId]/quick-add-expense.tsx`、`app/trips/[tripId]/expenses/expense-form.tsx`、`app/trips/[tripId]/payment-methods/payment-methods-manager.tsx`、`app/trips/[tripId]/invites/invites-manager.tsx`。
+
+### 部署
+`./deploy.sh` 五道关卡（lint / typecheck / 67 单测 / opennextjs-cloudflare build / wrangler deploy + 回读 `/api/health` 200）一次性全过，Version ID `2c1f42b5-35df-4fc4-8724-d53550844b57`。线上地址不变：`https://trip-expense-ledger.remybali.workers.dev`。
+
+### 测试数据清理
+部署后走查前，先清掉了上一轮 ui-auditor 遗留在生产库的"UI审计测试行程"（id `021c8ba3-fe3d-4cc0-a20e-309594fbd8a8`，含关联的 wallet/expense/expense_split/participant/session/invite），用的是逐表手动 DELETE（expense_split→settlement_confirmation→settlement_snapshot→exchange_record→wallet→expense→invite→session→participant→trip 这个依赖顺序，不是单纯信任 ORM 声明的 cascade，D1 是否真的强制执行 SQL 级联没有确认过，手动删更保险），删完验证过 `SELECT` 查不到这个 trip id 了。**没有动**的另外两个历史遗留测试行程（"FAB修复验证-测试(生产)" `d89659e1...`、"UI走查测试-无可用基准" `81991eff...`）——这两个不在这次任务交代的清理范围内，不确定是不是还有别的用途，留给 Remy 自己判断要不要删。
+
+这轮 ui-auditor 复验建的新测试数据（如果有）见下面复验小节。
+
+### ui-auditor 复验结果（第一轮，10 项全测）
+
+新建了测试行程"UI复验-第二轮"真机走查（不是只看代码），逐条结果：1/2/3/4/6/7/8/9/10 共 9 项✅通过，截图都在 `~/Desktop/Claude/verify2-*.png`（15 张）。**第 5 项发现一个真 bug**：记一笔消费页面的"跟其他人 split 这笔"开关，字段顺序本身是对的，展开/收起逻辑也对，但**默认状态错了**——新建表单一进去开关就是"开"的（应该默认"关"，跟 Artifact 一致），根因是 `expense-form.tsx` 里 `splitMode` 的默认值是 `'equal'` 不是 `'onlyMe'`，而开关判定是 `splitMode !== 'onlyMe'`。
+
+**当场修了**：`expense-form.tsx` 第 147 行左右，`useState<SplitMode>(initialSplitState?.splitMode ?? 'equal')` 改成 `... ?? 'onlyMe'`（编辑已有消费时走 `initialSplitState`，不受影响）。改完重新 lint/typecheck/67 单测全过，重新 `./deploy.sh` 部署，Version ID `708bad6c-7d70-4270-9ccc-276f97fbaea4`，健康检查 200。我自己又用 Playwright 拿 ui-auditor 那个测试行程的身份链接手动复测了一遍（`~/Desktop/Claude/verify3-splitmode-default.png`），确认新建表单默认开关是灰色关闭态，下面不再冒出"谁垫的钱？"那块内容——bug 修好了。
+
+第 6 项有个小落差备忘：ui-auditor 描述行程胶囊颜色是"深灰"不是我转述时以为的"深绿"，查了代码确认 `trip-switcher.tsx` 用的 `bg-accent-700`，`tailwind.config.ts` 里这个值等于 `ink`（`#373736`），是之前一轮（commit 52fdde1）就定下的设计决定"标题/Hero/CTA/选中态统一用最深灰"，不是这轮引入的问题，不用改。
+
+**测试数据清理**：ui-auditor 这轮建的"UI复验-第二轮"（id `6b8ed47d-82b0-414e-aa8e-f09c9bd8cfa2`，含 2 个占位参与者/1 笔消费/1 个支付方式）已经用跟第一轮一样的手动逐表 DELETE 方式清掉，`payment_method` 表那条"HSBC 测试卡"（不属于 trip，是人/账号级数据，删 trip 不会带走）单独多删了一次，删完都验证过查不到了。
+
+（这份文件到这里为止都是当晚一次做完的，没有再等 Remy 确认——按她睡前"不用等我确认，交代完你自己做"的原话执行。）
+
+---
+
 ## 【2026-09-13 第六轮，Remy 对 3 个开放问题 + 1 个 UX bug 拍板收尾，新 session 从这里读起】
 
 背景：第五轮落地记录（下面那段）里留了 3 个开放问题没真拍板 + 走查发现 1 个表单错位 UX bug。这轮 Remy 逐条拍板，已经全部处理完部署上线。

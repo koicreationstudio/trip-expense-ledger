@@ -7,7 +7,6 @@ import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadSettlementInput } from '@/lib/db/settlement-query';
 import { computeNetBalances } from '@/lib/domain/settlement';
 import { formatMoney } from '@/lib/money';
-import { Avatar } from '@/components/avatar';
 import { ExpenseList } from './expense-list';
 import { WalletCard } from './wallet-card';
 import { ExchangeRecordList } from './exchange-record-list';
@@ -148,43 +147,12 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
       <FxChannelCompareCard enabledCurrencies={trip.enabledCurrencies} />
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-ink">参与者</h2>
-        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[6px] py-[4px] shadow-card">
-          {tripParticipants.map((p) => {
-            const net = netBalances.get(p.id) ?? 0;
-            const isMe = p.id === identity.participantId;
-            return (
-              <li key={p.id} className="row-compact flex items-center gap-2">
-                <Avatar name={p.displayName} size={24} />
-                <div className="flex flex-1 flex-col">
-                  <span className="row-name font-medium">
-                    {p.displayName}
-                    {p.isOwner && <span className="ml-2 text-[10px] text-muted">创建者</span>}
-                  </span>
-                  <span
-                    className={`inline-flex w-fit items-center rounded-full px-[9px] py-[3px] text-[9.5px] font-medium ${
-                      p.claimedAt ? 'bg-ok-bg text-ok' : 'bg-gold-lt text-gold-dk'
-                    }`}
-                  >
-                    {p.claimedAt ? '已认领' : '邀请待认领'}
-                  </span>
-                </div>
-                {isMe ? (
-                  <span className="text-[11.5px] text-muted">我自己</span>
-                ) : (
-                  <span
-                    className={`text-[11.5px] font-medium ${net >= 0 ? 'text-positive' : 'text-negative'}`}
-                  >
-                    {net >= 0 ? '该收' : '该付'}{' '}
-                    <span className="font-serif tabular-nums">{formatMoney(Math.abs(net), trip.baseCurrency)}</span>
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+      {/* fix(2026-09-14 Artifact Version 10 走查补做)：行程主页的「参与者」卡片整块删掉——
+          Version 10 notes 原话是这个区块从行程主页删除，邀请管理页（参与者认领状态）跟
+          结算页（净额清单/查看分摊明细）各自留着自己那份参与者名单不受影响，只是这里不再
+          重复摆一份。删完这个区块，`tripParticipants`/`netBalances` 两份数据没有变成没用——
+          `tripParticipants` 还要喂给 WalletCard 的参与者选择器和 ExpenseList 的 nameById，
+          `netBalances` 还要算上面 Hero 卡的 myNet，都留着。 */}
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-ink">活动流</h2>

@@ -191,17 +191,10 @@ export function QuickAddExpense({
           下面这段 JS 校验跑）。关掉浏览器原生校验，把判断权完整交给这段已经写好
           的中文错误提示，两条路径（留空/填0）都要走到同一套中文文案。 */}
       <form onSubmit={handleSubmit} className="flex flex-col gap-1.5" noValidate>
+        {/* fix(2026-09-14 Artifact Version 10 走查补做)：字段左右顺序改成 Artifact 的
+            "分类→币种→金额"，纯粹换位置，三个字段各自的交互（分类走 CategoryCombobox
+            下拉、币种走 select）都不动。 */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <input
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={amountYuan}
-            onChange={(e) => setAmountYuan(e.target.value)}
-            placeholder="金额"
-            aria-label="金额"
-            className="field-input-dark w-[74px] font-serif tabular-nums"
-          />
           <CategoryCombobox
             value={category}
             onChange={setCategory}
@@ -222,6 +215,16 @@ export function QuickAddExpense({
               </option>
             ))}
           </select>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={amountYuan}
+            onChange={(e) => setAmountYuan(e.target.value)}
+            placeholder="金额"
+            aria-label="金额"
+            className="field-input-dark w-[74px] font-serif tabular-nums"
+          />
           <button
             type="submit"
             disabled={submitting || splitMismatch}

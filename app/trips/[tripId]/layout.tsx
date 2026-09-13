@@ -9,6 +9,7 @@ import { loadUserTripsWithBalance } from '@/lib/db/user-trips-query';
 import { LogoutButton } from './logout-button';
 import { RecordExpenseBar } from './record-expense-bar';
 import { TripSwitcher } from './trip-switcher';
+import { NavLinks } from './nav-links';
 
 /**
  * 共享布局：顶部导航栏（行程名+本位币、记一笔/行程主页/结算/支付方式几个链接，
@@ -48,6 +49,7 @@ export default async function TripLayout({
     { href: `/trips/${trip.id}`, label: '行程主页' },
     { href: `/trips/${trip.id}/settlement`, label: '结算' },
     { href: `/trips/${trip.id}/payment-methods`, label: '支付方式' },
+    ...(identity.isOwner ? [{ href: `/trips/${trip.id}/invites`, label: '邀请管理' }] : []),
   ];
 
   // action-bar-reserve：底部操作条是 fixed 的，不占文档流，靠这条 padding 把它那一横带
@@ -57,27 +59,35 @@ export default async function TripLayout({
   return (
     <div className="action-bar-reserve flex flex-col gap-8">
       <header className="flex flex-col gap-4 border-b border-sand pb-4">
-        <div className="flex items-center justify-between">
-          <div>
+        {/* fix(2026-09-14 Artifact Version 10 走查补做)：Version 10 头部是"大标题+独立胶囊"
+            两层——trip-switcher.tsx 2026-09-13 那次改动的注释里就写明了"这次没有擅自加"，
+            这里补上。左边是静态大标题（跟"记一笔消费"那批页面 h1 同款 text-base
+            font-semibold）+ 本位币小字；右边"我的账号/退出登录"占一行，TripSwitcher
+            胶囊单独占下一行、右对齐，不再兼职当标题用。 */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-base font-semibold text-ink">{trip.name}</h1>
+            <p className="text-[10px] text-muted">本位币 {trip.baseCurrency}</p>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-3">
+              {/* fix(2026-09-12 死路走查)：带上 ?from=当前行程id，让 /account 页面知道
+                  「回去」应该回哪——账号页本身没有 tripId 上下文（getCurrentUser() 是账号级，
+                  不是行程级），只能靠链接来源自己传，account/page.tsx 读不到就退回首页。 */}
+              <Link
+                href={`/account?from=${trip.id}`}
+                className="text-[10px] text-muted hover:text-ink hover:underline"
+              >
+                我的账号
+              </Link>
+              <LogoutButton />
+            </div>
             <TripSwitcher
               currentTripId={trip.id}
               currentTripName={trip.name}
               otherTrips={otherTrips}
               isOwner={identity.isOwner}
             />
-            <p className="text-[10px] text-muted">本位币 {trip.baseCurrency}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {/* fix(2026-09-12 死路走查)：带上 ?from=当前行程id，让 /account 页面知道
-                「回去」应该回哪——账号页本身没有 tripId 上下文（getCurrentUser() 是账号级，
-                不是行程级），只能靠链接来源自己传，account/page.tsx 读不到就退回首页。 */}
-            <Link
-              href={`/account?from=${trip.id}`}
-              className="text-[10px] text-muted hover:text-ink hover:underline"
-            >
-              我的账号
-            </Link>
-            <LogoutButton />
           </div>
         </div>
         {/* fix(2026-09-12 字号走查)：这几个是次级导航链接，不是分节标题，之前用
@@ -89,19 +99,12 @@ export default async function TripLayout({
             min-h-[44px] 是 DESIGN-BRIEF.md 第四版补丁明确推翻的旧规则（"次要按钮/纯文字
             链接沿用主 CTA 同款 44px"），全站其它纯文字链接早就走 .tap-link(min-h-32px)
             这个 chokepoint，这里当初手写 class 没接上，漏成了孤例。改用 .tap-link，
-            触控高度回到跟"查看结算明细→"/"取消"这批文字链接一致的 32px。 */}
-        <nav className="flex flex-wrap gap-x-4 gap-y-2 text-[10.5px]">
-          {navLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="tap-link text-muted hover:text-ink">
-              {link.label}
-            </Link>
-          ))}
-          {identity.isOwner && (
-            <Link href={`/trips/${trip.id}/invites`} className="tap-link text-muted hover:text-ink">
-              邀请管理
-            </Link>
-          )}
-        </nav>
+            触控高度回到跟"查看结算明细→"/"取消"这批文字链接一致的 32px。
+            fix(2026-09-14 Artifact Version 10 走查补做)：当前所在的 tab 之前跟其它三个
+            纯文字链接长一个样，分不清"我在哪一页"。拆到 NavLinks 客户端组件用
+            usePathname() 判断，当前项换成深色实底 pill（跟 fx-channel-compare-card.tsx
+            目标币种按钮同款 bg-ink text-white），其它维持纯文字。 */}
+        <NavLinks links={navLinks} />
       </header>
       {children}
       <RecordExpenseBar tripId={trip.id} />

@@ -41,6 +41,13 @@ const SPLIT_MODE_OPTIONS: { value: SplitMode; label: string }[] = [
   { value: 'custom', label: '自定义分摊' },
 ];
 
+// fix(2026-09-14 Artifact Version 10 走查补做)：Version 10 这一屏的分摊控件是一个
+// 「跟其他人 split 这笔」开关（.switch），不是三段式按钮——三段式按钮是行程主页
+// 「快速记账」那个不同屏幕该用的组件（.seg3），这里不能照抄。开关关掉＝onlyMe，
+// 不新增数据模型；开关打开后，「谁垫的钱？」这个统一区块里才需要在 equal/custom
+// 之间再选一次，复用同一份 SPLIT_MODE_OPTIONS 去掉 onlyMe 那一档。
+const SPLIT_SUB_MODE_OPTIONS = SPLIT_MODE_OPTIONS.filter((opt) => opt.value !== 'onlyMe');
+
 /**
  * 编辑一笔已有消费时，从数据库存的 splits（本位币金额）反推表单要用的原生币种
  * 分摊金额和当初是哪一档分摊模式——DB 只存本位币份额，不存用户当初输入的原生
@@ -137,7 +144,11 @@ export function ExpenseForm({
     initialExpense?.paymentMethodId ?? null
   );
 
-  const [splitMode, setSplitMode] = useState<SplitMode>(initialSplitState?.splitMode ?? 'equal');
+  // fix(2026-09-14 ui-auditor 第二轮复验抓到的真 bug)：新建消费时默认值原本是 'equal'，
+  // 但开关的 aria-checked 判定是 splitMode !== 'onlyMe'，'equal' 不等于 'onlyMe'，导致
+  // 开关一进页面就是"开"的，跟 Artifact 默认关闭态（只有自己一个人的消费，不用问）对不上。
+  // 编辑已有消费时 initialSplitState 会覆盖这个默认值，行为不受影响。
+  const [splitMode, setSplitMode] = useState<SplitMode>(initialSplitState?.splitMode ?? 'onlyMe');
   const [splitIncluded, setSplitIncluded] = useState<Record<string, boolean>>(
     initialSplitState?.splitIncluded ?? Object.fromEntries(participants.map((p) => [p.id, true]))
   );
@@ -379,9 +390,62 @@ export function ExpenseForm({
         </div>
       )}
 
+      {/* fix(2026-09-14 Artifact Version 10 走查补做)：字段顺序改成 Artifact 骨架——
+          金额+币种 → 商家名称 → 日期 → 分类 → 支付方式 → 备注 → 分摊区块（最下面）。
+          「商家名称」「日期」两个字段位置往上挪，「分类」也往上挪到「支付方式」前面。 */}
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="merchant">
+          商家名称（可选）
+        </label>
+        <input
+          id="merchant"
+          value={merchant}
+          onChange={(e) => setMerchant(e.target.value)}
+          placeholder="例如：星巴克"
+          className="field-input"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="expense-date">
+          日期
+        </label>
+        <input
+          id="expense-date"
+          type="date"
+          required
+          value={expenseDate}
+          onChange={(e) => setExpenseDate(e.target.value)}
+          className="field-input"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="category">
+          分类
+        </label>
+        <CategoryCombobox
+          id="category"
+          required
+          value={category}
+          onChange={setCategory}
+          options={COMMON_CATEGORIES}
+          placeholder="例如：餐饮"
+          inputClassName="field-input"
+        />
+      </div>
+
+      {/* fix(2026-09-14 Artifact Version 10 走查补做)：这张卡片是 v0.1（commit 59e69bf，
+          项目第一个版本）就有的「按支付方式比价」真实功能，不是这轮视觉改版顺手夹带的新
+          复杂化——Artifact 画的是一个纯粹的"支付方式"简单下拉，但比价这个功能本身有实际
+          价值（帮忙算清楚这笔用哪张卡最省手续费），阉割掉不合适。这里只做了"简化外观向
+          Artifact 靠拢"：字段标题从"这笔用哪张卡最划算？"改成 Artifact 用的"支付方式"，
+          位置也挪到 Artifact 骨架里"支付方式"该在的位置（分类之后、备注之前）；比价这个
+          交互本身（点比价按钮拉推荐列表、选中后记账自动扣对应钱包）原样保留，没有改成
+          Artifact 那种不比价直接选的静态下拉——需要 Remy 看效果再定要不要真的简化成那样。 */}
       <div className="flex flex-col gap-2 rounded-xl border border-sand bg-paper p-3">
         <div className="flex items-center justify-between">
-          <span className="field-label">这笔用哪张卡最划算？</span>
+          <span className="field-label">支付方式</span>
           <button
             type="button"
             onClick={handleCompare}
@@ -423,164 +487,6 @@ export function ExpenseForm({
         )}
       </div>
 
-      {/* fix(2026-09-13 表单错位走查反馈)："谁代垫的"字段原本在这上面，控制它显隐的分摊
-          开关却挂在表单最底部——滚到底部切开关时，"谁代垫的"早滚出视口看不见了，切完不
-          知道发生了什么。这俩本来就是因果关系（开关决定这字段显不显示），现在挪到一起：
-          先选"这笔怎么分摊"，紧接着就是"谁代垫的"，同一屏就能看见切换开关带来的变化，不用
-          再滚回去确认。"自定义分摊"详情编辑器一起搬过来，位置跟着父块走，逻辑不变。
-          fix(2026-09-12 字号走查)：这个盒子内部原本 text-base(16px)/text-sm(14px)/
-          text-xs(12px) 三种字号混着用，逐个对齐 DESIGN-SYSTEM-INTERNAL.md 字号阶梯：
-          "自定义分摊"是这个盒子的小节标题，跟上面"这笔用哪张卡最划算？"同类角色，改用
-          field-label 同款 10px；同行人姓名/金额是清单主内容，对齐 field-input 的
-          12.5px；说明性小字（默认平分提示/币种单位/已分配汇总）统一收进 10px 副信息档。
-          fix(2026-09-12 分摊逻辑反馈)：原本只有"自定义分摊"勾选框，不勾默认强制全员
-          平分——纯粹自己的消费也被逼着分给同行者。改成三档单选（仅我自己/平分/自定义
-          分摊），"仅我自己"不新造数据结构，复用跟自定义分摊一样的 SplitShare[]。 */}
-      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-paper p-3">
-        <span className="field-label">这笔怎么分摊</span>
-        <div className="flex flex-wrap gap-1.5">
-          {SPLIT_MODE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => handleSelectSplitMode(opt.value)}
-              aria-pressed={splitMode === opt.value}
-              className={
-                splitMode === opt.value
-                  ? 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[10px] text-[10px] font-medium text-white transition-colors'
-                  : 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[10px] text-[10px] font-medium text-muted transition-colors hover:text-ink'
-              }
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        {splitMode === 'equal' && <p className="text-[10px] text-muted">默认所有参与者平均分摊这笔消费。</p>}
-        {splitMode === 'onlyMe' && (
-          <p className="text-[10px] text-muted">
-            这笔只算在「谁代垫的」自己头上，不分给其他同行者——适合纯粹自己的消费。
-          </p>
-        )}
-
-        {splitMode === 'custom' && (
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-1">
-              {participants.map((p) => (
-                <div key={p.id} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={splitIncluded[p.id] ?? true}
-                    onChange={(e) =>
-                      setSplitIncluded((prev) => ({ ...prev, [p.id]: e.target.checked }))
-                    }
-                  />
-                  <span className="w-24 shrink-0 text-[12.5px]">{p.displayName}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    disabled={!(splitIncluded[p.id] ?? true)}
-                    value={splitAmounts[p.id] ?? ''}
-                    onChange={(e) =>
-                      setSplitAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))
-                    }
-                    placeholder="0.00"
-                    className="field-input w-28 font-serif tabular-nums"
-                  />
-                  <span className="text-[10px] text-muted">{currency}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={handleEqualizeSplit}
-                className="btn-secondary shrink-0 whitespace-nowrap"
-              >
-                平均分给已勾选的人
-              </button>
-              <span className={`text-[10px] ${splitMismatch ? 'text-coral' : 'text-ok'}`}>
-                已分配{' '}
-                <span className="font-serif tabular-nums">{formatMoney(splitCentsTotal, currency)}</span> / 共{' '}
-                <span className="font-serif tabular-nums">{formatMoney(amountCentsTotal, currency)}</span>
-              </span>
-            </div>
-            {splitMismatch && (
-              <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
-                分摊总和要跟消费总金额完全一致才能提交。
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* fix(2026-09-13 Artifact Version 10 落地，第四轮拍板)："谁代垫的"不再是一直常显
-          的独立字段——分摊开关关掉（选"仅我自己"）时默认就是自己付，不用问；只有打开分摊
-          （平分/自定义分摊）才可能是别人代垫，这时候才有必要展出这个下拉。紧跟在分摊开关
-          下面，切开关时同一屏就能看到这个字段跟着出现/消失。 */}
-      {splitMode !== 'onlyMe' && (
-        <div className="flex flex-col gap-1">
-          <label className="field-label" htmlFor="payer">
-            谁代垫的
-          </label>
-          <select
-            id="payer"
-            value={payerParticipantId}
-            onChange={(e) => setPayerParticipantId(e.target.value)}
-            className="field-input"
-          >
-            {participants.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.displayName}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-1">
-        <label className="field-label" htmlFor="category">
-          分类
-        </label>
-        <CategoryCombobox
-          id="category"
-          required
-          value={category}
-          onChange={setCategory}
-          options={COMMON_CATEGORIES}
-          placeholder="例如：餐饮"
-          inputClassName="field-input"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="field-label" htmlFor="merchant">
-          商家名称（可选）
-        </label>
-        <input
-          id="merchant"
-          value={merchant}
-          onChange={(e) => setMerchant(e.target.value)}
-          placeholder="例如：星巴克"
-          className="field-input"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="field-label" htmlFor="expense-date">
-          日期
-        </label>
-        <input
-          id="expense-date"
-          type="date"
-          required
-          value={expenseDate}
-          onChange={(e) => setExpenseDate(e.target.value)}
-          className="field-input"
-        />
-      </div>
-
       <div className="flex flex-col gap-1">
         <label className="field-label" htmlFor="note">
           备注（可选）
@@ -605,6 +511,136 @@ export function ExpenseForm({
           onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
           className="text-[12.5px]"
         />
+      </div>
+
+      {/* fix(2026-09-14 Artifact Version 10 走查补做)：这屏的分摊控件按 Version 10 应该
+          是一个开关（.switch，"跟其他人 split 这笔"），之前做成了跟行程主页"快速记账"
+          一样的三段式按钮（.seg3）——那是另一个屏幕该用的组件，这里用错了。改成开关：
+          关掉＝onlyMe，这块内容完全收起，不再留一个"若隐若现"的"谁代垫的"标签；打开才
+          展开"谁垫的钱？"统一区块，里面先选 平分/自定义分摊，紧跟着"谁代垫的"下拉，
+          "自定义分摊"详情编辑器位置不变。分摊名单读的是真实 participants prop，
+          跟"邀请管理"页参与者数据同步（那边加了新参与者，这里下次进来就读得到）。
+          底层数据模型（splitMode: onlyMe/equal/custom）完全没动，只是 UI 呈现变了，
+          handleSubmit/handleSelectSplitMode 这些既有逻辑原样复用。 */}
+      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-paper p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col">
+            <span className="field-label">跟其他人 split 这笔</span>
+            <span className="text-[10px] text-muted">
+              关掉开关＝这笔账是自己的消费，不是垫钱；打开才需要决定谁垫的钱、跟谁分——分摊名单会跟着「邀请管理」页面的参与者实时同步。
+            </span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={splitMode !== 'onlyMe'}
+            aria-label="跟其他人 split 这笔"
+            onClick={() => handleSelectSplitMode(splitMode === 'onlyMe' ? 'equal' : 'onlyMe')}
+            className={`relative inline-flex h-[18px] w-[32px] shrink-0 items-center rounded-full transition-colors ${
+              splitMode !== 'onlyMe' ? 'bg-accent-700' : 'bg-sand'
+            }`}
+          >
+            <span
+              className={`inline-block h-[14px] w-[14px] transform rounded-full bg-white shadow transition-transform ${
+                splitMode !== 'onlyMe' ? 'translate-x-[16px]' : 'translate-x-[2px]'
+              }`}
+            />
+          </button>
+        </div>
+
+        {splitMode !== 'onlyMe' && (
+          <div className="flex flex-col gap-2 border-t border-sand pt-2">
+            <span className="field-label">谁垫的钱？</span>
+            <div className="flex flex-wrap gap-1.5">
+              {SPLIT_SUB_MODE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleSelectSplitMode(opt.value)}
+                  aria-pressed={splitMode === opt.value}
+                  className={
+                    splitMode === opt.value
+                      ? 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[10px] text-[10px] font-medium text-white transition-colors'
+                      : 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[10px] text-[10px] font-medium text-muted transition-colors hover:text-ink'
+                  }
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {splitMode === 'equal' && <p className="text-[10px] text-muted">默认所有参与者平均分摊这笔消费。</p>}
+
+            <div className="flex flex-col gap-1">
+              <label className="field-label" htmlFor="payer">
+                谁代垫的
+              </label>
+              <select
+                id="payer"
+                value={payerParticipantId}
+                onChange={(e) => setPayerParticipantId(e.target.value)}
+                className="field-input"
+              >
+                {participants.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {splitMode === 'custom' && (
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1">
+                  {participants.map((p) => (
+                    <div key={p.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={splitIncluded[p.id] ?? true}
+                        onChange={(e) =>
+                          setSplitIncluded((prev) => ({ ...prev, [p.id]: e.target.checked }))
+                        }
+                      />
+                      <span className="w-24 shrink-0 text-[12.5px]">{p.displayName}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        disabled={!(splitIncluded[p.id] ?? true)}
+                        value={splitAmounts[p.id] ?? ''}
+                        onChange={(e) =>
+                          setSplitAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))
+                        }
+                        placeholder="0.00"
+                        className="field-input w-28 font-serif tabular-nums"
+                      />
+                      <span className="text-[10px] text-muted">{currency}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={handleEqualizeSplit}
+                    className="btn-secondary shrink-0 whitespace-nowrap"
+                  >
+                    平均分给已勾选的人
+                  </button>
+                  <span className={`text-[10px] ${splitMismatch ? 'text-coral' : 'text-ok'}`}>
+                    已分配{' '}
+                    <span className="font-serif tabular-nums">{formatMoney(splitCentsTotal, currency)}</span> / 共{' '}
+                    <span className="font-serif tabular-nums">{formatMoney(amountCentsTotal, currency)}</span>
+                  </span>
+                </div>
+                {splitMismatch && (
+                  <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+                    分摊总和要跟消费总金额完全一致才能提交。
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {error && (

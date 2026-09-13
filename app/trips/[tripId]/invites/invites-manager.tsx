@@ -34,6 +34,9 @@ export function InvitesManager({ tripId }: { tripId: string }) {
   const [newParticipantName, setNewParticipantName] = useState('');
   const [addingParticipant, setAddingParticipant] = useState(false);
   const [addParticipantError, setAddParticipantError] = useState<string | null>(null);
+  // fix(2026-09-14 Artifact Version 10 走查补做)：Artifact 里"直接添加参与者"是一行
+  // 文字链接，点开才展开这个小表单——之前做成了常驻的一整块 section，比 Artifact 重。
+  const [addParticipantOpen, setAddParticipantOpen] = useState(false);
 
   async function loadAll() {
     const [tripRes, invitesRes] = await Promise.all([
@@ -175,29 +178,41 @@ export function InvitesManager({ tripId }: { tripId: string }) {
 
       {/* 屏⑥"直接添加参与者"（2026-09-13 落地第四轮拍板）：纯姓名，没有登录方式，
           建一个跟"邀请链接还没被认领"完全同形状的 participant 占位，自动出现在
-          "记一笔消费"分摊名单里（那边本来就是读 participants 表的真实数据）。 */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-[12.5px] font-semibold text-ink">直接添加参与者</h2>
-        <p className="text-[10px] text-muted">不需要对方点邀请链接认领，适合对方不方便操作手机的场合，加进来的人只是个占位名字。</p>
-        <form onSubmit={handleAddParticipant} className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="field-label" htmlFor="new-participant-name">
-              名字
-            </label>
-            <input
-              id="new-participant-name"
-              value={newParticipantName}
-              onChange={(e) => setNewParticipantName(e.target.value)}
-              placeholder="例如：司机阿明"
-              className="field-input w-40"
-            />
-          </div>
-          <button type="submit" disabled={addingParticipant} className="btn-secondary shrink-0 whitespace-nowrap">
-            {addingParticipant ? '添加中…' : '＋ 添加'}
-          </button>
-        </form>
-        {addParticipantError && <p className="text-sm text-coral">{addParticipantError}</p>}
-      </section>
+          "记一笔消费"分摊名单里（那边本来就是读 participants 表的真实数据）。
+          fix(2026-09-14 Artifact Version 10 走查补做)：呈现形态改轻——默认只是一行
+          文字链接，点开才展开姓名输入框+添加按钮，不再是常驻的一整块 section。 */}
+      {!addParticipantOpen ? (
+        <button
+          type="button"
+          onClick={() => setAddParticipantOpen(true)}
+          className="tap-link text-left text-[10.5px] text-muted underline underline-offset-2"
+        >
+          或者：＋ 直接添加参与者（暂不需要邀请链接）
+        </button>
+      ) : (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-[12.5px] font-semibold text-ink">直接添加参与者</h2>
+          <p className="text-[10px] text-muted">不需要对方点邀请链接认领，适合对方不方便操作手机的场合，加进来的人只是个占位名字。</p>
+          <form onSubmit={handleAddParticipant} className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="field-label" htmlFor="new-participant-name">
+                名字
+              </label>
+              <input
+                id="new-participant-name"
+                value={newParticipantName}
+                onChange={(e) => setNewParticipantName(e.target.value)}
+                placeholder="例如：司机阿明"
+                className="field-input w-40"
+              />
+            </div>
+            <button type="submit" disabled={addingParticipant} className="btn-secondary shrink-0 whitespace-nowrap">
+              {addingParticipant ? '添加中…' : '＋ 添加'}
+            </button>
+          </form>
+          {addParticipantError && <p className="text-sm text-coral">{addParticipantError}</p>}
+        </section>
+      )}
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-ink">现有邀请链接</h2>

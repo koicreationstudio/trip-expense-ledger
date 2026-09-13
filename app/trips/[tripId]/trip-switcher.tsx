@@ -52,13 +52,13 @@ export function TripSwitcher({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
-  // fix(2026-09-12 标题栏走查反馈)：这是每个子页面顶部唯一真正的"行程标题"（下面
-  // page.tsx 那个重复的 <h1> 已经拿掉），原本 12.5px 跟其它次级文字同一档，读起来
-  // 不像标题。改成 text-lg font-bold，跟 "记一笔消费"这类页面 h1（text-base）比也
-  // 更大更重，撑得起"标题栏"这个角色。
+  // fix(2026-09-14 Artifact Version 10 走查补做)：layout.tsx 现在有独立的静态大标题
+  // (<h1>{trip.name}</h1>)了，这个组件不用再兼职顶替标题——没有下拉可开（既不是
+  // owner、名下也没有其它行程能切）时，标题那边已经显示了行程名，这里没有信息要补充，
+  // 直接不渲染，不再退回一份重复的大字文本。
   const canOpenPanel = otherTrips.length > 0 || isOwner;
   if (!canOpenPanel) {
-    return <p className="text-lg font-bold text-gold-dk">{currentTripName}</p>;
+    return null;
   }
 
   async function handleSwitch(tripId: string) {
@@ -142,10 +142,9 @@ export function TripSwitcher({
           跟 .btn-primary 同一套 accent-700/rounded-full 语言。**已知偏离**：截图里胶囊显示
           的是缩短过的行程名（"曼谷"），这里保留完整行程名——缩写规则没有明确定义（比如
           没有可识别地名子串的行程名该怎么截），没有把握就不猜，原样全名放进胶囊里，长
-          名字胶囊会变宽，需要 Remy 看了实际效果再定要不要加缩写规则。另外这个按钮从
-          2026-09-12 起是页面唯一的"行程标题"（那次顺手拿掉了下面重复的 <h1>），改小之后
-          页面不再有大号标题文字，只剩这颗胶囊——如果想要"大标题+独立小胶囊"两层，需要
-          在 layout.tsx 里另外加一个静态标题，这次没有擅自加。 */}
+          名字胶囊会变宽，需要 Remy 看了实际效果再定要不要加缩写规则。
+          fix(2026-09-14 Artifact Version 10 走查补做)：layout.tsx 现在补了独立的静态大
+          标题，这颗胶囊回到"纯粹的切换/管理入口"角色，不用再兼职撑标题份量。 */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

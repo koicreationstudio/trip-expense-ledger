@@ -56,6 +56,9 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
   const [balanceDate, setBalanceDate] = useState('');
   const [balanceSubmitting, setBalanceSubmitting] = useState(false);
   const [balanceError, setBalanceError] = useState<string | null>(null);
+  // fix(2026-09-14 Artifact Version 10 走查补做)：Artifact 里"设置当前余额"是页面
+  // 底部一颗按钮，点开才展开钱包余额清单——不是像这里之前那样常驻在页面最上面的一整块。
+  const [balancePanelOpen, setBalancePanelOpen] = useState(false);
 
   async function loadMethods() {
     const res = await fetch('/api/payment-methods');
@@ -155,90 +158,6 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-ink">设置当前余额</h2>
-        <p className="text-[10px] text-muted">
-          这里改的是这趟行程里每个钱包的余额（不是下面账号级的支付方式费率配置）。
-        </p>
-        {wallets === null ? (
-          <p className="text-xs text-muted">载入中…</p>
-        ) : wallets.length === 0 ? (
-          <p className="text-xs text-muted">还没建过钱包，先去行程主页新建。</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {wallets.map((w) => (
-              <li key={w.id} className="tx-item flex-col items-stretch gap-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium">
-                    <span aria-hidden="true">{w.emoji}</span>
-                    <span className="truncate">{w.label}</span>
-                    <span className="font-mono text-[9px] text-muted">{w.currency}</span>
-                  </span>
-                  {editingWalletId !== w.id && (
-                    <button type="button" onClick={() => startEditBalance(w)} className="btn-secondary shrink-0">
-                      设置当前余额
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-serif text-[12.5px] tabular-nums">{formatMoney(w.currentBalance, w.currency)}</span>
-                  {w.balanceUpdatedAt && (
-                    <span className="text-[9px] text-muted">
-                      最近记录 {new Date(w.balanceUpdatedAt).toLocaleDateString()}
-                    </span>
-                  )}
-                </div>
-                {editingWalletId === w.id && (
-                  <div className="flex flex-wrap items-end gap-2 rounded-xl border border-sand bg-white p-2">
-                    <div className="flex flex-col gap-1">
-                      <label className="field-label" htmlFor={`wallet-balance-${w.id}`}>
-                        当前余额（{w.currency}）
-                      </label>
-                      <input
-                        id={`wallet-balance-${w.id}`}
-                        type="number"
-                        step="0.01"
-                        value={balanceYuan}
-                        onChange={(e) => setBalanceYuan(e.target.value)}
-                        className="field-input w-28 font-serif tabular-nums"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="field-label" htmlFor={`wallet-balance-date-${w.id}`}>
-                        记录日期
-                      </label>
-                      <input
-                        id={`wallet-balance-date-${w.id}`}
-                        type="date"
-                        value={balanceDate}
-                        onChange={(e) => setBalanceDate(e.target.value)}
-                        className="field-input"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      disabled={balanceSubmitting}
-                      onClick={() => handleSetBalance(w.id)}
-                      className="btn-secondary"
-                    >
-                      {balanceSubmitting ? '保存中…' : '保存'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingWalletId(null)}
-                      className="tap-link text-[11px] text-muted"
-                    >
-                      取消
-                    </button>
-                    {balanceError && <p className="w-full text-[10px] text-coral">{balanceError}</p>}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-ink">已配置的支付方式</h2>
         {methods === null ? (
@@ -407,6 +326,102 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
           </button>
         </form>
       </section>
+
+      {/* fix(2026-09-14 Artifact Version 10 走查补做)："设置当前余额"之前常驻在页面最上面
+          一整块，Artifact 里这是页面底部一颗按钮，点开才展开钱包余额清单。这里改成同样
+          的收合形态，位置也挪到最下面——这一步操作的其实是 trip-level 的 wallets（这趟
+          行程里具体每张卡/现金的余额），不是上面账号级 paymentMethods（那份只存费率配置，
+          没有余额字段），Artifact 把它画在"支付方式"页只是信息架构上的归类，底层数据没变。 */}
+      <section className="flex flex-col gap-2">
+        <button type="button" onClick={() => setBalancePanelOpen((v) => !v)} className="btn-primary">
+          ⚙ 设置当前余额
+        </button>
+        {balancePanelOpen && (
+          <div className="flex flex-col gap-2">
+            <p className="text-[10px] text-muted">
+              这里改的是这趟行程里每个钱包的余额（不是上面账号级的支付方式费率配置）。
+            </p>
+            {wallets === null ? (
+              <p className="text-xs text-muted">载入中…</p>
+            ) : wallets.length === 0 ? (
+              <p className="text-xs text-muted">还没建过钱包，先去行程主页新建。</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {wallets.map((w) => (
+                  <li key={w.id} className="tx-item flex-col items-stretch gap-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium">
+                        <span aria-hidden="true">{w.emoji}</span>
+                        <span className="truncate">{w.label}</span>
+                        <span className="font-mono text-[9px] text-muted">{w.currency}</span>
+                      </span>
+                      {editingWalletId !== w.id && (
+                        <button type="button" onClick={() => startEditBalance(w)} className="btn-secondary shrink-0">
+                          设置当前余额
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-serif text-[12.5px] tabular-nums">{formatMoney(w.currentBalance, w.currency)}</span>
+                      {w.balanceUpdatedAt && (
+                        <span className="text-[9px] text-muted">
+                          最近记录 {new Date(w.balanceUpdatedAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    {editingWalletId === w.id && (
+                      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-sand bg-white p-2">
+                        <div className="flex flex-col gap-1">
+                          <label className="field-label" htmlFor={`wallet-balance-${w.id}`}>
+                            当前余额（{w.currency}）
+                          </label>
+                          <input
+                            id={`wallet-balance-${w.id}`}
+                            type="number"
+                            step="0.01"
+                            value={balanceYuan}
+                            onChange={(e) => setBalanceYuan(e.target.value)}
+                            className="field-input w-28 font-serif tabular-nums"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="field-label" htmlFor={`wallet-balance-date-${w.id}`}>
+                            记录日期
+                          </label>
+                          <input
+                            id={`wallet-balance-date-${w.id}`}
+                            type="date"
+                            value={balanceDate}
+                            onChange={(e) => setBalanceDate(e.target.value)}
+                            className="field-input"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          disabled={balanceSubmitting}
+                          onClick={() => handleSetBalance(w.id)}
+                          className="btn-secondary"
+                        >
+                          {balanceSubmitting ? '保存中…' : '保存'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingWalletId(null)}
+                          className="tap-link text-[11px] text-muted"
+                        >
+                          取消
+                        </button>
+                        {balanceError && <p className="w-full text-[10px] text-coral">{balanceError}</p>}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </section>
+
       <ConfirmDialog
         open={confirmingId !== null}
         message="确定要删除这个支付方式吗？"
