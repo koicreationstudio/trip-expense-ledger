@@ -16,7 +16,7 @@ export default async function PaymentMethodsPage({ params }: { params: { tripId:
           支付方式挂在你自己身上，跟人走不跟行程走，用来算记账时哪张卡/现金最划算。
         </p>
       </div>
-      <PaymentMethodsManager />
+      <PaymentMethodsManager tripId={params.tripId} />
     </main>
   );
 }

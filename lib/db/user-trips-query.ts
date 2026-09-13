@@ -17,6 +17,10 @@ export interface UserTripSummary {
   // "结算是唯一允许跨参与者读取的查询"是同一类聚合口径，不展开逐笔明细）。
   totalExpenseBaseCurrency: number;
   expenseCount: number;
+  // 首页卡片"日期范围显示行"用（2026-09-13 落地第四轮拍板屏①），老行程没填过
+  // 就是 null，卡片那一行直接不渲染，不强行补录。
+  tripStartDate: string | null; // ISO
+  tripEndDate: string | null; // ISO
 }
 
 /**
@@ -33,6 +37,8 @@ export async function loadUserTripsWithBalance(db: Db, userId: string): Promise<
       status: trips.status,
       isOwner: participants.isOwner,
       participantId: participants.id,
+      tripStartDate: trips.tripStartDate,
+      tripEndDate: trips.tripEndDate,
     })
     .from(participants)
     .innerJoin(trips, eq(participants.tripId, trips.id))
@@ -91,6 +97,8 @@ export async function loadUserTripsWithBalance(db: Db, userId: string): Promise<
         netBalance,
         totalExpenseBaseCurrency: Number(totals?.total ?? 0),
         expenseCount: Number(totals?.count ?? 0),
+        tripStartDate: row.tripStartDate ? row.tripStartDate.toISOString() : null,
+        tripEndDate: row.tripEndDate ? row.tripEndDate.toISOString() : null,
       };
     })
   );

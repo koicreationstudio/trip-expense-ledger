@@ -9,10 +9,10 @@ import { computeNetBalances } from '@/lib/domain/settlement';
 import { formatMoney } from '@/lib/money';
 import { Avatar } from '@/components/avatar';
 import { ExpenseList } from './expense-list';
-import { WalletGrid } from './wallet-grid';
-import { QuickAddExpense } from './quick-add-expense';
+import { WalletCard } from './wallet-card';
 import { ExchangeRecordList } from './exchange-record-list';
 import { FxRateCard } from './fx-rate-card';
+import { FxChannelCompareCard } from './fx-channel-compare-card';
 import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -84,12 +84,12 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         本位币 {trip.baseCurrency} · {STATUS_LABEL[trip.status] ?? trip.status}
       </p>
 
-      {/* 方案C（DESIGN-BRIEF-hero-wallet-variants.html 第151-176/300-324行，第十六轮拍板）：
-          净额卡+我的钱包合并成一张深色卡，中间一条细分隔线分两层，钱包胶囊嵌在卡片底部，
-          省掉两个区块之间的外边距和钱包自己的标题行。颜色沿用既有 hero-gradient/hero-label
-          等 token，不新增颜色。 */}
-      <section className="relative flex flex-col overflow-hidden rounded-hero bg-hero-gradient text-white shadow-hero">
-        <div className="flex items-baseline justify-between gap-2 px-3 pb-2.5 pt-3">
+      {/* fix(2026-09-13 Artifact Version 10 落地，第四轮拍板)：净额 Hero 卡跟「我的钱包」
+          拆回两张独立卡片（Artifact 本身就是 .hero + .wallet-block 两个分开的卡，第十六轮
+          "合并成一张深色卡"的方案C这次被更新的拍板版本推翻）——钱包卡需要自己的三档
+          色阶切换器，合并卡片没法自然装下这个交互，详见 wallet-card.tsx 顶部注释。 */}
+      <section className="relative flex flex-col gap-1 overflow-hidden rounded-hero bg-hero-gradient p-[9px] text-white shadow-hero">
+        <div className="flex items-baseline justify-between gap-2">
           <div className="flex flex-col gap-1">
             <span className="text-[10px] uppercase tracking-wide text-hero-label">我的净额</span>
             <span
@@ -111,70 +111,54 @@ export default async function TripPage({ params }: { params: { tripId: string } 
             查看结算明细 →
           </Link>
         </div>
-        <div className="mx-3 h-px bg-white/[.08]" />
-        <div className="flex flex-col gap-[5px] px-3 pb-[11px] pt-[9px]">
-          <div className="flex items-baseline justify-between">
-            <span className="text-[9px] uppercase tracking-wide text-hero-label">我的钱包</span>
-            <span className="text-[9px] text-hero-label">仅自己可见</span>
-          </div>
-          <WalletGrid
-            variant="embedded-dark"
-            tripId={trip.id}
-            wallets={myWallets.map((w) => ({
-              id: w.id,
-              label: w.label,
-              currency: w.currency,
-              emoji: w.emoji,
-              currentBalance: w.currentBalance,
-              paymentMethodId: w.paymentMethodId,
-              linkedPaymentMethodLabel: w.paymentMethodId ? paymentMethodLabelById.get(w.paymentMethodId) ?? null : null,
-            }))}
-            paymentMethods={myPaymentMethods.map((m) => ({
-              id: m.id,
-              label: m.label,
-              settlementCurrency: m.settlementCurrency,
-            }))}
-          />
-          <Link href={`/trips/${trip.id}/exchange/new`} className="tap-link self-start text-[11px] text-hero-label">
-            💱 取款 / 换汇
-          </Link>
-          <QuickAddExpense
-            tripId={trip.id}
-            baseCurrency={trip.baseCurrency}
-            myParticipantId={identity.participantId}
-            participants={tripParticipants.map((p) => ({ id: p.id, displayName: p.displayName }))}
-          />
-        </div>
       </section>
 
+      <WalletCard
+        tripId={trip.id}
+        baseCurrency={trip.baseCurrency}
+        myParticipantId={identity.participantId}
+        participants={tripParticipants.map((p) => ({ id: p.id, displayName: p.displayName }))}
+        wallets={myWallets.map((w) => ({
+          id: w.id,
+          label: w.label,
+          currency: w.currency,
+          emoji: w.emoji,
+          currentBalance: w.currentBalance,
+          paymentMethodId: w.paymentMethodId,
+          linkedPaymentMethodLabel: w.paymentMethodId ? paymentMethodLabelById.get(w.paymentMethodId) ?? null : null,
+        }))}
+        paymentMethods={myPaymentMethods.map((m) => ({
+          id: m.id,
+          label: m.label,
+          settlementCurrency: m.settlementCurrency,
+        }))}
+      />
+
       {/* 「新建钱包」表单的落点：WalletGrid 在 embedded-dark 模式下把表单 portal 到这里，
-          让它渲染在深色合并卡外面（浅色表单塞进深色卡里会看不清），设计稿没规格这段所以
+          让它渲染在深色钱包卡外面（浅色表单塞进深色卡里会看不清），设计稿没规格这段所以
           维持现有浅色表单样式，别自己发明深色版本。default 模式的 WalletGrid 用不到这个插槽。
-          （原本这里还挂着一个 data-fab-avoid 标记，给当年那个贴右下角的悬浮胶囊用。2026-09-12
-          悬浮胶囊整个换成底部操作条 + 容器预留空白之后，"哪些区块要打标记"这个会漏的步骤连同
-          标记一起删了，详见 record-expense-bar.tsx 顶部注释。）
           fix(2026-09-12 间距走查)：这个插槽收起时 height 是 0，但
           但 <main> 是 flex flex-col gap-6，gap 是加在"每一对相邻 flex item 之间"的，这个空插槽
-          即使 0 高度依然算一个 item，会在 Hero 卡和它之间、它和 FxRateCard 之间各吃一份 gap-6，
-          两份叠起来让"净额卡→汇率比价"这段视觉间距变成其它区块间距的整整两倍（实测 48px vs
-          24px，就是 Remy 反馈"两处间距肉眼可见不一样"的那两处）。加 empty:hidden：插槽真的
-          空的时候（:empty，无子节点）整个从 flex 布局摘掉，不再吃 gap；portal 挂表单进来后
-          不再是 :empty，恢复参与 flex 布局正常显示，行为不变。 */}
+          即使 0 高度依然算一个 item，会在钱包卡和它之间、它和 FxRateCard 之间各吃一份 gap-6。
+          加 empty:hidden：插槽真的空的时候（:empty，无子节点）整个从 flex 布局摘掉，不再吃 gap；
+          portal 挂表单进来后不再是 :empty，恢复参与 flex 布局正常显示，行为不变。 */}
       <div id="wallet-form-slot" className="empty:hidden" />
 
       <FxRateCard tripId={trip.id} baseCurrency={trip.baseCurrency} hasPaymentMethods={myPaymentMethods.length > 0} />
 
+      <FxChannelCompareCard enabledCurrencies={trip.enabledCurrencies} />
+
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-ink">参与者</h2>
-        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] shadow-card">
+        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[6px] py-[4px] shadow-card">
           {tripParticipants.map((p) => {
             const net = netBalances.get(p.id) ?? 0;
             const isMe = p.id === identity.participantId;
             return (
-              <li key={p.id} className="flex items-center gap-2 py-1">
+              <li key={p.id} className="row-compact flex items-center gap-2">
                 <Avatar name={p.displayName} size={24} />
                 <div className="flex flex-1 flex-col">
-                  <span className="text-[12.5px] font-medium">
+                  <span className="row-name font-medium">
                     {p.displayName}
                     {p.isOwner && <span className="ml-2 text-[10px] text-muted">创建者</span>}
                   </span>
@@ -187,10 +171,10 @@ export default async function TripPage({ params }: { params: { tripId: string } 
                   </span>
                 </div>
                 {isMe ? (
-                  <span className="text-[12.5px] text-muted">我自己</span>
+                  <span className="text-[11.5px] text-muted">我自己</span>
                 ) : (
                   <span
-                    className={`text-[12.5px] font-medium ${net >= 0 ? 'text-positive' : 'text-negative'}`}
+                    className={`text-[11.5px] font-medium ${net >= 0 ? 'text-positive' : 'text-negative'}`}
                   >
                     {net >= 0 ? '该收' : '该付'}{' '}
                     <span className="font-serif tabular-nums">{formatMoney(Math.abs(net), trip.baseCurrency)}</span>

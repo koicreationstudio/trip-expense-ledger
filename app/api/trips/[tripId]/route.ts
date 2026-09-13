@@ -6,6 +6,8 @@ import { assertSameTrip, withSession } from '@/lib/auth/require-session';
 import { resolveIdentity, SESSION_COOKIE_NAME } from '@/lib/auth/session';
 import { resolveUser, USER_SESSION_COOKIE_NAME } from '@/lib/auth/user-session';
 import { toParticipantSummaryDto, toTripDto } from '@/lib/http/dto';
+import { parseJsonBody } from '@/lib/http/validate';
+import { updateTripSchema } from '@/lib/validation/schemas';
 import { deleteReceipt } from '@/lib/storage/receipts';
 
 interface Context {
@@ -27,6 +29,51 @@ export const GET = withSession<Context>(async (_request, { params }, identity) =
     participants: tripParticipants.map(toParticipantSummaryDto),
   });
 });
+
+/**
+ * 屏①首页卡片可改名（2026-09-13 落地第四轮拍板），只开放改名字这一个字段，仅 owner
+ * 能改。鉴权不能直接套 withTripOwner——首页"我的行程"列表里点 ✎ 改名的是还没切换
+ * 过去的行程，tel_session（Layer 1）这时大概率还停在别的行程上，withTripOwner 只认
+ * tel_session === 当前 trip，会把大多数首页改名请求误判成越权。改用跟 DELETE 同一套
+ * 两条腿鉴权：tel_session 正好指向这趟 trip 就直接判；不是的话再查 tel_user_session
+ * 这个账号在目标 tripId 下是不是 owner（跟 switch-trip/DELETE 同一个模式）。
+ */
+export async function PATCH(request: NextRequest, { params }: Context) {
+  const db = await getDb();
+
+  const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const userToken = request.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+  const [identity, user] = await Promise.all([resolveIdentity(db, sessionToken), resolveUser(db, userToken)]);
+
+  if (!identity && !user) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  let authorized = Boolean(identity && identity.tripId === params.tripId && identity.isOwner);
+  if (!authorized && user) {
+    const ownedParticipant = await db.query.participants.findFirst({
+      where: and(
+        eq(participants.tripId, params.tripId),
+        eq(participants.userId, user.userId),
+        eq(participants.isOwner, true)
+      ),
+    });
+    authorized = Boolean(ownedParticipant);
+  }
+  if (!authorized) {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
+
+  const parsed = await parseJsonBody(request, updateTripSchema);
+  if ('error' in parsed) return parsed.error;
+  if (parsed.data.name === undefined) {
+    return NextResponse.json({ error: 'nothing_to_update' }, { status: 400 });
+  }
+
+  await db.update(trips).set({ name: parsed.data.name }).where(eq(trips.id, params.tripId));
+  const updated = await db.query.trips.findFirst({ where: eq(trips.id, params.tripId) });
+  return NextResponse.json({ trip: toTripDto(updated!) });
+}
 
 /**
  * 删行程是破坏性动作，只有 owner 能做。鉴权拆两条腿，不直接套 withTripOwner：

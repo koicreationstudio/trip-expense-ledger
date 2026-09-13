@@ -16,6 +16,15 @@ export const createTripSchema = z.object({
   baseCurrency: currencyCode,
   ownerDisplayName: z.string().trim().min(1).max(100),
   participantNames: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
+  // 屏⑦新建行程新增字段（2026-09-13 落地第四轮拍板，都是可选，老流程不填也能建行程）：
+  tripStartDate: z.string().datetime().optional(),
+  tripEndDate: z.string().datetime().optional(),
+  enabledCurrencies: z.array(currencyCode).max(20).optional(),
+});
+
+/** 屏①首页卡片可改名新增：目前只开放改名字，不是完整的行程设置编辑。 */
+export const updateTripSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
 });
 
 export const createExpenseSchema = z.object({
@@ -60,6 +69,14 @@ export const claimParticipantSchema = z.object({
 
 export const createInviteSchema = z.object({
   expiresInDays: z.number().int().positive().max(365).optional(),
+  // "对方名字"：纯人类可读标签，方便生成邀请的人自己认出这条链接是给谁的
+  // （2026-09-13 落地第四轮拍板屏⑥），不参与任何鉴权判断。
+  inviteeName: z.string().trim().max(100).optional(),
+});
+
+/** 屏⑥"直接添加参与者"新增：纯姓名，没有登录方式，claimedAt 留空跟占位同行人一样。 */
+export const addParticipantSchema = z.object({
+  displayName: z.string().trim().min(1).max(100),
 });
 
 export const fxRecommendationSchema = z.object({
@@ -109,6 +126,22 @@ export const updateWalletSchema = z.object({
   paymentMethodId: z.string().min(1).nullable().optional(),
   // 允许手动订正余额（比如跟实际现金对不上时），不算「记一笔换汇」，直接覆盖。
   currentBalance: z.number().int().optional(),
+  // 「设置当前余额」这个动作发生的记录时间，可选补录成之前的日期
+  // （2026-09-13 落地第四轮拍板屏⑤），只在同时传了 currentBalance 时才有意义。
+  balanceUpdatedAt: z.string().datetime().optional(),
+});
+
+export const settlementConfirmationSchema = z.object({
+  fromParticipantId: z.string().min(1),
+  toParticipantId: z.string().min(1),
+});
+
+export const setWalletBalanceSchema = z.object({
+  currentBalance: z.number().int(),
+  // 可选补录成之前的日期，不传就是"现在"——支付方式页"设置当前余额"新功能专用
+  // （2026-09-13 落地第四轮拍板屏⑤），跟 updateWalletSchema 分开是因为这个动作
+  // 语义上专门是"记一次余额快照"，不是随手改钱包名字这类字段更新。
+  recordedAt: z.string().datetime().optional(),
 });
 
 export const createExchangeRecordSchema = z

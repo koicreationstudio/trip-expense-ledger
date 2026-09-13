@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
-import { yuanToCents, formatMoney } from '@/lib/money';
+import { formatMoney } from '@/lib/money';
 
 export interface WalletItem {
   id: string;
@@ -27,14 +27,16 @@ export interface WalletPaymentMethodOption {
 // 「看不懂选的是什么」——常显文字满足手机触屏（没有 hover），title 顺手满足桌面。
 // 没在按钮旁边逐个摆文字标签：7 个类型都要摆的话（"银行卡"/"网络钱包"这种 2-4 字）
 // 横向空间不够摆一整排还不换行，压缩比 compact 目标更糟。
+//
+// fix(2026-09-13 Artifact Version 10 落地，开放问题③，未真正拍板)：新建钱包这一步
+// 能选的图标从 7 个精简到 4 个（🏦银行/💵现金/💳信用卡/📱手机支付）。保守处理：
+// 只收窄这份"新建时能选"的列表，历史钱包如果用了 🌐/🟠/💰ing 这几个被砍掉的图标，
+// 渲染逻辑本来就是直接读 w.emoji 字段、不反查这张表，不受影响，不用做任何数据迁移。
 const ICON_CHOICES = [
   { emoji: '🏦', label: '银行' },
   { emoji: '💵', label: '现金' },
-  { emoji: '🌐', label: '网络钱包' },
-  { emoji: '📱', label: '手机支付' },
-  { emoji: '🟠', label: '电子钱包' },
   { emoji: '💳', label: '信用卡' },
-  { emoji: '💰', label: '零钱' },
+  { emoji: '📱', label: '手机支付' },
 ] as const;
 const NO_LINK = '__none__';
 
@@ -62,7 +64,6 @@ export function WalletGrid({
   const [label, setLabel] = useState('');
   const [currency, setCurrency] = useState<string>(COMMON_CURRENCIES[0]);
   const [emoji, setEmoji] = useState<string>(ICON_CHOICES[0].emoji);
-  const [initialBalanceYuan, setInitialBalanceYuan] = useState('');
   const [paymentMethodId, setPaymentMethodId] = useState(NO_LINK);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +100,10 @@ export function WalletGrid({
           label: label.trim(),
           currency,
           emoji,
-          initialBalance: yuanToCents(Number(initialBalanceYuan) || 0),
+          // fix(2026-09-13 Artifact Version 10 落地)：起始余额字段整个拿掉了（第四轮
+          // 拍板"余额改由支付方式页的『设置当前余额』统一承担"），新钱包一律从 0 起步，
+          // initialBalance 字段本身在 API/schema 层继续保留（可选，默认 0），只是这个
+          // 表单不再主动填它。
           paymentMethodId: paymentMethodId === NO_LINK ? undefined : paymentMethodId,
         }),
       });
@@ -108,7 +112,6 @@ export function WalletGrid({
         return;
       }
       setLabel('');
-      setInitialBalanceYuan('');
       setPaymentMethodId(NO_LINK);
       setCreating(false);
       router.refresh();
@@ -137,6 +140,26 @@ export function WalletGrid({
             value={label}
             onChange={(e) => setLabel(e.target.value)}
           />
+          {/* fix(2026-09-13 Artifact Version 10 落地)：钱包名跟支付方式命名联动——点一下
+              已有支付方式的名字直接填进这个输入框，不用重新打一遍。paymentMethods 这个 prop
+              本来就是 page.tsx 传下来的真实数据（不是写死名单），这里直接复用，不用新查询。 */}
+          {paymentMethods.length > 0 && (
+            <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[9px] text-muted">
+              <span>已有支付方式：</span>
+              {paymentMethods.map((m, i) => (
+                <span key={m.id}>
+                  <button
+                    type="button"
+                    onClick={() => setLabel(m.label)}
+                    className="tap-link text-gold-dk"
+                  >
+                    {m.label}
+                  </button>
+                  {i < paymentMethods.length - 1 ? '、' : ''}
+                </span>
+              ))}
+            </p>
+          )}
         </div>
         <div className="flex flex-col gap-1">
           <label className="field-label" htmlFor="wallet-currency">
@@ -179,21 +202,9 @@ export function WalletGrid({
           </select>
         </div>
       )}
-      <div className="flex flex-col gap-1">
-        <label className="field-label" htmlFor="wallet-balance">
-          起始余额（可选）
-        </label>
-        <input
-          id="wallet-balance"
-          type="number"
-          min="0"
-          step="0.01"
-          className="field-input font-serif tabular-nums"
-          placeholder="0.00"
-          value={initialBalanceYuan}
-          onChange={(e) => setInitialBalanceYuan(e.target.value)}
-        />
-      </div>
+      {/* fix(2026-09-13 Artifact Version 10 落地，第四轮拍板)：起始余额输入框整个拿掉，
+          余额改由「支付方式」页新增的"设置当前余额"功能统一承担（见 payment-methods-manager.tsx）。
+          新钱包一律从 0 开始，之后要设余额得去那边操作——这是刻意的依赖关系，不是漏做。 */}
       <div className="flex flex-col gap-1">
         <span className="field-label">账户类型</span>
         <div className="flex flex-wrap items-center gap-1">

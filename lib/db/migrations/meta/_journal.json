@@ -43,6 +43,13 @@
       "when": 1789199999154,
       "tag": "0005_perpetual_randall",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789312577196,
+      "tag": "0006_worried_catseye",
+      "breakpoints": true
     }
   ]
 }

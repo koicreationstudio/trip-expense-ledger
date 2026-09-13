@@ -28,6 +28,7 @@ export const POST = withTripOwner<Context>(async (request, { params }, identity)
     tripId: params.tripId,
     code,
     createdByParticipantId: identity.participantId,
+    inviteeName: parsed.data.inviteeName?.trim() || null,
     expiresAt,
   });
 
@@ -42,6 +43,7 @@ export const GET = withTripOwner<Context>(async (_request, { params }) => {
     invites: rows.map((r) => ({
       id: r.id,
       code: r.code,
+      inviteeName: r.inviteeName,
       createdAt: r.createdAt.toISOString(),
       expiresAt: r.expiresAt?.toISOString() ?? null,
       revokedAt: r.revokedAt?.toISOString() ?? null,

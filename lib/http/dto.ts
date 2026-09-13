@@ -80,6 +80,7 @@ export function toWalletDto(row: WalletRow) {
     emoji: row.emoji,
     currentBalance: row.currentBalance,
     paymentMethodId: row.paymentMethodId,
+    balanceUpdatedAt: row.balanceUpdatedAt ? row.balanceUpdatedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   };
 }

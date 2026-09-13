@@ -44,6 +44,14 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
       emoji: body.emoji ?? existing.emoji,
       paymentMethodId: body.paymentMethodId === undefined ? existing.paymentMethodId : body.paymentMethodId,
       currentBalance: body.currentBalance ?? existing.currentBalance,
+      // 只有这次请求真的带了 currentBalance（= 这是一次「设置当前余额」动作）才更新
+      // balanceUpdatedAt；单纯改名字/绑支付方式不该悄悄刷新这个时间戳。
+      balanceUpdatedAt:
+        body.currentBalance !== undefined
+          ? body.balanceUpdatedAt
+            ? new Date(body.balanceUpdatedAt)
+            : new Date()
+          : existing.balanceUpdatedAt,
     })
     .where(eq(wallets.id, params.walletId));
 

@@ -160,6 +160,13 @@ export function ExpenseForm({
     if (mode === 'custom' && Object.keys(splitAmounts).length === 0 && amountCentsTotal > 0 && includedParticipants.length > 0) {
       handleEqualizeSplit();
     }
+    // fix(2026-09-13 Artifact Version 10 落地，第四轮拍板)："这笔要跟别人分摊"这个开关
+    // 关闭（= 选中「仅我自己」）时默认代垫人就是自己，不用问；打开（平分/自定义分摊）
+    // 才需要问"谁垫的钱"——同行人分摊的场景才可能是别人代垫。选回"仅我自己"时把代垫人
+    // 强制归位到自己，避免"之前手动选了别人当代垫人，又切回仅我自己"这种不一致状态残留。
+    if (mode === 'onlyMe') {
+      setPayerParticipantId(myParticipantId);
+    }
   }
 
   function handleEqualizeSplit() {
@@ -416,93 +423,12 @@ export function ExpenseForm({
         )}
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="field-label" htmlFor="payer">
-          谁代垫的
-        </label>
-        <select
-          id="payer"
-          value={payerParticipantId}
-          onChange={(e) => setPayerParticipantId(e.target.value)}
-          className="field-input"
-        >
-          {participants.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.displayName}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="field-label" htmlFor="category">
-          分类
-        </label>
-        <CategoryCombobox
-          id="category"
-          required
-          value={category}
-          onChange={setCategory}
-          options={COMMON_CATEGORIES}
-          placeholder="例如：餐饮"
-          inputClassName="field-input"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="field-label" htmlFor="merchant">
-          商家名称（可选）
-        </label>
-        <input
-          id="merchant"
-          value={merchant}
-          onChange={(e) => setMerchant(e.target.value)}
-          placeholder="例如：星巴克"
-          className="field-input"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="field-label" htmlFor="expense-date">
-          日期
-        </label>
-        <input
-          id="expense-date"
-          type="date"
-          required
-          value={expenseDate}
-          onChange={(e) => setExpenseDate(e.target.value)}
-          className="field-input"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="field-label" htmlFor="note">
-          备注（可选）
-        </label>
-        <textarea
-          id="note"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className="field-input"
-          rows={2}
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="field-label" htmlFor="receipt">
-          收据（可选{isEdit && initialExpense.hasReceipt ? '，已有收据，上传新文件会替换' : ''}）
-        </label>
-        <input
-          id="receipt"
-          type="file"
-          accept=".jpg,.jpeg,.png,.webp,.pdf"
-          onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-          className="text-[12.5px]"
-        />
-      </div>
-
-      {/* fix(2026-09-12 字号走查)：这个盒子内部原本 text-base(16px)/text-sm(14px)/
+      {/* fix(2026-09-13 表单错位走查反馈)："谁代垫的"字段原本在这上面，控制它显隐的分摊
+          开关却挂在表单最底部——滚到底部切开关时，"谁代垫的"早滚出视口看不见了，切完不
+          知道发生了什么。这俩本来就是因果关系（开关决定这字段显不显示），现在挪到一起：
+          先选"这笔怎么分摊"，紧接着就是"谁代垫的"，同一屏就能看见切换开关带来的变化，不用
+          再滚回去确认。"自定义分摊"详情编辑器一起搬过来，位置跟着父块走，逻辑不变。
+          fix(2026-09-12 字号走查)：这个盒子内部原本 text-base(16px)/text-sm(14px)/
           text-xs(12px) 三种字号混着用，逐个对齐 DESIGN-SYSTEM-INTERNAL.md 字号阶梯：
           "自定义分摊"是这个盒子的小节标题，跟上面"这笔用哪张卡最划算？"同类角色，改用
           field-label 同款 10px；同行人姓名/金额是清单主内容，对齐 field-input 的
@@ -587,6 +513,98 @@ export function ExpenseForm({
             )}
           </div>
         )}
+      </div>
+
+      {/* fix(2026-09-13 Artifact Version 10 落地，第四轮拍板)："谁代垫的"不再是一直常显
+          的独立字段——分摊开关关掉（选"仅我自己"）时默认就是自己付，不用问；只有打开分摊
+          （平分/自定义分摊）才可能是别人代垫，这时候才有必要展出这个下拉。紧跟在分摊开关
+          下面，切开关时同一屏就能看到这个字段跟着出现/消失。 */}
+      {splitMode !== 'onlyMe' && (
+        <div className="flex flex-col gap-1">
+          <label className="field-label" htmlFor="payer">
+            谁代垫的
+          </label>
+          <select
+            id="payer"
+            value={payerParticipantId}
+            onChange={(e) => setPayerParticipantId(e.target.value)}
+            className="field-input"
+          >
+            {participants.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.displayName}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="category">
+          分类
+        </label>
+        <CategoryCombobox
+          id="category"
+          required
+          value={category}
+          onChange={setCategory}
+          options={COMMON_CATEGORIES}
+          placeholder="例如：餐饮"
+          inputClassName="field-input"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="merchant">
+          商家名称（可选）
+        </label>
+        <input
+          id="merchant"
+          value={merchant}
+          onChange={(e) => setMerchant(e.target.value)}
+          placeholder="例如：星巴克"
+          className="field-input"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="expense-date">
+          日期
+        </label>
+        <input
+          id="expense-date"
+          type="date"
+          required
+          value={expenseDate}
+          onChange={(e) => setExpenseDate(e.target.value)}
+          className="field-input"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="note">
+          备注（可选）
+        </label>
+        <textarea
+          id="note"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="field-input"
+          rows={2}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="receipt">
+          收据（可选{isEdit && initialExpense.hasReceipt ? '，已有收据，上传新文件会替换' : ''}）
+        </label>
+        <input
+          id="receipt"
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp,.pdf"
+          onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+          className="text-[12.5px]"
+        />
       </div>
 
       {error && (

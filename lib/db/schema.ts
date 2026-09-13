@@ -24,6 +24,15 @@ export const trips = sqliteTable('trip', {
     .default('active'),
   // 建表时 owner 还不存在，先允许 null，创建流程里第二步立刻回填
   ownerParticipantId: text('owner_participant_id'),
+  // 2026-09-13 落地第四轮拍板：可选的行程起止日期，首页"我的行程"卡片和新建行程表单都要用。
+  // 建库时没有这两个字段的老行程留 null，首页那一行日期显示就直接不渲染，不强行补录。
+  tripStartDate: integer('trip_start_date', { mode: 'timestamp_ms' }),
+  tripEndDate: integer('trip_end_date', { mode: 'timestamp_ms' }),
+  // 这个行程同时启用哪些币种（多选），JSON 字符串数组。这一项是 lifeos-pm 自己判断的方向，
+  // Artifact 里明确标注还没真正拍板（开放问题②），先落地但刻意收敛在"新建行程表单+这一个
+  // 字段"，不散播式地耦合进记账/钱包等其它地方，方便日后改回单一下拉。可以为 null（老行程/
+  // 还没设置），此时视为"不做币种收窄"。
+  enabledCurrencies: text('enabled_currencies', { mode: 'json' }).$type<string[] | null>(),
   createdAt: createdAt(),
 });
 
@@ -140,6 +149,9 @@ export const invites = sqliteTable(
     createdByParticipantId: text('created_by_participant_id')
       .notNull()
       .references(() => participants.id),
+    // 生成邀请时可选填"这条链接是给谁的"，纯人类可读标签，不参与任何鉴权判断
+    // （2026-09-13 落地第四轮拍板，屏⑥邀请管理）。
+    inviteeName: text('invitee_name'),
     createdAt: createdAt(),
     expiresAt: integer('expires_at', { mode: 'timestamp_ms' }),
     revokedAt: integer('revoked_at', { mode: 'timestamp_ms' }),
@@ -275,6 +287,10 @@ export const wallets = sqliteTable(
     currentBalance: integer('current_balance').notNull().default(0), // 最小货币单位
     // 可选关联到自己配置的支付方式，用于「记账选中这个支付方式时自动扣这个钱包」。
     paymentMethodId: text('payment_method_id').references(() => paymentMethods.id, { onDelete: 'set null' }),
+    // 「设置当前余额」这个动作最后一次发生的记录时间（2026-09-13 落地第四轮拍板，屏⑤
+    // 支付方式页新增功能）：允许补录成之前的日期，不强制等于 updatedAt/now。跟
+    // currentBalance 是同一次 PATCH 一起写，不单独起表。
+    balanceUpdatedAt: integer('balance_updated_at', { mode: 'timestamp_ms' }),
     createdAt: createdAt(),
   },
   (table) => ({
@@ -341,6 +357,43 @@ export const settlementSnapshots = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// settlement_confirmation：结算页"转账清单"里某一笔（from→to）是否已被标记
+// "已收款"，2026-09-13 落地第四轮拍板（屏④按笔勾选收款）。行存在=已确认，不存在=
+// 未确认，不用一个 boolean 列表示——这样"取消勾选"就是删这一行，逻辑更直接。
+// 只锚定 (tripId, from, to) 这一对参与者，不锚定金额：如果这期间又有新消费改变了
+// 这笔转账的实际金额，已确认状态不会自动失效——这是刻意简化，已在
+// PENDING-DECISIONS 里写明，之后如果 Remy 觉得需要按金额也锚定再加。
+// 只有 toParticipantId 本人（收钱的人）能确认/取消确认自己收到的这笔钱，
+// API 层校验，不能由付钱方替对方标记。
+// ---------------------------------------------------------------------------
+export const settlementConfirmations = sqliteTable(
+  'settlement_confirmation',
+  {
+    id: id(),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    fromParticipantId: text('from_participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    toParticipantId: text('to_participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    confirmedAt: integer('confirmed_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch('subsec') * 1000)`),
+  },
+  (table) => ({
+    tripIdx: index('settlement_confirmation_trip_idx').on(table.tripId),
+    pairIdx: uniqueIndex('settlement_confirmation_pair_idx').on(
+      table.tripId,
+      table.fromParticipantId,
+      table.toParticipantId
+    ),
+  })
+);
+
+// ---------------------------------------------------------------------------
 // exchange_rate_cache：每日汇率缓存，避免每次记账都打外部汇率 API。
 // ---------------------------------------------------------------------------
 export const exchangeRateCache = sqliteTable(
@@ -369,6 +422,21 @@ export const tripsRelations = relations(trips, ({ many }) => ({
   settlementSnapshots: many(settlementSnapshots),
   wallets: many(wallets),
   exchangeRecords: many(exchangeRecords),
+  settlementConfirmations: many(settlementConfirmations),
+}));
+
+export const settlementConfirmationsRelations = relations(settlementConfirmations, ({ one }) => ({
+  trip: one(trips, { fields: [settlementConfirmations.tripId], references: [trips.id] }),
+  fromParticipant: one(participants, {
+    fields: [settlementConfirmations.fromParticipantId],
+    references: [participants.id],
+    relationName: 'confirmFrom',
+  }),
+  toParticipant: one(participants, {
+    fields: [settlementConfirmations.toParticipantId],
+    references: [participants.id],
+    relationName: 'confirmTo',
+  }),
 }));
 
 export const participantsRelations = relations(participants, ({ one, many }) => ({

@@ -7,6 +7,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 interface Invite {
   id: string;
   code: string;
+  inviteeName: string | null;
   createdAt: string;
   expiresAt: string | null;
   revokedAt: string | null;
@@ -23,10 +24,16 @@ export function InvitesManager({ tripId }: { tripId: string }) {
   const [invites, setInvites] = useState<Invite[] | null>(null);
   const [participants, setParticipants] = useState<Participant[] | null>(null);
   const [expiresInDays, setExpiresInDays] = useState('');
+  const [inviteeName, setInviteeName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<{ type: 'revoke' | 'reset'; id: string } | null>(null);
+
+  // 屏⑥"直接添加参与者"（2026-09-13 落地第四轮拍板）：纯姓名，没有登录方式。
+  const [newParticipantName, setNewParticipantName] = useState('');
+  const [addingParticipant, setAddingParticipant] = useState(false);
+  const [addParticipantError, setAddParticipantError] = useState<string | null>(null);
 
   async function loadAll() {
     const [tripRes, invitesRes] = await Promise.all([
@@ -56,16 +63,45 @@ export function InvitesManager({ tripId }: { tripId: string }) {
       const res = await fetch(`/api/trips/${tripId}/invites`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(expiresInDays ? { expiresInDays: Number(expiresInDays) } : {}),
+        body: JSON.stringify({
+          ...(expiresInDays ? { expiresInDays: Number(expiresInDays) } : {}),
+          ...(inviteeName.trim() ? { inviteeName: inviteeName.trim() } : {}),
+        }),
       });
       if (!res.ok) {
         setError('生成邀请链接失败');
         return;
       }
       setExpiresInDays('');
+      setInviteeName('');
       await loadAll();
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleAddParticipant(e: React.FormEvent) {
+    e.preventDefault();
+    setAddParticipantError(null);
+    if (!newParticipantName.trim()) {
+      setAddParticipantError('名字不能空着');
+      return;
+    }
+    setAddingParticipant(true);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/participants`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ displayName: newParticipantName.trim() }),
+      });
+      if (!res.ok) {
+        setAddParticipantError('添加失败');
+        return;
+      }
+      setNewParticipantName('');
+      await loadAll();
+    } finally {
+      setAddingParticipant(false);
     }
   }
 
@@ -102,6 +138,18 @@ export function InvitesManager({ tripId }: { tripId: string }) {
         <h2 className="text-[12.5px] font-semibold text-ink">生成新邀请链接</h2>
         <form onSubmit={handleCreateInvite} className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
+            <label className="field-label" htmlFor="invitee-name">
+              对方名字（可选，方便自己认出这条链接是给谁的）
+            </label>
+            <input
+              id="invitee-name"
+              value={inviteeName}
+              onChange={(e) => setInviteeName(e.target.value)}
+              placeholder="例如：Ben"
+              className="field-input w-40"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
             <label className="field-label" htmlFor="expires-in-days">
               有效期（天，留空=不设有效期）
             </label>
@@ -125,6 +173,32 @@ export function InvitesManager({ tripId }: { tripId: string }) {
         {error && <p className="text-sm text-coral">{error}</p>}
       </section>
 
+      {/* 屏⑥"直接添加参与者"（2026-09-13 落地第四轮拍板）：纯姓名，没有登录方式，
+          建一个跟"邀请链接还没被认领"完全同形状的 participant 占位，自动出现在
+          "记一笔消费"分摊名单里（那边本来就是读 participants 表的真实数据）。 */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-[12.5px] font-semibold text-ink">直接添加参与者</h2>
+        <p className="text-[10px] text-muted">不需要对方点邀请链接认领，适合对方不方便操作手机的场合，加进来的人只是个占位名字。</p>
+        <form onSubmit={handleAddParticipant} className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="field-label" htmlFor="new-participant-name">
+              名字
+            </label>
+            <input
+              id="new-participant-name"
+              value={newParticipantName}
+              onChange={(e) => setNewParticipantName(e.target.value)}
+              placeholder="例如：司机阿明"
+              className="field-input w-40"
+            />
+          </div>
+          <button type="submit" disabled={addingParticipant} className="btn-secondary shrink-0 whitespace-nowrap">
+            {addingParticipant ? '添加中…' : '＋ 添加'}
+          </button>
+        </form>
+        {addParticipantError && <p className="text-sm text-coral">{addParticipantError}</p>}
+      </section>
+
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-ink">现有邀请链接</h2>
         {invites === null ? (
@@ -137,12 +211,15 @@ export function InvitesManager({ tripId }: { tripId: string }) {
               const isRevoked = invite.revokedAt !== null;
               const isExpired = invite.expiresAt !== null && new Date(invite.expiresAt).getTime() < Date.now();
               return (
-                <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-sm shadow-card">
+                <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
                   <span className="flex items-start gap-1.5">
                     <span aria-hidden="true">🔗</span>
-                    <code className="break-all font-mono text-xs text-muted">{inviteUrl(invite.code)}</code>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      {invite.inviteeName && <span className="text-[11px] font-medium text-ink">{invite.inviteeName}</span>}
+                      <code className="break-all font-mono text-[9px] text-muted">{inviteUrl(invite.code)}</code>
+                    </span>
                   </span>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
+                  <div className="flex flex-wrap items-center gap-3 text-[10px] text-muted">
                     {isRevoked || isExpired ? (
                       <span>
                         {isRevoked ? '已撤销' : '已过期'}
@@ -156,7 +233,11 @@ export function InvitesManager({ tripId }: { tripId: string }) {
                         )}
                       </span>
                     )}
-                    <button type="button" onClick={() => handleCopy(invite.code)} className="tap-link">
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(invite.code)}
+                      className="inline-flex min-h-[24px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
+                    >
                       {copiedCode === invite.code ? '已复制' : '复制链接'}
                     </button>
                     {!isRevoked && (
@@ -186,9 +267,9 @@ export function InvitesManager({ tripId }: { tripId: string }) {
             {participants.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] shadow-card"
+                className="flex items-center justify-between rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card"
               >
-                <span className="flex items-center gap-2 text-[12.5px]">
+                <span className="flex items-center gap-2 text-[11px]">
                   <Avatar name={p.displayName} size={24} />
                   {p.displayName}
                   {p.isOwner && <span className="ml-2 text-[10px] text-muted">创建者</span>}

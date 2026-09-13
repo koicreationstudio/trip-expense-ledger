@@ -1,30 +1,11 @@
-import { and, eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
-import { getDb } from '@/lib/db/client';
-import { wallets } from '@/lib/db/schema';
-import { getCurrentIdentity } from '@/lib/auth/current-session';
-import { ExchangeForm } from '../exchange-form';
 
-export default async function NewExchangePage({ params }: { params: { tripId: string } }) {
-  const identity = await getCurrentIdentity();
-  if (!identity || identity.tripId !== params.tripId) {
-    redirect('/');
-  }
-
-  const db = await getDb();
-  const myWallets = await db
-    .select()
-    .from(wallets)
-    .where(and(eq(wallets.tripId, params.tripId), eq(wallets.participantId, identity.participantId)))
-    .orderBy(wallets.createdAt);
-
-  return (
-    <main className="flex flex-col gap-6">
-      <h1 className="text-base font-semibold text-ink">取款 / 换汇</h1>
-      <ExchangeForm
-        tripId={params.tripId}
-        wallets={myWallets.map((w) => ({ id: w.id, label: w.label, currency: w.currency, emoji: w.emoji }))}
-      />
-    </main>
-  );
+/**
+ * 取款/换汇不再是独立页面——2026-09-13 第四轮拍板"真正合并进钱包卡内部"，
+ * 表单挪到行程主页 WalletCard 组件里原地展开（点「💱 取款/换汇」链接）。
+ * 这个路由文件保留但改成重定向，不整个删掉：万一有人收藏过这条旧链接，
+ * 落地时还能回到行程主页，而不是碰一个 404。
+ */
+export default function NewExchangePage({ params }: { params: { tripId: string } }) {
+  redirect(`/trips/${params.tripId}`);
 }

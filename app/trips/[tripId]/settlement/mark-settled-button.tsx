@@ -4,7 +4,18 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 
-export function MarkSettledButton({ tripId }: { tripId: string }) {
+export function MarkSettledButton({
+  tripId,
+  disabled = false,
+  disabledReason,
+}: {
+  tripId: string;
+  // 2026-09-13 落地第四轮拍板：转账清单按笔勾选"已收款"没勾完之前，这颗按钮禁用变灰，
+  // 全部勾完才解锁——由父组件（settlement/page.tsx 的客户端包装）算好 disabled 状态传下来，
+  // 这个组件自己不查确认状态。
+  disabled?: boolean;
+  disabledReason?: string;
+}) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,11 +49,12 @@ export function MarkSettledButton({ tripId }: { tripId: string }) {
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        disabled={submitting}
+        disabled={submitting || disabled}
         className="btn-primary"
       >
         {submitting ? '处理中…' : '标记已结算'}
       </button>
+      {disabled && disabledReason && <p className="text-[10px] text-muted">{disabledReason}</p>}
       {error && (
         <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
           {error}

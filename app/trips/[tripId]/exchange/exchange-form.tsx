@@ -17,7 +17,18 @@ export interface WalletOption {
  * 隐含汇率 = 目标金额 / 来源金额，不直接填汇率数字——两个真实金额比手动算好的
  * 汇率更不容易输错，这是照搬 remy-thailand 换汇表单的交互判断。
  */
-export function ExchangeForm({ tripId, wallets }: { tripId: string; wallets: WalletOption[] }) {
+export function ExchangeForm({
+  tripId,
+  wallets,
+  onSuccess,
+}: {
+  tripId: string;
+  wallets: WalletOption[];
+  // 内嵌进「我的钱包」卡片时传这个：成功后只收起面板+刷新余额，不整页跳转
+  // （2026-09-13 第四轮拍板"取款/换汇真正合并进钱包卡内部"）。不传就是原本的
+  // 独立页面行为：提交成功跳回行程主页。
+  onSuccess?: () => void;
+}) {
   const router = useRouter();
   const [fromWalletId, setFromWalletId] = useState<string | null>(null);
   const [toWalletId, setToWalletId] = useState<string | null>(wallets[0]?.id ?? null);
@@ -71,8 +82,17 @@ export function ExchangeForm({ tripId, wallets }: { tripId: string; wallets: Wal
         setError('保存失败，检查一下表单内容');
         return;
       }
-      router.push(`/trips/${tripId}`);
-      router.refresh();
+      setFromWalletId(null);
+      setFromAmountYuan('');
+      setToAmountYuan('');
+      setNote('');
+      if (onSuccess) {
+        onSuccess();
+        router.refresh();
+      } else {
+        router.push(`/trips/${tripId}`);
+        router.refresh();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -209,9 +229,15 @@ export function ExchangeForm({ tripId, wallets }: { tripId: string; wallets: Wal
         <button type="submit" disabled={submitting} className="btn-primary">
           {submitting ? '保存中…' : '保存充值记录'}
         </button>
-        <Link href={`/trips/${tripId}`} className="tap-link text-[12.5px] text-muted">
-          取消
-        </Link>
+        {onSuccess ? (
+          <button type="button" onClick={onSuccess} className="tap-link text-[11px] text-muted">
+            取消
+          </button>
+        ) : (
+          <Link href={`/trips/${tripId}`} className="tap-link text-[11px] text-muted">
+            取消
+          </Link>
+        )}
       </div>
     </form>
   );

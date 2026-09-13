@@ -13,6 +13,18 @@ export interface MyTripCard {
   netBalance: number;
   totalExpenseBaseCurrency: number;
   expenseCount: number;
+  tripStartDate: string | null;
+  tripEndDate: string | null;
+}
+
+function formatDateRange(start: string | null, end: string | null): string | null {
+  if (!start && !end) return null;
+  const fmt = (iso: string) => {
+    const d = new Date(iso);
+    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+  };
+  if (start && end) return `${fmt(start)} - ${fmt(end)}`;
+  return fmt((start ?? end)!);
 }
 
 // 状态从裸文字换成 pill（DESIGN-BRIEF.md 第五版已定案、settlement/invites-manager 已落地的
@@ -115,50 +127,131 @@ function TripCard({
   onOpen: (tripId: string) => void;
   ended?: boolean;
 }) {
+  const router = useRouter();
   const statusPill = STATUS_PILL[trip.status];
+  const dateRange = formatDateRange(trip.tripStartDate, trip.tripEndDate);
+  const [editing, setEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState(trip.name);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSaveName() {
+    const next = nameDraft.trim();
+    if (!next || next === trip.name) {
+      setEditing(false);
+      setNameDraft(trip.name);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/trips/${trip.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: next }),
+      });
+      if (res.ok) {
+        setEditing(false);
+        router.refresh();
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // fix(2026-09-13 Artifact Version 10 落地，第四轮拍板屏①)：卡片本身是可点开的
+  // <button>，改名 ✎ 图标必须是独立控件——两个 <button> 不能互相嵌套（无效 HTML），
+  // 改成外层 relative 容器 + 卡片按钮 + 绝对定位的编辑图标按钮，图标点击
+  // stopPropagation 不让事件冒泡触发卡片的 onOpen。
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(trip.id)}
-      disabled={switching}
-      className={`flex flex-col gap-1 rounded-xl border border-sand px-[9px] py-2 text-left text-base hover:border-muted disabled:opacity-50 ${
-        ended ? 'bg-paper opacity-70' : 'bg-[rgba(164,163,160,.14)] shadow-card'
-      }`}
-    >
-      <span className="font-medium">{trip.name}</span>
-      <span className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
-        <span className="inline-flex items-center rounded-full bg-sand px-[7px] py-[1px] font-mono text-[9.5px] font-medium text-muted">
-          {trip.baseCurrency}
-        </span>
-        <span>{trip.isOwner ? '创建者' : '同行人'}</span>
-        {statusPill ? (
-          <span className={`inline-flex items-center rounded-full px-[9px] py-[3px] text-[9.5px] font-medium ${statusPill.className}`}>
-            {statusPill.label}
-          </span>
-        ) : (
-          <span>{ARCHIVED_LABEL}</span>
-        )}
-      </span>
-      <span
-        className={`text-sm font-medium ${
-          trip.netBalance >= 0 ? 'text-positive' : 'text-negative'
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => onOpen(trip.id)}
+        disabled={switching}
+        className={`flex w-full flex-col gap-1 rounded-[14px] border border-sand px-[10px] py-2 text-left text-[12.5px] hover:border-muted disabled:opacity-50 ${
+          ended ? 'bg-paper opacity-70' : 'bg-[rgba(164,163,160,.14)] shadow-card'
         }`}
       >
-        {trip.netBalance >= 0 ? '该收' : '该付'}{' '}
-        <span className="font-serif tabular-nums">
-          {formatMoney(Math.abs(trip.netBalance), trip.baseCurrency)}
+        <span className="pr-5 font-medium">{trip.name}</span>
+        {dateRange && <span className="text-[10px] text-muted">📅 {dateRange}</span>}
+        <span className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+          <span className="inline-flex items-center rounded-full bg-sand px-[7px] py-[1px] font-mono text-[9.5px] font-medium text-muted">
+            {trip.baseCurrency}
+          </span>
+          <span>{trip.isOwner ? '创建者' : '同行人'}</span>
+          {statusPill ? (
+            <span className={`inline-flex items-center rounded-full px-[9px] py-[3px] text-[9.5px] font-medium ${statusPill.className}`}>
+              {statusPill.label}
+            </span>
+          ) : (
+            <span>{ARCHIVED_LABEL}</span>
+          )}
         </span>
-      </span>
-      {trip.expenseCount > 0 && (
-        <span className="text-[10px] text-muted">
-          总消费{' '}
+        <span
+          className={`text-[12.5px] font-medium ${
+            trip.netBalance >= 0 ? 'text-positive' : 'text-negative'
+          }`}
+        >
+          {trip.netBalance >= 0 ? '该收' : '该付'}{' '}
           <span className="font-serif tabular-nums">
-            {formatMoney(trip.totalExpenseBaseCurrency, trip.baseCurrency)}
-          </span>{' '}
-          · {trip.expenseCount} 笔
+            {formatMoney(Math.abs(trip.netBalance), trip.baseCurrency)}
+          </span>
         </span>
+        {trip.expenseCount > 0 && (
+          <span className="text-[10px] text-muted">
+            总消费{' '}
+            <span className="font-serif tabular-nums">
+              {formatMoney(trip.totalExpenseBaseCurrency, trip.baseCurrency)}
+            </span>{' '}
+            · {trip.expenseCount} 笔
+          </span>
+        )}
+        {switching && <span className="text-[10px] text-muted">打开中…</span>}
+      </button>
+
+      {trip.isOwner && !editing && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setNameDraft(trip.name);
+            setEditing(true);
+          }}
+          aria-label={`改名「${trip.name}」`}
+          className="absolute right-2 top-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] text-muted hover:text-ink"
+        >
+          ✎
+        </button>
       )}
-      {switching && <span className="text-[10px] text-muted">打开中…</span>}
-    </button>
+
+      {editing && (
+        <div
+          className="absolute inset-0 z-10 flex flex-col justify-center gap-1.5 rounded-[14px] border border-sand bg-paper p-[9px] shadow-card"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            autoFocus
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            className="field-input"
+            placeholder="行程名称"
+          />
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={saving} onClick={handleSaveName} className="btn-secondary">
+              {saving ? '保存中…' : '保存'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false);
+                setNameDraft(trip.name);
+              }}
+              className="tap-link text-[11px] text-muted"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

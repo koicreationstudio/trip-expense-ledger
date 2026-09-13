@@ -51,18 +51,19 @@ body {
   }
 
   /* 主操作按钮：DESIGN-BRIEF 第三版圆角尺度改 pill；min-h 44px 是 Apple HIG 最小触控热区（触控热区不算视觉密度，不跟着字号收）。
-     字号 2026-09-08 从 text-sm(14px) 收到 12.5px：这个 class 从建库起就没跟上其它模块历轮的紧凑化，是全站字号不一致的公共 chokepoint 之一。 */
+     字号 2026-09-08 从 text-sm(14px) 收到 12.5px；2026-09-13 第四轮全局紧凑化再收到 --btn-font(11px)，
+     padding 收到 --btn-pad(7px)。 */
   .btn-primary {
-    @apply inline-flex min-h-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[14px] text-[12.5px] font-medium text-white transition-colors hover:bg-accent-800 disabled:opacity-50;
+    @apply inline-flex min-h-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[10px] text-[11px] font-medium text-white transition-colors hover:bg-accent-800 disabled:opacity-50;
   }
 
   /* 次要操作按钮：比价/平均分摊/移除这类不需要抢主按钮风头的动作，触控高度跟主 CTA/FAB 拉开一级。
      第十六轮：min-h 36px→32px 再收紧一档（跟 .tap-link 的 32px 同档，靠背景/边框区分不靠高度）；
      shrink-0+whitespace-nowrap 这次提到全局 class 层（原本只在 payment-methods-manager.tsx/
      expense-form.tsx/invites-manager.tsx 三处零散补了 shrink-0，这次收成 chokepoint 一次性覆盖全部
-     调用点，防止以后新页面再漏加）。 */
+     调用点，防止以后新页面再漏加）。2026-09-13 第四轮：字号/padding 同步收到 --btn-font(11px)/--btn-pad(7px)。 */
   .btn-secondary {
-    @apply inline-flex min-h-[32px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[10px] text-[12.5px] font-medium text-ink transition-colors hover:bg-slate-50 disabled:opacity-50;
+    @apply inline-flex min-h-[32px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[7px] text-[11px] font-medium text-ink transition-colors hover:bg-slate-50 disabled:opacity-50;
   }
 
   /* 行内文字链接型操作（编辑/删除/撤销/复制）：纯文字链接不需要 44px 按钮级触控热区 */
@@ -71,21 +72,26 @@ body {
   }
 
   /* 字段标签：跟表单说明性文字（如"汇率加点 X%"caption）同一档 10px，比 field-input 里的实际内容矮一档，
-     跟其它模块"标签比内容小"的惯例对齐（原为 text-sm，同上 chokepoint）。 */
+     跟其它模块"标签比内容小"的惯例对齐（原为 text-sm，同上 chokepoint）。
+     2026-09-13 第四轮全局紧凑化：10px→9px（--label-font），跟 Artifact Version 10
+     拍板的紧凑化共享值对齐，这是全站 chokepoint，改这里比逐页面改省事也不容易漏。 */
   .field-label {
-    @apply text-[10px] font-medium text-ink;
+    @apply text-[9px] font-medium text-ink;
   }
 
-  /* 输入内容字号对齐全站"主要内容"档 12.5px（跟 expense-list/exchange-record-list 等列表主文字同一档，原为 text-sm）。 */
+  /* 输入内容字号对齐全站"主要内容"档，原 12.5px。第四轮紧凑化收到 --ctrl-font 10px，
+     padding 同步收到 --ctrl-pad(5px 7px)——跟 select/segmented按钮/wallet-select-btn
+     这几类控件统一同一套尺寸，不再各自零散定。 */
   .field-input {
-    @apply rounded-xl border border-sand px-[9px] py-2 text-[12.5px] focus:border-accent-700 focus:outline-none focus:ring-1 focus:ring-accent-700 disabled:bg-slate-100;
+    @apply rounded-xl border border-sand px-[7px] py-[5px] text-[10px] focus:border-accent-700 focus:outline-none focus:ring-1 focus:ring-accent-700 disabled:bg-slate-100;
   }
 
   /* .field-input 的深色卡变体：净额+钱包合并卡（bg-hero-gradient）里唯一会出现输入框
      的地方（快速记账 quick-add-expense.tsx），沿用钱包胶囊已经在用的 white/[.x] 叠加
-     语言（不新造颜色），跟浅色页面上的 .field-input 是两个独立 class，不用媒体查询切换。 */
+     语言（不新造颜色），跟浅色页面上的 .field-input 是两个独立 class，不用媒体查询切换。
+     第四轮紧凑化同步收紧，字号/padding 对齐 .field-input 新值。 */
   .field-input-dark {
-    @apply rounded-lg border border-white/[.14] bg-white/[.08] px-[7px] py-1 text-[11.5px] text-white placeholder:text-white/40 focus:border-white/40 focus:outline-none disabled:opacity-40;
+    @apply rounded-lg border border-white/[.14] bg-white/[.08] px-[7px] py-[5px] text-[10px] text-white placeholder:text-white/40 focus:border-white/40 focus:outline-none disabled:opacity-40;
   }
 
   /* 标准卡片容器：钱包卡/交易行/汇率卡通用同一档圆角+sand边，
@@ -93,8 +99,21 @@ body {
      容器级字号不再统一撑大，由每个子元素各自定字号（见各组件）。
      第五版补丁：填充从跟页面同色的 bg-paper 改成 sand 低透明度叠加，做出
      "卡片比页面深一档"的双层背景层次（吸收 brand-pm paper/paper-raised 分层
-     思路，但取值继续用本系统已验证的 sand，不引入未验证的新 hex）。 */
+     思路，但取值继续用本系统已验证的 sand，不引入未验证的新 hex）。
+     第四轮紧凑化：padding 从 9px/5px 收到 --list-pad(4px 6px)，跟参与者/支付方式/
+     邀请管理这几处 list 容器统一。 */
   .tx-item {
-    @apply flex items-center gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] shadow-card;
+    @apply flex items-center gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[6px] py-[4px] shadow-card;
+  }
+
+  /* 第四轮紧凑化新增 chokepoint：list 内每一行的行间距，参与者/结算净值/转账清单/
+     邀请管理这类"一行一人/一笔"的列表统一用这个，原本各处零散写 py-1。 */
+  .row-compact {
+    @apply py-[4px];
+  }
+
+  /* 第四轮紧凑化新增 chokepoint：list 主名字（人名/行程名），原本各处零散写 text-[12.5px]。 */
+  .row-name {
+    @apply text-[11.5px];
   }
 }

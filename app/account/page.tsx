@@ -55,7 +55,7 @@ export default async function AccountPage({ searchParams }: { searchParams?: { f
       <Link href={backHref} className="tap-link self-start text-[10px] text-muted hover:text-ink">
         ← {backLabel}
       </Link>
-      <h1 className="text-base font-semibold text-ink">我的账号</h1>
+      <h1 className="text-[15px] font-semibold text-ink">我的账号</h1>
       <AccountIdentityLink url={identityUrl} />
     </main>
   );

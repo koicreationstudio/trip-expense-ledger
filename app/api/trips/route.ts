@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
 
   const parsed = await parseJsonBody(request, createTripSchema);
   if ('error' in parsed) return parsed.error;
-  const { name, baseCurrency, ownerDisplayName, participantNames } = parsed.data;
+  const { name, baseCurrency, ownerDisplayName, participantNames, tripStartDate, tripEndDate, enabledCurrencies } =
+    parsed.data;
 
   const tripId = crypto.randomUUID();
   const ownerId = crypto.randomUUID();
@@ -39,7 +40,14 @@ export async function POST(request: NextRequest) {
   // 元组类型来做逐项类型推断，这里的动态数组结构上退化成普通数组，做一次断言
   // （运行时永远至少有 3 项：建 trip / 建 owner / 回填 ownerParticipantId）。
   const statements = [
-    db.insert(trips).values({ id: tripId, name, baseCurrency }),
+    db.insert(trips).values({
+      id: tripId,
+      name,
+      baseCurrency,
+      tripStartDate: tripStartDate ? new Date(tripStartDate) : undefined,
+      tripEndDate: tripEndDate ? new Date(tripEndDate) : undefined,
+      enabledCurrencies: enabledCurrencies && enabledCurrencies.length > 0 ? enabledCurrencies : undefined,
+    }),
     db.insert(participants).values({
       id: ownerId,
       tripId,

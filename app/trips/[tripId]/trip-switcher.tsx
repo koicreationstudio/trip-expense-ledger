@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { formatMoney } from '@/lib/money';
 import type { UserTripSummary } from '@/lib/db/user-trips-query';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 
@@ -156,17 +155,32 @@ export function TripSwitcher({
         <span aria-hidden="true">▾</span>
       </button>
 
+      {/* fix(2026-09-13 Artifact Version 10 落地，第四轮拍板)：这个面板历史被打回 3 次，
+          逐值照抄设计稿 .dropdown-panel 规格，不凭记忆估：容器 rounded-[14px]+padding 4px；
+          标题跟"＋新建行程"入口同一行（原本创建入口是面板最底部单独一整行，这次挪到标题
+          行右上角）；每一行前面加圆点 ●（未选中 #B5B4B1／选中 ink），未选中行背景透明+
+          极淡 1px 分隔线（不是明显色块边界），选中行背景 #EBEAE8 圆角 8px 名字加粗，右边
+          用 ✓ 符号代替"当前行程"这行文字。删除/切换中/报错这些真实交互功能原样保留，只是
+          换了外层视觉——Artifact 本身只是静态设计稿，没有这些交互，不能因为设计稿没画就删掉。 */}
       {open && (
-        <div className="absolute left-0 top-full z-10 mt-1 w-full min-w-[220px] rounded-xl border border-sand bg-paper shadow-card">
-          <p className="px-[9px] pt-[9px] text-[9.5px] uppercase tracking-wide text-muted">
-            {otherTrips.length > 0 ? '切换行程' : '管理行程'}
-          </p>
-          {error && <p className="px-[9px] pb-1 text-[10px] text-coral">{error}</p>}
+        <div className="absolute left-0 top-full z-10 mt-1 w-full min-w-[220px] rounded-[14px] border border-sand bg-paper p-1 shadow-card">
+          <div className="flex items-center justify-between gap-2 px-[6px] pb-[3px] pt-[2px]">
+            <span className="text-[9.5px] tracking-wide text-gold">
+              {otherTrips.length > 0 ? '展开：切到其它行程' : '管理行程'}
+            </span>
+            <Link href="/trips/new" className="shrink-0 text-[9.5px] text-gold-dk underline underline-offset-2">
+              ＋ 新建行程
+            </Link>
+          </div>
+          {error && <p className="px-[6px] pb-1 text-[10px] text-coral">{error}</p>}
           <ul className="flex flex-col">
-            <li className="flex items-center justify-between gap-2 border-t border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px]">
-              <span className="min-w-0 truncate">
-                <span className="text-[12.5px] font-medium text-ink">{currentTripName}</span>
-                <span className="ml-2 text-[10px] text-muted">当前行程</span>
+            <li className="flex items-center gap-[6px] rounded-[8px] bg-[#EBEAE8] px-[6px] py-[4px]">
+              <span className="w-[9px] shrink-0 text-center text-[7px] leading-none text-ink" aria-hidden="true">
+                ●
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-ink">{currentTripName}</span>
+              <span className="shrink-0 text-[10px] text-ink" aria-hidden="true">
+                ✓
               </span>
               {isOwner && (
                 <button
@@ -175,31 +189,27 @@ export function TripSwitcher({
                   className="tap-link shrink-0 text-[10px] text-coral"
                   aria-label={`删除「${currentTripName}」`}
                 >
-                  🗑 删除
+                  🗑
                 </button>
               )}
             </li>
             {otherTrips.map((trip) => (
-              <li key={trip.id} className="flex items-center gap-1 border-t border-sand px-[9px] py-[5px]">
+              <li
+                key={trip.id}
+                className="flex items-center gap-[6px] border-t border-[rgba(55,55,54,.07)] px-[6px] py-[4px]"
+              >
+                <span className="w-[9px] shrink-0 text-center text-[7px] leading-none text-[#B5B4B1]" aria-hidden="true">
+                  ●
+                </span>
                 <button
                   type="button"
                   onClick={() => handleSwitch(trip.id)}
                   disabled={switchingId === trip.id}
-                  className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left disabled:opacity-50"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:opacity-50"
                 >
-                  <span className="min-w-0 truncate text-[12.5px] font-medium text-ink">
+                  <span className="min-w-0 truncate text-[11px] font-normal text-ink">
                     {trip.name}
                     {switchingId === trip.id && <span className="ml-2 text-[10px] text-muted">切换中…</span>}
-                  </span>
-                  <span
-                    className={`shrink-0 text-[10px] font-medium ${
-                      trip.netBalance >= 0 ? 'text-positive' : 'text-negative'
-                    }`}
-                  >
-                    {trip.netBalance >= 0 ? '该收' : '该付'}{' '}
-                    <span className="font-serif tabular-nums">
-                      {formatMoney(Math.abs(trip.netBalance), trip.baseCurrency)}
-                    </span>
                   </span>
                 </button>
                 {trip.isOwner && (
@@ -209,18 +219,12 @@ export function TripSwitcher({
                     className="tap-link shrink-0 text-[10px] text-coral"
                     aria-label={`删除「${trip.name}」`}
                   >
-                    🗑 删除
+                    🗑
                   </button>
                 )}
               </li>
             ))}
           </ul>
-          <Link
-            href="/trips/new"
-            className="block border-t border-sand px-[9px] py-[5px] text-[12.5px] text-gold-dk underline underline-offset-2"
-          >
-            ＋ 创建新行程
-          </Link>
         </div>
       )}
 
