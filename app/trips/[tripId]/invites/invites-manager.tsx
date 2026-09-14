@@ -37,6 +37,10 @@ export function InvitesManager({ tripId }: { tripId: string }) {
   // fix(2026-09-14 Artifact Version 10 走查补做)：Artifact 里"直接添加参与者"是一行
   // 文字链接，点开才展开这个小表单——之前做成了常驻的一整块 section，比 Artifact 重。
   const [addParticipantOpen, setAddParticipantOpen] = useState(false);
+  // fix(2026-09-14 第四轮走查)：Artifact 这屏"生成新邀请链接"也是同一个模式——一颗
+  // "＋ 生成新邀请"按钮，点开才展开"对方名字/有效期"这个表单，之前这里是常驻展开的，
+  // 没跟"直接添加参与者"那半边统一。
+  const [genInviteOpen, setGenInviteOpen] = useState(false);
 
   async function loadAll() {
     const [tripRes, invitesRes] = await Promise.all([
@@ -137,44 +141,50 @@ export function InvitesManager({ tripId }: { tripId: string }) {
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-3">
-        <h2 className="text-[12.5px] font-semibold text-ink">生成新邀请链接</h2>
-        <form onSubmit={handleCreateInvite} className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="field-label" htmlFor="invitee-name">
-              对方名字（可选，方便自己认出这条链接是给谁的）
-            </label>
-            <input
-              id="invitee-name"
-              value={inviteeName}
-              onChange={(e) => setInviteeName(e.target.value)}
-              placeholder="例如：Ben"
-              className="field-input w-40"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="field-label" htmlFor="expires-in-days">
-              有效期（天，留空=不设有效期）
-            </label>
-            <input
-              id="expires-in-days"
-              type="number"
-              min="1"
-              value={expiresInDays}
-              onChange={(e) => setExpiresInDays(e.target.value)}
-              className="field-input w-40"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={creating}
-            className="btn-primary shrink-0 whitespace-nowrap"
-          >
-            {creating ? '生成中…' : '生成邀请链接'}
-          </button>
-        </form>
-        {error && <p className="text-sm text-coral">{error}</p>}
-      </section>
+      {!genInviteOpen ? (
+        <button type="button" onClick={() => setGenInviteOpen(true)} className="btn-primary self-start">
+          ＋ 生成新邀请
+        </button>
+      ) : (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-[12.5px] font-semibold text-ink">生成新邀请链接</h2>
+          <form onSubmit={handleCreateInvite} className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="field-label" htmlFor="invitee-name">
+                对方名字（可选，方便自己认出这条链接是给谁的）
+              </label>
+              <input
+                id="invitee-name"
+                value={inviteeName}
+                onChange={(e) => setInviteeName(e.target.value)}
+                placeholder="例如：Ben"
+                className="field-input w-40"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="field-label" htmlFor="expires-in-days">
+                有效期（天，留空=不设有效期）
+              </label>
+              <input
+                id="expires-in-days"
+                type="number"
+                min="1"
+                value={expiresInDays}
+                onChange={(e) => setExpiresInDays(e.target.value)}
+                className="field-input w-40"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={creating}
+              className="btn-primary shrink-0 whitespace-nowrap"
+            >
+              {creating ? '生成中…' : '生成邀请链接'}
+            </button>
+          </form>
+          {error && <p className="text-sm text-coral">{error}</p>}
+        </section>
+      )}
 
       {/* 屏⑥"直接添加参与者"（2026-09-13 落地第四轮拍板）：纯姓名，没有登录方式，
           建一个跟"邀请链接还没被认领"完全同形状的 participant 占位，自动出现在

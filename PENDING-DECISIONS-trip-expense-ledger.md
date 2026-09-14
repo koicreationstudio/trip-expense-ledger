@@ -1,5 +1,48 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-14 晚，第八轮（Remy 说的"第四轮"，round4 截图对齐），线上真实页面 vs Artifact 源码逐屏核对，新 session 从这里读起】
+
+背景：前几轮反复被 Remy 打回"跟 Artifact 不一样，功能也是"，这轮换了个做法——不再凭截图印象猜，而是直接翻 Artifact 完整源码（本地路径见下）逐 class/逐数值核对，配合 Remy 准备好的两组截图（`audit-diffs/round4/artifact/` vs `audit-diffs/round4/live/`，9 屏 + 2 交互态）。Artifact 源码路径：`~/.claude/projects/-Users-linotan-Desktop-Claude/24a4d41c-bedb-442f-934a-6f8fade25cf7/tool-results/artifact-86772aaa-1789310837-d1f0.html`（1432 行，全部 9 屏 markup + 全部 CSS token）。
+
+### 做了的改动（已部署）
+
+1. **"记一笔消费"支付方式字段简化成朴素下拉（Remy 本人明确要求）**——`expense-form.tsx`：原本是一张带"比价"按钮+比价推荐列表的卡片，改成一个纯原生 `<select>`（照抄币种字段同一套模式），列出用户名下全部支付方式，选中记 `selectedPaymentMethodId`。`ExpenseForm` 的 prop 从 `hasPaymentMethods: boolean` 改成 `paymentMethods: {id,label}[]`，两个调用方（`expenses/new/page.tsx`、`expenses/[expenseId]/edit/page.tsx`）跟着传完整列表。删掉的：`handleCompare`/`comparing`/`recommendations`/`compareError` 这几个 state/函数、`FxCompareList` 和 `FxRecommendationResult` 的 import。**没删**：`lib/domain/fx-recommendation`、`/api/trips/[tripId]/fx-recommendation` 路由、`fx-compare-list.tsx` 组件本身——比价功能的底层实现原样保留，只是先不挂在这个表单里了，之后要接到别的地方（比如取款换汇面板，或者独立入口）再说，这轮没有决定接到哪。
+   - hint 文案如实说了现状：**没有**照抄 Artifact 那句"只列出本行程启用的"，因为这个项目的 schema 里 `paymentMethods` 表只到 userId/participantId 级别，没有 trip 级别的启用开关，Artifact 画了这个过滤但代码没做（见下面第 3 条结构性缺口）。列的是"用户名下全部支付方式"，hint 文字这么写的。
+
+2. **支付方式页标题**——`payment-methods/page.tsx`：文案 "支付方式设置" → "支付方式"，字号 `text-base`(16px) → `text-[15px]`，对齐 Artifact 的 `.title-block h3{font-size:15px}` 以及本站"我的账号"/"我的行程"两处已经在用的 15px 规格。**没动**副标题文案（Remy 没要求改这句）。
+
+3. **顶部导航 tab 补外层"轨道"容器**——`nav-links.tsx`：Artifact `.navtabs` 有一层 `background: gold-lt; border-radius: 999px; padding: 3px; gap: 4px` 的浅金色圆角轨道包着四个 tab，之前只做出了选中态的黑色胶囊，没有这层外层容器。补上 `<nav className="w-fit rounded-full bg-gold-lt p-[3px] gap-1">` 包装，选中态维持原来的 `bg-ink text-white` 不变，未选中态颜色从 `text-muted` 换成语义更准的 `text-gold-dk`（这两个 token 实际是同一个 hex `#6E6E6C`，纯视觉上没差别，只是跟 Artifact 对应的 `--gold-dk` 变量名对上）。
+
+4. **两张汇率比价卡默认展开**——`fx-rate-card.tsx`（"当前汇率比价"）+ `fx-channel-compare-card.tsx`（"换汇渠道比价"）：查过 Artifact 源码，`.fx-section` 这块内容根本没有收起/展开的概念，一进页面就是摊开的；两个文件的注释里也没找到"Remy 拍板保留收起"这类记录，判断是没跟上 Artifact，不是刻意为之。`expanded` 初始值 `false`→`true`，`fx-rate-card.tsx` 额外补了一个 `useEffect` 在默认展开时自动拉一次数据（之前只有点"展开"这个动作才会触发拉数据，直接改初始值会导致默认展开但空白）。点"收起▲"的功能还留着，只是默认态换了。
+
+5. **邀请管理页"生成新邀请链接"表单改成点开才展开**——`invites-manager.tsx`：这个文件里"直接添加参与者"那半边上一轮已经改成点开展开的模式了（`addParticipantOpen` state），但"生成新邀请链接"这半边还是常驻展开的表单，两边不统一，也跟 Artifact 的"+ 生成新邀请"按钮点开才弹表单对不上。加了 `genInviteOpen` state（默认 `false`），照抄同一个文件里已有的模式包一层。
+
+### 判断"这轮不改"、原样保留的差异（附理由）
+
+**A. "本行程启用的支付方式" ——Artifact 有、代码没有，这是真实架构缺口，这轮没做**
+Artifact「支付方式」屏在"已添加"列表之外还有一个独立区块"本行程启用的支付方式"（复选框列表，勾哪些卡这趟行程要用），`payment-methods-manager.tsx` 里的"设置当前余额"面板文案也提到过类似假设（"余额面板收窄成只显示已勾选的这 2 项"），但翻了 schema，`paymentMethods` 表压根没有 trip 级别的启用/关联字段（只有 userId/participantId 级别，费率配置）。这不是 CSS/文案能解决的，要加 schema 字段/关联表 + migration + UI，改动面积和风险都不小。**这轮没有动手做**，留给下一轮单独评估要不要做、怎么做。
+
+**B. 邀请管理页"现有邀请链接"/"参与者认领状态"两个独立区块——判断是真实功能，保留**
+Artifact 这一屏只画了一个简单的合并列表（参与者+邀请状态混一起），线上代码拆成了两个更完整的区块：一个管理邀请链接本身（含有效期、撤销），一个管理参与者认领状态（含重置认领）。核实过代码，这两个功能（撤销邀请、重置认领）是真实存在且有实际用途的操作（`/api/trips/[tripId]/invites/[inviteId]` DELETE、`/api/trips/[tripId]/participants/[participantId]/reset-claim`），Artifact 的静态稿没有画出这两个操作口子，不代表不需要。判断跟"收据上传"是同一类——静态原型没画的真实功能，不该为了对齐视觉而砍掉。
+
+**C. 新建行程页"你的称呼"/"同行人"字段——Artifact 没有，代码里是必需的，保留**
+Artifact「创建新行程」屏没有这两个字段，但翻了 `new-trip-form.tsx` 和后端，建行程时必须同时指定创建者自己的称呼（`ownerDisplayName`）+ 可选预置同行人名单（`participantNames`），这是这个项目的数据模型要求（一个 trip 至少要有一个 participant 才能记账），不是这轮视觉改版顺手加的东西，Artifact 静态稿单纯没画出这一步。"本位币"字段的文案（"本位币（结算/比较用的币种）" vs Artifact"主要币种 用于统计汇总/净额"）代码里本来就有个注释写着"开放问题②，未真正拍板"，这轮没有动。
+
+**D. 快速记账（quick-add-expense.tsx）"币种"字段——原生 select，风险大于收益，暂不改**
+Artifact 这个字段是深色 `.dd-fake` 触发器点开候选清单；"分类"字段这边已经用 `CategoryCombobox` 组件解决了（这个组件本身是为了绕开 iOS Safari 对 datalist 的渲染 bug 而写的，行为上已经很接近 Artifact 的点开式下拉），但"币种"字段目前还是原生 `<select>`。评估过要不要照"分类"字段的思路也给"币种"做一个自定义下拉——币种候选就 6 个短代码，原生 select 功能完全够用，纯粹是为了跟 Artifact 视觉对齐要新增一个组件/新的状态管理，收益（好看一点）跟风险（新增代码面、新的边界情况）不成比例，这轮没有做，先记在这里。
+
+**E. 新建钱包——Artifact 画的是弹层（modal），代码是卡片内联展开，判断保留**
+Artifact 标注这屏是"新建钱包（弹层）"，代码里点"＋"是在"我的钱包"卡片内联展开一个表单（`wallet-grid.tsx` 的 `creating` state），不是真正的模态弹窗。功能上完全等价（钱包名联动支付方式命名池、账户类型 4 个图标、去掉起始余额字段——这几条 Artifact 第四轮拍板的东西上一轮已经落地了，逐值核对过是对的），只是"弹层 vs 内联展开"这个交互形态选择不同，属于合理的实现简化（避免额外引入 modal 组件/焦点锁定等复杂度），不是没跟上视觉，这轮没有改。
+
+**F. 结算页 / 我的账号页——逐屏核对，已经对齐，没有发现需要改的地方**
+"标记已结算"按钮从全局一键改成"转账清单按笔勾选已收款、全部确认才解锁"，逐条核对代码注释和文案（"转账进度：X/Y 笔已确认收款"），已经是 Artifact 第四轮拍板要的样子；"我的账号"页标题/副标题/链接框/按钮，跟 Artifact 截图逐项比对完全一致。这两屏没有改动。
+
+### 部署
+
+`./deploy.sh` 五关全过：lint 0 warning、typecheck 过、单测 67 个全绿、opennextjs-cloudflare build 成功、`wrangler deploy` 成功（Version ID `db03b327-2f3e-48ac-b8e2-211433a204a5`），回读 `https://trip-expense-ledger.remybali.workers.dev/api/health` 200。部署后另外建了一个测试行程复验（"UI复验-可删"），用 Playwright 截了 5 张图核对本轮改的 5 处改动：`01-行程主页-导航轨道和汇率卡展开.png`、`02-支付方式页标题.png`、`02b-支付方式页已添加.png`、`03-记一笔消费-支付方式简化下拉.png`、`04-邀请管理-生成邀请收起态.png`，截图存在 `audit-diffs/round4/verify/`。核对完这个测试行程已经从数据库清理掉了。
+
+---
+
 ## 【2026-09-14 凌晨，第七轮，ui-auditor 逐屏走查抓出 3 个结构性缺口 + 5 处呈现差异，独立 session 熬夜做完，新 session 从这里读起】
 
 背景：Remy 睡前交代"按 artifacts proposal 里那样部署，明早起来要看到一模一样"，这个 session 独立执行到底、中途不等确认。起手前 ui-auditor 先做过一轮线上页面 vs Artifact Version 10 的逐屏截图比对（`~/Desktop/Claude/live-*.png` / `artifact-*.png`），抓出 10 条差异，这轮逐条核实+修。

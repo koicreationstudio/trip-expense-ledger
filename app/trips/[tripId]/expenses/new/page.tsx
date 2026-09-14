@@ -33,7 +33,7 @@ export default async function NewExpensePage({ params }: { params: { tripId: str
         baseCurrency={trip.baseCurrency}
         myParticipantId={identity.participantId}
         participants={tripParticipants.map((p) => ({ id: p.id, displayName: p.displayName }))}
-        hasPaymentMethods={myPaymentMethods.length > 0}
+        paymentMethods={myPaymentMethods.map((m) => ({ id: m.id, label: m.label }))}
       />
     </main>
   );

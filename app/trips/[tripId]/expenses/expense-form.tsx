@@ -8,8 +8,6 @@ import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { equalSplit, rescaleSplitToBaseCurrency } from '@/lib/domain/split';
 import type { SplitShare } from '@/lib/domain/split';
 import { COMMON_CATEGORIES } from '@/lib/domain/categories';
-import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
-import { FxCompareList } from '../fx-compare-list';
 import { CategoryCombobox } from '@/components/category-combobox';
 
 interface Participant {
@@ -102,19 +100,24 @@ function deriveInitialSplitState(initialExpense: InitialExpense, participants: P
   return { splitMode: 'custom' as const, splitIncluded, splitAmounts };
 }
 
+interface PaymentMethodOption {
+  id: string;
+  label: string;
+}
+
 export function ExpenseForm({
   tripId,
   baseCurrency,
   myParticipantId,
   participants,
-  hasPaymentMethods,
+  paymentMethods,
   initialExpense,
 }: {
   tripId: string;
   baseCurrency: string;
   myParticipantId: string;
   participants: Participant[];
-  hasPaymentMethods: boolean;
+  paymentMethods: PaymentMethodOption[];
   initialExpense?: InitialExpense;
 }) {
   const router = useRouter();
@@ -137,9 +140,6 @@ export function ExpenseForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [comparing, setComparing] = useState(false);
-  const [recommendations, setRecommendations] = useState<FxRecommendationResult[] | null>(null);
-  const [compareError, setCompareError] = useState<string | null>(null);
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(
     initialExpense?.paymentMethodId ?? null
   );
@@ -190,47 +190,6 @@ export function ExpenseForm({
       }
       return next;
     });
-  }
-
-  async function handleCompare() {
-    setCompareError(null);
-    setRecommendations(null);
-    if (!hasPaymentMethods) {
-      setCompareError('no_payment_methods');
-      return;
-    }
-    const amount = Number(amountYuan);
-    if (!amount || amount <= 0) {
-      setCompareError('先填金额再比价');
-      return;
-    }
-    setComparing(true);
-    try {
-      const res = await fetch(`/api/trips/${tripId}/fx-recommendation`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ amount: yuanToCents(amount), expenseCurrency: currency }),
-      });
-      if (res.status === 400) {
-        const body = await (res.json() as Promise<any>).catch(() => null);
-        if (body?.error === 'no_payment_methods') {
-          setCompareError('no_payment_methods');
-          return;
-        }
-        setCompareError('比价失败，检查一下金额/币种');
-        return;
-      }
-      if (!res.ok) {
-        setCompareError('比价失败，检查一下金额/币种');
-        return;
-      }
-      const data = (await res.json()) as any;
-      setRecommendations(data.recommendations);
-      // 每次重新比价都清掉已选定的支付方式：金额/币种可能变了，旧的选择不一定还成立。
-      setSelectedPaymentMethodId(null);
-    } finally {
-      setComparing(false);
-    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -357,10 +316,7 @@ export function ExpenseForm({
           <select
             id="currency"
             value={currency}
-            onChange={(e) => {
-              setCurrency(e.target.value);
-              setRecommendations(null);
-            }}
+            onChange={(e) => setCurrency(e.target.value)}
             className="field-input"
           >
             {Array.from(new Set([baseCurrency, ...COMMON_CURRENCIES])).map((c) => (
@@ -435,27 +391,39 @@ export function ExpenseForm({
         />
       </div>
 
-      {/* fix(2026-09-14 Artifact Version 10 走查补做)：这张卡片是 v0.1（commit 59e69bf，
-          项目第一个版本）就有的「按支付方式比价」真实功能，不是这轮视觉改版顺手夹带的新
-          复杂化——Artifact 画的是一个纯粹的"支付方式"简单下拉，但比价这个功能本身有实际
-          价值（帮忙算清楚这笔用哪张卡最省手续费），阉割掉不合适。这里只做了"简化外观向
-          Artifact 靠拢"：字段标题从"这笔用哪张卡最划算？"改成 Artifact 用的"支付方式"，
-          位置也挪到 Artifact 骨架里"支付方式"该在的位置（分类之后、备注之前）；比价这个
-          交互本身（点比价按钮拉推荐列表、选中后记账自动扣对应钱包）原样保留，没有改成
-          Artifact 那种不比价直接选的静态下拉——需要 Remy 看效果再定要不要真的简化成那样。 */}
-      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-paper p-3">
-        <div className="flex items-center justify-between">
-          <span className="field-label">支付方式</span>
-          <button
-            type="button"
-            onClick={handleCompare}
-            disabled={comparing || !hasPaymentMethods}
-            className="btn-secondary"
+      {/* fix(2026-09-14 第四轮走查，Remy 本人明确要求"都要做")：这里原本是一张带"比价"
+          按钮的卡片（点了拉 /api/trips/{tripId}/fx-recommendation 算哪张卡最划算），
+          跟 Artifact 画的纯朴素下拉不一样。Remy 原话是把"记一笔消费"这里简化成 Artifact
+          这种下拉就好，比价功能本身有真实价值，不能删，但不能留在这个位置——这轮先从这里
+          搬走，没有接到新地方（"搁置想清楚放哪"），底层 lib/domain/fx-recommendation +
+          /api/trips/[tripId]/fx-recommendation 路由 + FxCompareList 组件原样保留没删，
+          只是这张表单不再引用。
+          照抄的是币种字段（上面 357 行左右）同一套原生 select 模式，不新发明下拉组件——
+          Artifact 的 .dd-fake 只是静态原型没有真下拉逻辑。
+          这里列出来的是"我名下全部支付方式"，不是"这个行程启用的支付方式"：schema 里
+          paymentMethods 表现在只到 userId/participantId 级别，没有 trip 级别的启用开关，
+          Artifact 画了「本行程启用的支付方式」这个过滤但代码没做（这是个真实架构缺口，
+          见 PENDING-DECISIONS），所以下面这句提示如实说"全部"，没有照抄 Artifact 那句
+          "只列出本行程启用的"。 */}
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="payment-method">
+          支付方式
+        </label>
+        {paymentMethods.length > 0 ? (
+          <select
+            id="payment-method"
+            value={selectedPaymentMethodId ?? ''}
+            onChange={(e) => setSelectedPaymentMethodId(e.target.value || null)}
+            className="field-input"
           >
-            {comparing ? '比价中…' : '比价'}
-          </button>
-        </div>
-        {(!hasPaymentMethods || compareError === 'no_payment_methods') && (
+            <option value="">不指定</option>
+            {paymentMethods.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        ) : (
           <p className="text-[10px] text-muted">
             还没配置支付方式，先去{' '}
             <Link href={`/trips/${tripId}/payment-methods`} className="tap-link">
@@ -464,26 +432,8 @@ export function ExpenseForm({
             配一下。
           </p>
         )}
-        {/* fix(2026-09-12 走查)：之前是裸红字文字直接摆在浅色边框盒子里（text-base 16px
-            + text-coral，没有自己的容器），很原生很粗糙。改用 app/page.tsx 第75行「身份链接
-            失效」提示已经在用的盒子写法（rounded-xl border-sand + card-tint 底，跟 .tx-item
-            同一套容器语言，只是文字换成 coral），不新发明一套错误样式；字号按这个文件字号
-            走查统一到 10px（副信息/caption 档），跟下面"点一张卡标记…"同一档。 */}
-        {compareError && compareError !== 'no_payment_methods' && (
-          <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
-            {compareError}
-          </p>
-        )}
-        {recommendations && (
-          <div className="flex flex-col gap-2">
-            <FxCompareList
-              recommendations={recommendations}
-              compareCurrency={baseCurrency}
-              selectedPaymentMethodId={selectedPaymentMethodId}
-              onSelect={setSelectedPaymentMethodId}
-            />
-            <p className="text-[10px] text-muted">点一张卡标记「这笔实际用它」，记账时会自动扣对应钱包余额。</p>
-          </div>
+        {paymentMethods.length > 0 && (
+          <span className="text-[10px] text-muted">列出的是你名下配置过的支付方式（全部，不分行程）。</span>
         )}
       </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { yuanToCents } from '@/lib/money';
 import { FxCompareList } from './fx-compare-list';
@@ -26,7 +26,11 @@ export function FxRateCard({
   baseCurrency: string;
   hasPaymentMethods: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  // fix(2026-09-14 第四轮走查)：查过 Artifact 源码的 .fx-section——那一屏这块内容
+  // 根本没有收起/展开这回事，一进页面就是摊开显示的，跟下面这行代码之前默认 false
+  // （收起，要点"展开▼"才看得到）对不上；代码注释里也没找到"Remy 拍板保留收起"这
+  // 类记录，判断是没跟上 Artifact，不是刻意为之。改成默认展开，点"收起▲"还是能收起来。
+  const [expanded, setExpanded] = useState(true);
   const [currency, setCurrency] = useState<string>(DESTINATION_CURRENCIES[0]);
   const [amountYuan, setAmountYuan] = useState('100');
   const [loading, setLoading] = useState(false);
@@ -67,6 +71,15 @@ export function FxRateCard({
       void loadRates(currency, false);
     }
   }
+
+  // 默认展开态要在进页面时就把数字拉出来，不能只靠 handleToggle（那个只在"从收起点开"
+  // 这个动作发生时才会跑）——否则默认展开但一片空白，要点一次"收起再展开"才有数字。
+  useEffect(() => {
+    if (expanded && recommendations === null && hasPaymentMethods) {
+      void loadRates(currency, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleSelectCurrency(next: string) {
     setCurrency(next);

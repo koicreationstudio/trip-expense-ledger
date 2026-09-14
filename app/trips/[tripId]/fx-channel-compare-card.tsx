@@ -82,7 +82,10 @@ function resolveTargetCandidates(base: string, enabledCurrencies: string[] | nul
 }
 
 export function FxChannelCompareCard({ enabledCurrencies }: { enabledCurrencies: string[] | null }) {
-  const [expanded, setExpanded] = useState(false);
+  // fix(2026-09-14 第四轮走查)：跟 fx-rate-card.tsx 同一个问题——Artifact 的 .fx-section
+  // 没有收起/展开这个概念，这张卡之前默认收起是没跟上 Artifact，代码里也没有"Remy 拍板
+  // 保留收起"这类记录，改成默认展开。
+  const [expanded, setExpanded] = useState(true);
   const [baseCurrency, setBaseCurrency] = useState<string>('MYR');
   const [targetCurrency, setTargetCurrency] = useState<string>('THB');
   const [amountYuan, setAmountYuan] = useState('1000');
