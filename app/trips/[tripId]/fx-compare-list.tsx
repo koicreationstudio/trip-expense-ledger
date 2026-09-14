@@ -1,6 +1,5 @@
 'use client';
 
-import { Check } from 'lucide-react';
 import { formatMoney } from '@/lib/money';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
 
@@ -30,19 +29,16 @@ export function FxCompareList({
             type="button"
             disabled={r.unavailable || !onSelect}
             onClick={() => onSelect?.(r.paymentMethodId)}
-            className={`flex flex-col gap-1 rounded-xl border px-[9px] py-2 text-left disabled:cursor-not-allowed ${
+            className={`flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-2 text-left disabled:cursor-not-allowed ${
               !onSelect ? '' : 'disabled:opacity-60'
-            } ${isBest ? 'border-seafoam bg-sf-lt' : 'border-sand bg-[rgba(164,163,160,.14)]'} ${
-              isSelected ? 'ring-2 ring-ink' : ''
-            }`}
+            } ${isSelected ? 'ring-2 ring-ink' : ''}`}
           >
             <span className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-[12.5px] font-semibold">
+              <span className="text-[12.5px] font-semibold">
                 {r.label}
                 {isBest && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-seafoam px-[9px] py-[3px] text-[9.5px] font-medium text-white">
-                    <Check className="h-3 w-3" aria-hidden="true" />
-                    最划算
+                  <span className="ml-1.5 inline-flex items-center rounded-full bg-ok px-[7px] py-[1px] align-middle text-[8.5px] font-semibold text-white">
+                    ✓最划算
                   </span>
                 )}
               </span>
