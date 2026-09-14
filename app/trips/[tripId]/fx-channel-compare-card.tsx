@@ -221,6 +221,12 @@ export function FxChannelCompareCard({ enabledCurrencies }: { enabledCurrencies:
                   {midRate === undefined ? (
                     <p className="text-[10px] text-muted">这个币种组合暂时没有参考汇率。</p>
                   ) : (
+                    // fix(2026-09-15 第四轮反馈第二批)：原本"最划算"那一行整块变色
+                    // （border-ok + bg-ok-bg），Artifact 要的是"贴在渠道名字后面一个绿底
+                    // 白字的小圆角徽章"，卡片本身/整行维持中性边框浅底不变色。"最划算"
+                    // 判定也从静态的 `c.best` 标记改成"排序后真正排第一"（index 0）——两者
+                    // 目前恒等（Wise 的点差 spread 值本来就最高），但用排序结果判断更贴合
+                    // "当前渠道组合下真的最划算"这句话本身的语义，不依赖写死的静态标记。
                     <ul className="flex flex-col gap-1.5">
                       {visibleChannels
                         .map((c) => ({
@@ -229,15 +235,20 @@ export function FxChannelCompareCard({ enabledCurrencies }: { enabledCurrencies:
                           note: c.name === 'ATM 取款' ? formatAtmFeeNote(effectiveTarget) : c.note,
                         }))
                         .sort((a, b) => b.effectiveRate - a.effectiveRate)
-                        .map((c) => (
+                        .map((c, i) => (
                           <li
                             key={c.name}
-                            className={`flex items-center justify-between gap-2 rounded-xl border px-[9px] py-[5px] text-[10.5px] ${
-                              c.best ? 'border-ok bg-ok-bg' : 'border-sand bg-[rgba(164,163,160,.14)]'
-                            }`}
+                            className="flex items-center justify-between gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10.5px]"
                           >
                             <div className="flex flex-col">
-                              <span className="font-medium">{c.name}</span>
+                              <span className="font-medium">
+                                {c.name}
+                                {i === 0 && (
+                                  <span className="ml-1.5 inline-flex items-center rounded-full bg-ok px-[7px] py-[1px] align-middle text-[8.5px] font-semibold text-white">
+                                    ✓最划算
+                                  </span>
+                                )}
+                              </span>
                               <span className="text-[9px] text-muted">{c.note}</span>
                             </div>
                             <span className="font-serif tabular-nums">

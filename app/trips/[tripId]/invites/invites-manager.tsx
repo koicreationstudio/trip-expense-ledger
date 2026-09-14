@@ -146,7 +146,9 @@ export function InvitesManager({ tripId }: { tripId: string }) {
           ＋ 生成新邀请
         </button>
       ) : (
-        <section className="flex flex-col gap-3">
+        // fix(2026-09-15)：Artifact 这块是带边框的卡片容器（border + padding 7px +
+        // 圆角 14px），之前是裸 section 没有这层包装。
+        <section className="flex flex-col gap-3 rounded-[14px] border border-sand p-[7px]">
           <h2 className="text-[12.5px] font-semibold text-ink">生成新邀请链接</h2>
           <form onSubmit={handleCreateInvite} className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1">

@@ -70,6 +70,11 @@ export function toPaymentMethodDto(row: PaymentMethodRow) {
   };
 }
 
+/** 同一份支付方式，多带一个「这趟行程是否启用」布尔值——只在行程范围内的接口用。 */
+export function toTripPaymentMethodDto(row: PaymentMethodRow, enabled: boolean) {
+  return { ...toPaymentMethodDto(row), enabled };
+}
+
 /** 私有资源，只会出现在「查自己」的响应里，不做跨参与者展开。 */
 export function toWalletDto(row: WalletRow) {
   return {

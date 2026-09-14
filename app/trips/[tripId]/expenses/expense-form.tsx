@@ -400,11 +400,12 @@ export function ExpenseForm({
           只是这张表单不再引用。
           照抄的是币种字段（上面 357 行左右）同一套原生 select 模式，不新发明下拉组件——
           Artifact 的 .dd-fake 只是静态原型没有真下拉逻辑。
-          这里列出来的是"我名下全部支付方式"，不是"这个行程启用的支付方式"：schema 里
-          paymentMethods 表现在只到 userId/participantId 级别，没有 trip 级别的启用开关，
-          Artifact 画了「本行程启用的支付方式」这个过滤但代码没做（这是个真实架构缺口，
-          见 PENDING-DECISIONS），所以下面这句提示如实说"全部"，没有照抄 Artifact 那句
-          "只列出本行程启用的"。 */}
+          fix(2026-09-15 补齐架构缺口)：这里列出来的原本是"我名下全部支付方式"，跟
+          Artifact 明确拍板的"本行程启用的支付方式"（见 payment-methods-manager.tsx 顶部
+          注释）不一样。schema 加了 trip_payment_method_enabled 关联表之后，调用方
+          （expenses/new、expenses/[expenseId]/edit 两个 page.tsx）已经把 `paymentMethods`
+          这个 prop 过滤成"这趟行程勾了启用的那几个"再传进来，这个组件本身不用重新判断
+          谁启用谁没启用，照抄 Artifact 原文改成这句提示就好。 */}
       <div className="flex flex-col gap-1">
         <label className="field-label" htmlFor="payment-method">
           支付方式
@@ -425,15 +426,17 @@ export function ExpenseForm({
           </select>
         ) : (
           <p className="text-[10px] text-muted">
-            还没配置支付方式，先去{' '}
+            这趟行程还没有启用的支付方式，先去{' '}
             <Link href={`/trips/${tripId}/payment-methods`} className="tap-link">
               支付方式设置
             </Link>{' '}
-            配一下。
+            配一个、记得勾选「本行程启用」。
           </p>
         )}
         {paymentMethods.length > 0 && (
-          <span className="text-[10px] text-muted">列出的是你名下配置过的支付方式（全部，不分行程）。</span>
+          <span className="text-[10px] text-muted">
+            只列出这个行程「支付方式」页面里勾选启用的那几张卡/钱包，不是全部支付方式。
+          </span>
         )}
       </div>
 

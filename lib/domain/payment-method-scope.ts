@@ -1,5 +1,6 @@
-import { eq, type SQL } from 'drizzle-orm';
-import { paymentMethods } from '../db/schema';
+import { and, eq, type SQL } from 'drizzle-orm';
+import { paymentMethods, tripPaymentMethodEnabled } from '../db/schema';
+import type { Db } from '../db/client';
 
 /**
  * payment_method 双轨归属的唯一判断点：有账号（userId 非空）按 user_id 查，
@@ -24,4 +25,23 @@ export function paymentMethodOwnerColumns(identity: { userId: string | null; par
   return identity.userId
     ? { userId: identity.userId, participantId: null }
     : { userId: null, participantId: identity.participantId };
+}
+
+/**
+ * 这个人名下的支付方式里，哪些 id 在这趟行程被勾了「启用」（trip_payment_method_enabled
+ * 有对应一行）。只看这张关联表有没有行，不看 payment_method 本身任何字段；INNER JOIN
+ * payment_method 顺带把归属过滤焊进同一次查询，不会读到别人挂在这趟行程下的启用行
+ * （理论上不会有，因为写入这张表前一律先校验 payment_method 归属，双重保险不吃亏）。
+ */
+export async function loadEnabledPaymentMethodIds(
+  db: Db,
+  tripId: string,
+  identity: { userId: string | null; participantId: string }
+): Promise<Set<string>> {
+  const rows = await db
+    .select({ paymentMethodId: tripPaymentMethodEnabled.paymentMethodId })
+    .from(tripPaymentMethodEnabled)
+    .innerJoin(paymentMethods, eq(paymentMethods.id, tripPaymentMethodEnabled.paymentMethodId))
+    .where(and(eq(tripPaymentMethodEnabled.tripId, tripId), paymentMethodOwnerFilter(identity)));
+  return new Set(rows.map((r) => r.paymentMethodId));
 }

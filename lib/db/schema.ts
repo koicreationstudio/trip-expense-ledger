@@ -265,6 +265,34 @@ export const paymentMethods = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// trip_payment_method_enabled：「本行程启用的支付方式」勾选状态（2026-09-15
+// 落地 Artifact Version 10 第四轮拍板遗留缺口）。payment_method 是账号/participant
+// 级数据、不天然挂在某一趟 trip 下（可能跨多趟行程复用），这张表只是一个纯粹的
+// 关联勾选表：一行存在＝这个支付方式在这趟行程里勾了「启用」，不存在＝没勾/还没
+// 决定。两边都 cascade：行程删了这份勾选没意义，支付方式删了也一样。
+// 新建支付方式时（payment-methods-manager.tsx 的表单）默认对当前查看的行程插入
+// 一行启用记录，呼应 Artifact 截图里新建的支付方式默认是勾选态；这张表本身不需要
+// 存「未启用」这个状态，删行就是取消勾选。
+// ---------------------------------------------------------------------------
+export const tripPaymentMethodEnabled = sqliteTable(
+  'trip_payment_method_enabled',
+  {
+    id: id(),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    paymentMethodId: text('payment_method_id')
+      .notNull()
+      .references(() => paymentMethods.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (table) => ({
+    tripIdx: index('trip_payment_method_enabled_trip_idx').on(table.tripId),
+    pairIdx: uniqueIndex('trip_payment_method_enabled_pair_idx').on(table.tripId, table.paymentMethodId),
+  })
+);
+
+// ---------------------------------------------------------------------------
 // wallet：挂在「某个人在某趟行程下」的现金/账户余额追踪，私有——只有
 // participant_id 对应的那个人自己能查自己的钱包，查询边界跟 expense 的
 // entered_by_participant_id 同一套规矩：硬编码 WHERE，不接受客户端传参覆盖。
@@ -496,6 +524,15 @@ export const paymentMethodsRelations = relations(paymentMethods, ({ one, many })
   user: one(users, { fields: [paymentMethods.userId], references: [users.id] }),
   participant: one(participants, { fields: [paymentMethods.participantId], references: [participants.id] }),
   wallets: many(wallets),
+  tripEnablements: many(tripPaymentMethodEnabled),
+}));
+
+export const tripPaymentMethodEnabledRelations = relations(tripPaymentMethodEnabled, ({ one }) => ({
+  trip: one(trips, { fields: [tripPaymentMethodEnabled.tripId], references: [trips.id] }),
+  paymentMethod: one(paymentMethods, {
+    fields: [tripPaymentMethodEnabled.paymentMethodId],
+    references: [paymentMethods.id],
+  }),
 }));
 
 export const walletsRelations = relations(wallets, ({ one, many }) => ({

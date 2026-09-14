@@ -12,7 +12,7 @@ import { WalletCard } from './wallet-card';
 import { ExchangeRecordList } from './exchange-record-list';
 import { FxRateCard } from './fx-rate-card';
 import { FxChannelCompareCard } from './fx-channel-compare-card';
-import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
+import { loadEnabledPaymentMethodIds, paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 
 const STATUS_LABEL: Record<string, string> = {
   active: '记账中',
@@ -73,6 +73,12 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     .from(paymentMethods)
     .where(paymentMethodOwnerFilter(identity));
   const paymentMethodLabelById = new Map(myPaymentMethods.map((m) => [m.id, m.label]));
+  // 「本行程启用的支付方式」（2026-09-15 落地 Artifact Version 10 遗留缺口）：钱包卡
+  // 「绑定支付方式」下拉/命名提示只给这趟行程勾了启用的选，不是名下全部——已经绑过
+  // 某个之后被取消勾选的支付方式的钱包，`paymentMethodLabelById` 这份全量映射还留着，
+  // 历史绑定的名字不会因为取消勾选就显示成"未知"。
+  const enabledPaymentMethodIds = await loadEnabledPaymentMethodIds(db, params.tripId, identity);
+  const enabledPaymentMethods = myPaymentMethods.filter((m) => enabledPaymentMethodIds.has(m.id));
 
   return (
     <main className="flex flex-col gap-6">
@@ -126,7 +132,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
           paymentMethodId: w.paymentMethodId,
           linkedPaymentMethodLabel: w.paymentMethodId ? paymentMethodLabelById.get(w.paymentMethodId) ?? null : null,
         }))}
-        paymentMethods={myPaymentMethods.map((m) => ({
+        paymentMethods={enabledPaymentMethods.map((m) => ({
           id: m.id,
           label: m.label,
           settlementCurrency: m.settlementCurrency,
@@ -159,16 +165,25 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         <ExpenseList
           tripId={trip.id}
           myParticipantId={identity.participantId}
+          baseCurrency={trip.baseCurrency}
           expenses={tripExpenses.map((e) => ({
             id: e.id,
             category: e.category,
             merchant: e.merchant,
             amount: e.amount,
             currency: e.currency,
+            // 排序/约算成本位币小字要用，见 expense-list.tsx。
+            amountBaseCurrency: e.amountBaseCurrency,
             expenseDate: e.expenseDate.toISOString(),
             hasReceipt: e.receiptPath !== null,
             payerName: nameById.get(e.payerParticipantId) ?? '未知',
             enteredByParticipantId: e.enteredByParticipantId,
+            // 支付方式筛选 chip 要用的标签：只有「我自己」录入的那些消费才查得到标签
+            // （payment_method 归属私有，别人的 payment_method_id 我读不到是哪一张卡），
+            // 别人录入的消费如果带了 paymentMethodId 也只能显示成"其他人的支付方式"。
+            paymentMethodLabel: e.paymentMethodId
+              ? paymentMethodLabelById.get(e.paymentMethodId) ?? '其他人的支付方式'
+              : null,
           }))}
         />
       </section>

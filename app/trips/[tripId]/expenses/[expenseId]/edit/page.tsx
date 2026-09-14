@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { getDb } from '@/lib/db/client';
 import { expenses, participants, paymentMethods, trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
-import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
+import { loadEnabledPaymentMethodIds, paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 import { ExpenseForm } from '../../expense-form';
 
 /**
@@ -41,6 +41,14 @@ export default async function EditExpensePage({
     .select()
     .from(paymentMethods)
     .where(paymentMethodOwnerFilter(identity));
+  // 「记一笔消费」支付方式下拉只列这趟行程勾了「启用」的那几个（2026-09-15 落地
+  // Artifact Version 10 遗留缺口）。编辑态额外补一条例外：这笔消费当初选的支付方式
+  // 如果之后被取消勾选了，下拉里还是要留着它（不然编辑页会显示"选中了一个不存在的
+  // 选项"，或者悄悄把用户没碰过的字段改没了），不强行帮用户换掉历史选择。
+  const enabledIds = await loadEnabledPaymentMethodIds(db, params.tripId, identity);
+  const enabledPaymentMethods = myPaymentMethods.filter(
+    (m) => enabledIds.has(m.id) || m.id === expense.paymentMethodId
+  );
 
   return (
     <main className="flex flex-col gap-6">
@@ -50,7 +58,7 @@ export default async function EditExpensePage({
         baseCurrency={trip.baseCurrency}
         myParticipantId={identity.participantId}
         participants={tripParticipants.map((p) => ({ id: p.id, displayName: p.displayName }))}
-        paymentMethods={myPaymentMethods.map((m) => ({ id: m.id, label: m.label }))}
+        paymentMethods={enabledPaymentMethods.map((m) => ({ id: m.id, label: m.label }))}
         initialExpense={{
           id: expense.id,
           amount: expense.amount,

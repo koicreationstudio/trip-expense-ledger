@@ -52,7 +52,9 @@ export default async function SettlementPage({ params }: { params: { tripId: str
 
   return (
     <main className="flex flex-col gap-8">
-      <h1 className="text-base font-semibold text-ink">结算</h1>
+      {/* fix(2026-09-15)：16px(text-base) 改成 15px，对齐"我的行程"/"我的账号"/
+          "支付方式"三处已经统一的标题规格。 */}
+      <h1 className="text-[15px] font-semibold text-ink">结算</h1>
 
       {trip.status === 'settled' && (
         <div className="flex w-fit items-center gap-2">

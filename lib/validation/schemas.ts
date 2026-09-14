@@ -57,10 +57,19 @@ export const createPaymentMethodSchema = z.object({
   fixedFee: z.number().int().min(0).default(0),
   cashbackPercent: z.number().min(0).max(100).default(0),
   sortOrder: z.number().int().default(0),
+  // 「支付方式」页现在是行程内路由（/trips/[tripId]/payment-methods），新建的这个
+  // 支付方式在这趟行程默认就是「启用」——不用建完还要再点一次勾选。可选是因为
+  // payment_method 本身是账号级数据，不排除以后有别的入口不带 tripId 建它。
+  tripId: z.string().min(1).optional(),
 });
 
 export const updatePaymentMethodSchema = createPaymentMethodSchema.partial().extend({
   isActive: z.boolean().optional(),
+});
+
+/** 「本行程启用的支付方式」勾选/取消勾选，2026-09-15 落地 Artifact Version 10 遗留缺口。 */
+export const updatePaymentMethodEnablementSchema = z.object({
+  enabled: z.boolean(),
 });
 
 export const claimParticipantSchema = z.object({

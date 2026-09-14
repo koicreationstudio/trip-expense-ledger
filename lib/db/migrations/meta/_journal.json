@@ -50,6 +50,13 @@
       "when": 1789312577196,
       "tag": "0006_worried_catseye",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789403239653,
+      "tag": "0007_cuddly_captain_cross",
+      "breakpoints": true
     }
   ]
 }

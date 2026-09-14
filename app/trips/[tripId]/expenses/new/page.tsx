@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { getDb } from '@/lib/db/client';
 import { participants, paymentMethods, trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
-import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
+import { loadEnabledPaymentMethodIds, paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 import { ExpenseForm } from '../expense-form';
 
 export default async function NewExpensePage({ params }: { params: { tripId: string } }) {
@@ -24,6 +24,11 @@ export default async function NewExpensePage({ params }: { params: { tripId: str
     .select()
     .from(paymentMethods)
     .where(paymentMethodOwnerFilter(identity));
+  // 「记一笔消费」支付方式下拉只列这趟行程勾了「启用」的那几个（2026-09-15 落地
+  // Artifact Version 10 遗留缺口），不是名下全部——见 payment-methods-manager.tsx
+  // 「本行程启用的支付方式」区块。
+  const enabledIds = await loadEnabledPaymentMethodIds(db, params.tripId, identity);
+  const enabledPaymentMethods = myPaymentMethods.filter((m) => enabledIds.has(m.id));
 
   return (
     <main className="flex flex-col gap-6">
@@ -33,7 +38,7 @@ export default async function NewExpensePage({ params }: { params: { tripId: str
         baseCurrency={trip.baseCurrency}
         myParticipantId={identity.participantId}
         participants={tripParticipants.map((p) => ({ id: p.id, displayName: p.displayName }))}
-        paymentMethods={myPaymentMethods.map((m) => ({ id: m.id, label: m.label }))}
+        paymentMethods={enabledPaymentMethods.map((m) => ({ id: m.id, label: m.label }))}
       />
     </main>
   );

@@ -122,7 +122,8 @@ export function SettlementBody({
             const isExpanded = expandedId === entry.participantId;
             return (
               <li key={entry.participantId} className="flex flex-col">
-                <div className="flex items-center gap-2 py-[3px]">
+                {/* fix(2026-09-15)：行内 padding 3px 改 2px，对齐 Artifact 规格 */}
+                <div className="flex items-center gap-2 py-[2px]">
                   <Avatar name={entry.name} size={18} />
                   <span className="flex-1 text-[10.5px]">{entry.name}</span>
                   <span className={`text-[9.5px] ${entry.amount >= 0 ? 'text-positive' : 'text-negative'}`}>
@@ -136,7 +137,8 @@ export function SettlementBody({
                   <button
                     type="button"
                     onClick={() => setExpandedId(isExpanded ? null : entry.participantId)}
-                    className="tap-link self-start pl-[26px] text-[10px] text-muted"
+                    // fix(2026-09-15)：字号 10px 改 8.5px，对齐 Artifact `.detail-toggle` 规格
+                    className="tap-link self-start pl-[26px] text-[8.5px] text-muted"
                   >
                     查看 {entry.name} 的分摊明细 {isExpanded ? '▲' : '▾'}
                   </button>
