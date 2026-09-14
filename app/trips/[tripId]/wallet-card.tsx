@@ -24,6 +24,15 @@ interface Participant {
  * 点了不再跳转到 /exchange/new 独立页面，原地在卡片内部展开一个白色小面板，
  * ExchangeForm 复用同一个组件，通过 onSuccess 回调区分"页面模式"（push 走人）
  * 和"内嵌模式"（收起面板 + refresh 就地刷新余额），不用另起一份表单逻辑。
+ *
+ * fix(2026-09-15 第十轮，Remy 真实账号真机走查发现的真 bug)：「⚡快速记账」
+ * 之前被塞在跟「我的钱包」同一个 `<section>` 容器里，靠 `bg-white/[.06]`（6% 透明白）
+ * 叠一层区分，深色底下反差太弱，肉眼几乎看不出这是两个东西——难怪 Remy 说"快速记账
+ * 功能少了"。核对 Artifact Version 10 源码（`.wallet-block` 和 `.quickadd` 是两个完全
+ * 独立的 div，各自 `border-radius:14px` + `box-shadow:var(--shadow-card)`，`.quickadd`
+ * 背景是纯色 `var(--ink)` 即 #373736，不是钱包卡那种半透明叠加）后，改成真正独立的
+ * 第二个 `<section>`，返回一个 Fragment 让它跟钱包卡一样是 `<main>`（flex-col gap-6）
+ * 的直接子节点，靠 gap-6 天然隔开，不用再补 margin-bottom。
  */
 export function WalletCard({
   tripId,
@@ -52,10 +61,11 @@ export function WalletCard({
   }));
 
   return (
-    <section
-      className="relative flex flex-col gap-[8px] overflow-hidden rounded-[14px] p-[9px] text-white shadow-hero transition-colors"
-      style={{ backgroundColor: shade }}
-    >
+    <>
+      <section
+        className="relative flex flex-col gap-[8px] overflow-hidden rounded-[14px] p-[9px] text-white shadow-hero transition-colors"
+        style={{ backgroundColor: shade }}
+      >
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10.5px] uppercase tracking-wide text-hero-label">我的钱包</span>
         <div className="flex shrink-0 items-center gap-[7px]">
@@ -95,13 +105,19 @@ export function WalletCard({
           )}
         </div>
       )}
+      </section>
 
-      <QuickAddExpense
-        tripId={tripId}
-        baseCurrency={baseCurrency}
-        myParticipantId={myParticipantId}
-        participants={participants}
-      />
-    </section>
+      {/* Artifact `.quickadd` 是跟 `.wallet-block` 平级的独立卡片（纯色 var(--ink)
+          背景 + 自己的 shadow-card），不是钱包卡内部一块半透明叠加区域——这里必须
+          真的另起一个 <section>，靠 <main> 的 flex-col gap-6 天然隔出卡片间距。 */}
+      <section className="flex flex-col gap-1.5 rounded-[14px] bg-ink p-[9px] text-white shadow-card">
+        <QuickAddExpense
+          tripId={tripId}
+          baseCurrency={baseCurrency}
+          myParticipantId={myParticipantId}
+          participants={participants}
+        />
+      </section>
+    </>
   );
 }

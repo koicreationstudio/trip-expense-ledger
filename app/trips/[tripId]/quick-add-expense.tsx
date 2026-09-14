@@ -183,8 +183,11 @@ export function QuickAddExpense({
   }
 
   return (
-    <div className="mt-1 flex flex-col gap-1.5 rounded-[10px] bg-white/[.06] p-2">
-      <span className="text-[12.5px] uppercase tracking-wide text-hero-label">⚡ 快速记账</span>
+    // fix(2026-09-15 第十轮)：外层背景/圆角/内边距挪到父级 wallet-card.tsx 的独立
+    // <section>（现在是真正的独立卡片，不是嵌在钱包卡里的一块半透明叠加区），这里
+    // 只保留内部纵向排列；.cap 字号对齐 Artifact `.quickadd .cap{font-size:10px}`。
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[10px] uppercase tracking-wide text-hero-label">⚡ 快速记账</span>
       {/* noValidate: 金额输入框带 min="0.01" 这类 HTML5 constraint，浏览器会在
           onSubmit 的 preventDefault 真正执行前抢先用 reportValidity() 弹出原生
           英文提示气泡（比如"填 0"这个具体数值会被 min 拦截，只有"留空"才轮得到
