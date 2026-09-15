@@ -5,7 +5,9 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { getDb } from '@/lib/db/client';
 import { users } from '@/lib/db/schema';
+import { BUILD_COMMIT, BUILD_TIME } from '@/lib/build-info';
 import { AccountIdentityLink } from './account-identity-link';
+import { HardRefreshButton } from './hard-refresh-button';
 
 /**
  * 专属身份链接不能只在开号那一刻展示一次就找不回——这里是随时能回来
@@ -50,6 +52,21 @@ export default async function AccountPage({ searchParams }: { searchParams?: { f
   const backHref = searchParams?.from ? `/trips/${searchParams.from}` : '/';
   const backLabel = searchParams?.from ? '返回行程' : '返回首页';
 
+  // 部署时间统一按马来西亚时区(UTC+8)显示，跟 Remy 自己看时间的习惯对齐，
+  // 不用她再心算 UTC 时间戳换算。BUILD_TIME/BUILD_COMMIT 是
+  // scripts/generate-build-info.mjs 在上一次 `npm run build`（deploy.sh
+  // 部署那一刻）写实的值，不是运行时现算，Cloudflare Workers 运行时环境
+  // 没有 .git 目录读不到 git 信息。
+  const deployedAtLabel = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Kuala_Lumpur',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(BUILD_TIME));
+
   return (
     <main className="flex flex-col gap-6">
       <Link href={backHref} className="tap-link self-start text-[10px] text-muted hover:text-ink">
@@ -57,6 +74,10 @@ export default async function AccountPage({ searchParams }: { searchParams?: { f
       </Link>
       <h1 className="text-[15px] font-semibold text-ink">我的账号</h1>
       <AccountIdentityLink url={identityUrl} />
+      <HardRefreshButton />
+      <p className="text-[8.5px] text-muted">
+        版本 {BUILD_COMMIT} · 部署于 {deployedAtLabel}（UTC+8）
+      </p>
     </main>
   );
 }

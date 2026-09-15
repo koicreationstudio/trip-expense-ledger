@@ -7,7 +7,9 @@
     "node": ">=22"
   },
   "scripts": {
+    "predev": "node scripts/generate-build-info.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/generate-build-info.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
