@@ -1,0 +1,1 @@
+ALTER TABLE `expense` ADD `exclude_from_split` integer DEFAULT false NOT NULL;

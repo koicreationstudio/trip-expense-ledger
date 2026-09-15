@@ -11,6 +11,7 @@ export interface SettlementDetailEntryDto {
   expenseDate: string;
   amountBaseCurrency: number;
   role: 'paid' | 'shared';
+  excludeFromSplit: boolean;
 }
 
 export interface NetEntry {
@@ -150,6 +151,7 @@ export function SettlementBody({
                         <span>
                           {d.category} · {d.role === 'paid' ? '垫付' : '分摊'} ·{' '}
                           {new Date(d.expenseDate).toLocaleDateString()}
+                          {d.excludeFromSplit && ' · 不计分摊'}
                         </span>
                         <span className={`font-serif tabular-nums ${d.amountBaseCurrency >= 0 ? 'text-positive' : 'text-negative'}`}>
                           {d.amountBaseCurrency >= 0 ? '+' : '-'}

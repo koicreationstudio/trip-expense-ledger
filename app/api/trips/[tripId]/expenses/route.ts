@@ -81,6 +81,7 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
     category: body.category,
     merchant: body.merchant || null,
     note: body.note ?? null,
+    excludeFromSplit: body.excludeFromSplit ?? false,
     expenseDate: new Date(body.expenseDate),
   });
   const insertSplits = db.insert(expenseSplits).values(

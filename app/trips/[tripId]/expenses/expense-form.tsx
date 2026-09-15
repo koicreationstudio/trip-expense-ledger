@@ -29,7 +29,14 @@ export interface InitialExpense {
   hasReceipt: boolean;
   splits: SplitShare[];
   paymentMethodId: string | null;
+  excludeFromSplit: boolean;
 }
+
+// fix(2026-09-16)：机票/宝石这两个分类默认"不计入分摊"（业务差旅成本，不该分给
+// 同行人），其它分类默认照旧"计入分摊"。这里按 COMMON_CATEGORIES 里的确切文案
+// 精确匹配（含 emoji 前缀），不是"分类包含'机票'两个字"这种模糊匹配——CategoryCombobox
+// 允许自由输入，用户手打的分类不会命中这两个字符串，就落回默认 false，不强加。
+const AUTO_EXCLUDE_CATEGORIES = new Set<string>(['✈️ 机票', '💎 宝石']);
 
 export type SplitMode = 'onlyMe' | 'equal' | 'custom';
 
@@ -133,6 +140,20 @@ export function ExpenseForm({
     initialExpense ? initialExpense.expenseDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
   );
   const [note, setNote] = useState(initialExpense?.note ?? '');
+  // fix(2026-09-16)："这笔不计入分摊"开关。新建时按初始分类自动给个默认值
+  // （机票/宝石预设 true），一旦用户自己手动点过这个勾选框（excludeFromSplitTouched），
+  // 之后再切换分类就不再覆盖用户的选择——只是"帮用户省一次手动勾选"，不是写死的强规则。
+  const [excludeFromSplit, setExcludeFromSplit] = useState(
+    initialExpense?.excludeFromSplit ?? AUTO_EXCLUDE_CATEGORIES.has(initialExpense?.category ?? '')
+  );
+  const [excludeFromSplitTouched, setExcludeFromSplitTouched] = useState(false);
+
+  function handleCategoryChange(value: string) {
+    setCategory(value);
+    if (!excludeFromSplitTouched) {
+      setExcludeFromSplit(AUTO_EXCLUDE_CATEGORIES.has(value));
+    }
+  }
   const [fxRateUsed, setFxRateUsed] = useState(
     initialExpense && initialExpense.fxRateUsed !== 1 ? String(initialExpense.fxRateUsed) : ''
   );
@@ -272,6 +293,7 @@ export function ExpenseForm({
           note: note.trim() || undefined,
           expenseDate: new Date(expenseDate).toISOString(),
           splits,
+          excludeFromSplit,
         }),
       });
 
@@ -393,11 +415,35 @@ export function ExpenseForm({
           id="category"
           required
           value={category}
-          onChange={setCategory}
+          onChange={handleCategoryChange}
           options={COMMON_CATEGORIES}
           placeholder="例如：餐饮"
           inputClassName="field-input"
         />
+      </div>
+
+      {/* fix(2026-09-16)："不计入分摊"开关——机票/宝石这类差旅业务成本默认勾选，
+          不该分给同行人；其它分类默认不勾。跟"跟其他人 split 这笔"是两回事：那个
+          开关决定"这笔实际怎么分给谁"，这个开关只决定"这笔算不算进行程主页 Hero
+          卡'我承担'那个主数字"，两者互不影响，这笔即使勾了这里，下面照样可以正常
+          设置 splits（真实语义详见 PENDING-DECISIONS，这是待 Remy 确认的理解）。 */}
+      <div className="flex items-start gap-2 rounded-xl border border-sand bg-paper p-3">
+        <input
+          id="exclude-from-split"
+          type="checkbox"
+          checked={excludeFromSplit}
+          onChange={(e) => {
+            setExcludeFromSplit(e.target.checked);
+            setExcludeFromSplitTouched(true);
+          }}
+          className="mt-[3px] h-4 w-4 shrink-0 accent-accent-700"
+        />
+        <label htmlFor="exclude-from-split" className="flex flex-col gap-0.5">
+          <span className="field-label">这笔不计入跟同行人的分摊总额</span>
+          <span className="text-[10px] text-muted">
+            业务/个人成本（比如机票、宝石采购），照常记账，只是不算进行程主页「我承担」的合计数字里，下面分摊设置不受影响。选了「✈️ 机票」或「💎 宝石」分类会自动帮你勾上，你也可以手动改。
+          </span>
+        </label>
       </div>
 
       {/* fix(2026-09-14 第四轮走查，Remy 本人明确要求"都要做")：这里原本是一张带"比价"

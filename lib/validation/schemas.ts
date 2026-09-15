@@ -44,6 +44,9 @@ export const createExpenseSchema = z.object({
   expenseDate: z.string().datetime(),
   // 不传就在路由里按 trip 全部参与者等分
   splits: z.array(splitSchema).min(1).optional(),
+  // 这笔要不要计入 Hero 卡"我承担"主数字的分摊合计，不传按 schema 默认值 false
+  // （2026-09-16 新增，见 lib/db/schema.ts expenses.excludeFromSplit 注释）。
+  excludeFromSplit: z.boolean().optional(),
 });
 
 export const updateExpenseSchema = createExpenseSchema.partial();

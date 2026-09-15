@@ -117,6 +117,7 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
         // 的"没传这个字段，保持原值"分开处理，用 || null 把空字符串归一化成 null。
         merchant: body.merchant !== undefined ? body.merchant || null : existing.merchant,
         note: body.note !== undefined ? body.note : existing.note,
+        excludeFromSplit: body.excludeFromSplit !== undefined ? body.excludeFromSplit : existing.excludeFromSplit,
         expenseDate: body.expenseDate ? new Date(body.expenseDate) : existing.expenseDate,
         updatedAt: new Date(),
       })

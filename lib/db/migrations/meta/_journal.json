@@ -57,6 +57,13 @@
       "when": 1789403239653,
       "tag": "0007_cuddly_captain_cross",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789488393485,
+      "tag": "0008_wealthy_hobgoblin",
+      "breakpoints": true
     }
   ]
 }

@@ -22,6 +22,9 @@ export interface ExpenseListItem {
   // 只有「我自己」录入的消费才查得到真实标签（payment_method 归属私有），
   // 别人录入的一律是 '其他人的支付方式' 或 null（没选支付方式）。
   paymentMethodLabel: string | null;
+  // 2026-09-16 新增：这笔是不是被标了"不计入 Hero 卡我承担合计"（机票/宝石这类
+  // 默认如此），纯展示小标记，不影响这里任何排序/筛选/金额计算。
+  excludeFromSplit: boolean;
 }
 
 type SortMode = 'manual' | 'date' | 'amount';
@@ -244,6 +247,11 @@ export function ExpenseList({
                   <span className="text-[12.5px] font-medium">
                     {e.category}
                     {e.merchant && <span className="font-normal text-muted"> · {e.merchant}</span>}
+                    {e.excludeFromSplit && (
+                      <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.2)] px-[6px] py-[1px] align-middle text-[8.5px] font-medium text-muted">
+                        不计分摊
+                      </span>
+                    )}
                   </span>
                   <span className="truncate text-[10px] text-muted">
                     {e.payerName} · {e.expenseDate.slice(5, 10)}

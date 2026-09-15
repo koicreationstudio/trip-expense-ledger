@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { getDb } from '@/lib/db/client';
 import { exchangeRecords, expenses, participants, paymentMethods, trips, wallets } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
-import { loadSettlementInput } from '@/lib/db/settlement-query';
+import { loadMyShareBreakdown, loadSettlementInput } from '@/lib/db/settlement-query';
 import { computeNetBalances } from '@/lib/domain/settlement';
 import { formatMoney } from '@/lib/money';
 import { ExpenseList } from './expense-list';
@@ -40,6 +40,30 @@ export default async function TripPage({ params }: { params: { tripId: string } 
   const netBalances = computeNetBalances(settlementInput);
   const myNet = netBalances.get(identity.participantId) ?? 0;
   const unsettledCount = settlementInput.length;
+
+  // 「我承担」明细（2026-09-16 新增，见 lib/db/settlement-query.ts 顶部注释）：
+  // 跟上面 myNet 是两个不同的数字——myNet 是"付出减分摊"的净额（该收/该付），
+  // 这里是"我自己该承担多少"的毛份额，机票/宝石这类被标了 excludeFromSplit
+  // 的消费会从主数字里摘出来单独成行，不写死只认这两个分类。
+  const myShareGroups = await loadMyShareBreakdown(db, params.tripId, identity.participantId);
+  const myShareIncluded = myShareGroups.find((g) => !g.excludeFromSplit);
+  const myShareExcluded = [...myShareGroups.filter((g) => g.excludeFromSplit)].sort(
+    (a, b) => b.grossBaseCurrency - a.grossBaseCurrency
+  );
+  const myShareNet = myShareIncluded?.netBaseCurrency ?? 0;
+  const myShareGross = myShareIncluded?.grossBaseCurrency ?? 0;
+  const myShareCount = myShareIncluded?.count ?? 0;
+  const hasAnyMyShare = myShareGroups.length > 0;
+  // 分类文案去掉 emoji 前缀（"✈️ 机票" → "机票"），行首摘要句用得上；分类明细
+  // 行本身还是显示带 emoji 的完整分类名，跟活动流/结算页的展示习惯保持一致。
+  const stripCategoryEmoji = (label: string) => {
+    const spaceIdx = label.indexOf(' ');
+    return spaceIdx > -1 ? label.slice(spaceIdx + 1) : label;
+  };
+  const myShareIncludedLabel =
+    myShareExcluded.length > 0
+      ? `不含${myShareExcluded.map((g) => stripCategoryEmoji(g.category)).join('、')}`
+      : '我承担的消费';
 
   // ③ 活动流：整个行程的消费都要看见（同行人分摊的前提是能看到对方记了什么），
   // 不再按 enteredByParticipantId 过滤。编辑/删除权限边界仍然只认自己录入的那些，
@@ -116,6 +140,46 @@ export default async function TripPage({ params }: { params: { tripId: string } 
             查看结算明细 →
           </Link>
         </div>
+
+        {/* 「我承担」区块（2026-09-16 新增，落地"机票/宝石消费明细"这个真功能，
+            之前只是 Artifact demo 假数据，见 PENDING-DECISIONS 对应章节）——
+            跟上面"我的净额"是两个不同的数字："我的净额"是付出减分摊的净额（该收/
+            该付），这里是"我自己该承担多少钱"的毛份额，被标了 excludeFromSplit
+            的消费（机票/宝石这类业务差旅成本默认如此）从主数字里摘出来、按分类
+            单独成行，不影响上面的结算计算。myShareGroups 为空（这趟行程她自己
+            一笔分摊份额都没有）时整块不渲染，避免空数据还占一块地方。 */}
+        {hasAnyMyShare && (
+          <div className="mt-1 flex flex-col gap-1 border-t border-white/15 pt-[7px]">
+            <span className="text-[10px] text-hero-label">
+              我承担 · {myShareIncludedLabel} · 已扣分摊份额
+            </span>
+            <span className="font-serif text-lg font-medium tabular-nums tracking-tight text-white">
+              {formatMoney(myShareNet, trip.baseCurrency)}
+            </span>
+            <span className="text-[10px] text-hero-label">{myShareCount} 笔消费</span>
+
+            <div className="mt-1 flex flex-col gap-[3px] rounded-[9px] bg-white/[.06] p-[7px]">
+              <div className="flex items-center justify-between gap-2 text-[10px]">
+                <span className="text-hero-label">{myShareIncludedLabel}</span>
+                <span className="font-serif tabular-nums text-white">
+                  净 {formatMoney(myShareNet, trip.baseCurrency)} · 毛{' '}
+                  {formatMoney(myShareGross, trip.baseCurrency)}
+                </span>
+              </div>
+              {myShareExcluded.map((g) => (
+                <div key={g.category} className="flex items-center justify-between gap-2 text-[10px]">
+                  <span className="text-hero-label">
+                    {g.category} ({g.count})
+                  </span>
+                  <span className="font-serif tabular-nums text-white">
+                    净 {formatMoney(g.netBaseCurrency, trip.baseCurrency)} · 毛{' '}
+                    {formatMoney(g.grossBaseCurrency, trip.baseCurrency)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <WalletCard
@@ -184,6 +248,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
             paymentMethodLabel: e.paymentMethodId
               ? paymentMethodLabelById.get(e.paymentMethodId) ?? '其他人的支付方式'
               : null,
+            excludeFromSplit: e.excludeFromSplit,
           }))}
         />
       </section>

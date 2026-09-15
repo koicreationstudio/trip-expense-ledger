@@ -48,6 +48,7 @@ export function toExpenseDto(row: ExpenseRow) {
     category: row.category,
     merchant: row.merchant,
     note: row.note,
+    excludeFromSplit: row.excludeFromSplit,
     hasReceipt: row.receiptPath !== null,
     expenseDate: row.expenseDate.toISOString(),
     createdAt: row.createdAt.toISOString(),

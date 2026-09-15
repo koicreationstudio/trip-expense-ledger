@@ -200,6 +200,16 @@ export const expenses = sqliteTable(
     merchant: text('merchant'),
     note: text('note'),
     receiptPath: text('receipt_path'),
+    // 这笔消费要不要计入行程主页 Hero 卡"我承担"那个主数字的分摊合计
+    // （2026-09-16 新增，落地"机票/宝石消费明细"这个真功能，lifeos-pm 对业务
+    // 语义的判断详见 PENDING-DECISIONS 对应章节，不是 Remy 逐字拍板的规格）。
+    // 默认 false＝跟现在的行为完全一样，照常计入。true 的意思只是"这笔别算进
+    // Hero 卡主数字里、单独拉一行显示"，不代表"这笔 100% 不跟别人分摊"——
+    // 这笔本身仍然可以正常有 splits（比如机票/宝石里偶尔真有一笔是跟同行人
+    // 分的），实际"谁欠谁多少"的结算计算完全不看这个字段，只看 splits，这个
+    // 字段纯粹是 Hero 卡怎么分组显示的开关，故意不跟结算逻辑绑死，免得以后
+    // 理解错了还要跟着改一遍算法。
+    excludeFromSplit: integer('exclude_from_split', { mode: 'boolean' }).notNull().default(false),
     expenseDate: integer('expense_date', { mode: 'timestamp_ms' }).notNull(),
     createdAt: createdAt(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
