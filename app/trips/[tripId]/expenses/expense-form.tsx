@@ -235,10 +235,19 @@ export function ExpenseForm({
         return;
       }
       splits = rescaleSplitToBaseCurrency(nativeShares, amountBaseCurrency);
-    } else if (isEdit) {
-      // 编辑时金额/币种字段一定会被重传，PATCH 要求「金额一变就必须同时带 splits」，
-      // 这里补上默认等分，跟创建时后端自己算的默认行为保持一致。
-      splits = equalSplit(amountBaseCurrency, participants.map((p) => p.id));
+    } else {
+      // fix(2026-09-15 round10 真实结构性缺口)：「平分」之前完全没有显式传 splits，
+      // POST 时交给后端默认值（app/api/trips/[tripId]/expenses/route.ts 第 64 行），
+      // 但那个默认值是「行程全部参与者平分」，压根不知道「跟谁分？」这组新增的
+      // 勾选——选了只跟其中几个人分、点了平分，实际却悄悄分给了全部人，是那种
+      // 「代码看起来加了勾选框，但真实数据下选了也没用」的假功能。这里改成一律
+      // 显式按 includedParticipants 传 splits（创建和编辑都一样），不再依赖后端
+      // 默认值，「跟谁分？」勾选真的会决定平分的分母。
+      if (includedParticipants.length === 0) {
+        setError('平分至少要选一个人参与');
+        return;
+      }
+      splits = equalSplit(amountBaseCurrency, includedParticipants.map((p) => p.id));
     }
 
     setSubmitting(true);
@@ -503,30 +512,38 @@ export function ExpenseForm({
 
         {splitMode !== 'onlyMe' && (
           <div className="flex flex-col gap-2 border-t border-sand pt-2">
-            <span className="field-label">谁垫的钱？</span>
-            <div className="flex flex-wrap gap-1.5">
-              {SPLIT_SUB_MODE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => handleSelectSplitMode(opt.value)}
-                  aria-pressed={splitMode === opt.value}
-                  className={
-                    splitMode === opt.value
-                      ? 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[10px] text-[10px] font-medium text-white transition-colors'
-                      : 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[10px] text-[10px] font-medium text-muted transition-colors hover:text-ink'
-                  }
-                >
-                  {opt.label}
-                </button>
-              ))}
+            {/* fix(2026-09-15 round10)：Artifact 这个开关打开后是「跟谁分？→谁垫的钱？→
+                怎么分？」三组独立问题，「跟谁分？」是这次新补的一组——之前只有「怎么分？」
+                (平分/自定义) 一组，平分时到底跟谁分是隐性的（后端默认全体参与者），
+                这里补成一排可勾选的参与者 chip，跟自定义分摊共用同一份 splitIncluded
+                state，勾选结果对平分/自定义都生效。 */}
+            <div className="flex flex-col gap-1">
+              <span className="field-label">跟谁分？</span>
+              <div className="flex flex-wrap gap-1.5">
+                {participants.map((p) => {
+                  const included = splitIncluded[p.id] ?? true;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSplitIncluded((prev) => ({ ...prev, [p.id]: !included }))}
+                      aria-pressed={included}
+                      className={
+                        included
+                          ? 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[10px] text-[10px] font-medium text-white transition-colors'
+                          : 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[10px] text-[10px] font-medium text-muted transition-colors hover:text-ink'
+                      }
+                    >
+                      {p.displayName}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-
-            {splitMode === 'equal' && <p className="text-[10px] text-muted">默认所有参与者平均分摊这笔消费。</p>}
 
             <div className="flex flex-col gap-1">
               <label className="field-label" htmlFor="payer">
-                谁代垫的
+                谁垫的钱？
               </label>
               <select
                 id="payer"
@@ -536,34 +553,66 @@ export function ExpenseForm({
               >
                 {participants.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.displayName}
+                    {p.id === myParticipantId ? `${p.displayName}（我）` : p.displayName}
                   </option>
                 ))}
               </select>
             </div>
 
+            <div className="flex flex-col gap-1">
+              <span className="field-label">怎么分？</span>
+              <div className="flex flex-wrap gap-1.5">
+                {SPLIT_SUB_MODE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleSelectSplitMode(opt.value)}
+                    aria-pressed={splitMode === opt.value}
+                    className={
+                      splitMode === opt.value
+                        ? 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[10px] text-[10px] font-medium text-white transition-colors'
+                        : 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[10px] text-[10px] font-medium text-muted transition-colors hover:text-ink'
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {splitMode === 'equal' && (
+                <p className="text-[10px] text-muted">按上面「跟谁分？」勾选的人平均分摊这笔消费。</p>
+              )}
+            </div>
+
             {splitMode === 'custom' && (
               <div className="flex flex-col gap-2">
+                {/* fix(2026-09-15 round10)：「跟谁分？」那组 chip 已经决定了包含谁，这里
+                    不再重复一份 checkbox（两处各管一份 splitIncluded 容易勾出不一致的
+                    状态）。恰好 2 人时加一层「填一个、另一个自动算」联动（Artifact 明确
+                    点名的场景），3 人以上维持各自手动填 + 下面的「平均分给已勾选的人」
+                    按钮兜底。 */}
                 <div className="flex flex-col gap-1">
-                  {participants.map((p) => (
+                  {includedParticipants.map((p) => (
                     <div key={p.id} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={splitIncluded[p.id] ?? true}
-                        onChange={(e) =>
-                          setSplitIncluded((prev) => ({ ...prev, [p.id]: e.target.checked }))
-                        }
-                      />
                       <span className="w-24 shrink-0 text-[12.5px]">{p.displayName}</span>
                       <input
                         type="number"
                         min="0"
                         step="0.01"
-                        disabled={!(splitIncluded[p.id] ?? true)}
                         value={splitAmounts[p.id] ?? ''}
-                        onChange={(e) =>
-                          setSplitAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))
-                        }
+                        onChange={(e) => {
+                          const nextVal = e.target.value;
+                          setSplitAmounts((prev) => {
+                            const next = { ...prev, [p.id]: nextVal };
+                            if (includedParticipants.length === 2) {
+                              const other = includedParticipants.find((o) => o.id !== p.id);
+                              if (other) {
+                                const remainderCents = amountCentsTotal - yuanToCents(Number(nextVal) || 0);
+                                next[other.id] = String(centsToYuan(Math.max(0, remainderCents)));
+                              }
+                            }
+                            return next;
+                          });
+                        }}
                         placeholder="0.00"
                         className="field-input w-28 font-serif tabular-nums"
                       />
