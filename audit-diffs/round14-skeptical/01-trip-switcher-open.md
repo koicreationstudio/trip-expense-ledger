@@ -1,0 +1,180 @@
+- generic [ref=f1e1]:
+  - generic [ref=f1e3]:
+    - banner [ref=f1e4]:
+      - generic [ref=f1e5]:
+        - generic [ref=f1e6]:
+          - heading "2026曼谷" [level=1] [ref=f1e7]
+          - paragraph [ref=f1e8]: 本位币 MYR
+        - generic [ref=f1e9]:
+          - generic [ref=f1e10]:
+            - link "我的账号" [ref=f1e11] [cursor=pointer]:
+              - /url: /account?from=ec5bff02-9ff3-4a03-b857-4e88a3f42b23
+            - button "退出登录" [ref=f1e12] [cursor=pointer]
+          - generic [ref=f1e13]:
+            - button "2026曼谷" [active] [ref=f1e14] [cursor=pointer]:
+              - text: 2026曼谷
+              - generic [aria-hidden] [ref=f1e15]: ▾
+            - generic [ref=f1e158]:
+              - generic [ref=f1e159]:
+                - generic [ref=f1e160]: 管理行程
+                - link "＋ 新建行程" [ref=f1e161] [cursor=pointer]:
+                  - /url: /trips/new
+              - list [ref=f1e162]:
+                - listitem [ref=f1e163]:
+                  - generic [aria-hidden] [ref=f1e164]: ●
+                  - generic [ref=f1e165]: 2026曼谷
+                  - generic [aria-hidden] [ref=f1e166]: ✓
+                  - button "删除「2026曼谷」" [ref=f1e167] [cursor=pointer]: 🗑
+      - navigation [ref=f1e16]:
+        - link "行程主页" [ref=f1e17] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23
+        - link "结算" [ref=f1e18] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/settlement
+        - link "支付方式" [ref=f1e19] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/payment-methods
+        - link "邀请管理" [ref=f1e20] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/invites
+    - main [ref=f1e21]:
+      - paragraph [ref=f1e22]: 本位币 MYR · 记账中
+      - generic [ref=f1e24]:
+        - generic [ref=f1e25]:
+          - generic [ref=f1e26]: 我的净额
+          - generic [ref=f1e27]: +RM 0.00
+          - generic [ref=f1e28]: 该收回 · 0 笔消费
+        - link "查看结算明细 →" [ref=f1e29] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/settlement
+      - generic [ref=f1e30]:
+        - generic [ref=f1e31]:
+          - generic [ref=f1e32]: 我的钱包
+          - generic [ref=f1e33]:
+            - generic [ref=f1e34]: 仅自己可见
+            - group "钱包卡背景色阶" [ref=f1e35]:
+              - 'button "换成背景色 #1A1A19" [ref=f1e36] [cursor=pointer]'
+              - 'button "换成背景色 #242422" [ref=f1e37] [cursor=pointer]'
+              - 'button "换成背景色 #2E2E2C" [pressed] [ref=f1e38] [cursor=pointer]'
+        - button "新建钱包" [ref=f1e41] [cursor=pointer]: ＋
+        - button "💱 取款 / 换汇" [ref=f1e42] [cursor=pointer]
+      - generic [ref=f1e44]:
+        - generic [ref=f1e45]: ⚡ 快速记账
+        - generic [ref=f1e46]:
+          - generic [ref=f1e47]:
+            - combobox "分类" [ref=f1e49]
+            - combobox "币种" [ref=f1e50]:
+              - option "MYR" [selected]
+              - option "USD"
+              - option "HKD"
+              - option "THB"
+              - option "PHP"
+              - option "SGD"
+              - option "LKR"
+              - option "CNY"
+            - spinbutton "金额" [ref=f1e51]
+            - button "记" [ref=f1e52] [cursor=pointer]
+          - generic [ref=f1e53]:
+            - generic [ref=f1e54]: 分摊
+            - button "仅我自己" [ref=f1e55] [cursor=pointer]
+            - button "平分" [pressed] [ref=f1e56] [cursor=pointer]
+            - button "自定义分摊" [ref=f1e57] [cursor=pointer]
+      - generic [ref=f1e58]:
+        - button "💱 当前汇率比价 收起 ▲" [ref=f1e59] [cursor=pointer]:
+          - generic [ref=f1e60]: 💱 当前汇率比价
+          - generic [ref=f1e61]: 收起 ▲
+        - generic [ref=f1e62]:
+          - generic [ref=f1e63]:
+            - button "THB" [ref=f1e64] [cursor=pointer]
+            - button "HKD" [ref=f1e65] [cursor=pointer]
+            - button "SGD" [ref=f1e66] [cursor=pointer]
+            - button "LKR" [ref=f1e67] [cursor=pointer]
+          - generic [ref=f1e68]:
+            - generic [ref=f1e69]:
+              - generic [ref=f1e70]: 名义金额（THB）
+              - spinbutton "名义金额（THB）" [ref=f1e71]: "100"
+            - button "🔄 刷新" [ref=f1e72] [cursor=pointer]
+          - generic [ref=f1e73]:
+            - button "支付宝 ✓最划算 RM 12.30 汇率 0.2043" [disabled] [ref=f1e74]:
+              - generic [ref=f1e75]:
+                - generic [ref=f1e76]:
+                  - text: 支付宝
+                  - generic [ref=f1e77]: ✓最划算
+                - generic [ref=f1e78]: RM 12.30
+              - generic [ref=f1e79]: 汇率 0.2043
+            - button "Wise RM 12.35 汇率 0.1230" [disabled] [ref=f1e80]:
+              - generic [ref=f1e81]:
+                - generic [ref=f1e82]: Wise
+                - generic [ref=f1e83]: RM 12.35
+              - generic [ref=f1e84]: 汇率 0.1230
+            - button "HSBC 大马 Visa Signature RM 12.43 汇率 0.1243" [disabled] [ref=f1e85]:
+              - generic [ref=f1e86]:
+                - generic [ref=f1e87]: HSBC 大马 Visa Signature
+                - generic [ref=f1e88]: RM 12.43
+              - generic [ref=f1e89]: 汇率 0.1243
+      - generic [ref=f1e90]:
+        - button "🔀 换汇渠道比价 收起 ▲" [ref=f1e91] [cursor=pointer]:
+          - generic [ref=f1e92]: 🔀 换汇渠道比价
+          - generic [ref=f1e93]: 收起 ▲
+        - generic [ref=f1e94]:
+          - generic [ref=f1e95]:
+            - generic [ref=f1e96]:
+              - generic [ref=f1e97]: 我持有
+              - combobox "我持有" [ref=f1e98]:
+                - option "MYR" [selected]
+                - option "USD"
+            - generic [ref=f1e99]:
+              - generic [ref=f1e100]: 金额
+              - spinbutton "金额" [ref=f1e101]: "1000"
+          - generic [ref=f1e102]:
+            - generic [ref=f1e103]:
+              - generic [ref=f1e104]: 1 MYR
+              - generic [ref=f1e105]: = 8.120 ฿
+            - generic [ref=f1e106]:
+              - generic [ref=f1e107]: 1 USD
+              - generic [ref=f1e108]: = 33.030 ฿
+          - generic [ref=f1e109]:
+            - button "THB" [ref=f1e110] [cursor=pointer]
+            - button "USD" [ref=f1e111] [cursor=pointer]
+            - button "SGD" [ref=f1e112] [cursor=pointer]
+            - button "CNY" [ref=f1e113] [cursor=pointer]
+            - button "HKD" [ref=f1e114] [cursor=pointer]
+          - generic [ref=f1e115]:
+            - checkbox "包含支付宝渠道" [checked] [ref=f1e116]
+            - text: 包含支付宝渠道
+          - list [ref=f1e117]:
+            - listitem [ref=f1e118]:
+              - generic [ref=f1e119]:
+                - generic [ref=f1e120]:
+                  - text: Wise
+                  - generic [ref=f1e121]: ✓最划算
+                - generic [ref=f1e122]: 接近中间价 · 约 0.7% 手续费
+              - generic [ref=f1e123]: ฿8062.02
+            - listitem [ref=f1e124]:
+              - generic [ref=f1e125]:
+                - generic [ref=f1e126]: TNG 跨境
+                - generic [ref=f1e127]: DuitNow 跨境 · 约 -1.5%
+              - generic [ref=f1e128]: ฿7996.98
+            - listitem [ref=f1e129]:
+              - generic [ref=f1e130]:
+                - generic [ref=f1e131]: 支付宝
+                - generic [ref=f1e132]: 约 -1.8%（估算值，待真实数据更新）
+              - generic [ref=f1e133]: ฿7973.84
+            - listitem [ref=f1e134]:
+              - generic [ref=f1e135]:
+                - generic [ref=f1e136]: ATM 取款
+                - generic [ref=f1e137]: 银行外汇费约 2% + ฿220 固定手续费
+              - generic [ref=f1e138]: ฿7939.98
+            - listitem [ref=f1e139]:
+              - generic [ref=f1e140]:
+                - generic [ref=f1e141]: 换钱店
+                - generic [ref=f1e142]: 市区 Superrich · 约 -2.5%，机场更差
+              - generic [ref=f1e143]: ฿7916.03
+          - paragraph [ref=f1e144]: 参考汇率是固定表，不是实时拉取；跟上面「当前汇率比价」比的是不同东西——那个比的是刷卡该用哪张卡，这个比的是换钱走哪个渠道。
+      - generic [ref=f1e145]:
+        - heading "活动流" [level=2] [ref=f1e146]
+        - paragraph [ref=f1e147]: 还没记过账，点下面「记一笔消费」开始。
+      - generic [ref=f1e148]:
+        - generic [ref=f1e149]:
+          - heading "换汇 · EXCHANGE" [level=2] [ref=f1e150]
+          - generic [ref=f1e151]: 仅自己可见
+        - paragraph [ref=f1e152]: 还没有换汇记录，点上面「取款 / 换汇」开始记。
+    - link "记一笔消费" [ref=f1e155] [cursor=pointer]:
+      - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/expenses/new
+  - alert [ref=f1e157]

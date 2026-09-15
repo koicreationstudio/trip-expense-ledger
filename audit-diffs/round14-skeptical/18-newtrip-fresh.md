@@ -1,0 +1,51 @@
+- generic [active] [ref=f21e1]:
+  - main [ref=f21e3]:
+    - link "← 返回首页" [ref=f21e4] [cursor=pointer]:
+      - /url: /
+    - heading "创建新行程" [level=1] [ref=f21e5]
+    - generic [ref=f21e6]:
+      - generic [ref=f21e7]:
+        - generic [ref=f21e8]: 行程名称
+        - textbox "行程名称" [ref=f21e9]:
+          - /placeholder: 例如：2026 曼谷出差
+      - generic [ref=f21e10]:
+        - generic [ref=f21e11]: 本位币（结算/比较用的币种）
+        - combobox "本位币（结算/比较用的币种）" [ref=f21e12]:
+          - option "MYR" [selected]
+          - option "USD"
+          - option "HKD"
+          - option "THB"
+          - option "PHP"
+          - option "SGD"
+          - option "LKR"
+          - option "CNY"
+      - generic [ref=f21e13]:
+        - generic [ref=f21e14]: 同时启用哪些币种（多选）
+        - generic [ref=f21e15]:
+          - button "MYR" [pressed] [ref=f21e16] [cursor=pointer]
+          - button "USD" [ref=f21e17] [cursor=pointer]
+          - button "HKD" [ref=f21e18] [cursor=pointer]
+          - button "THB" [ref=f21e19] [cursor=pointer]
+          - button "PHP" [ref=f21e20] [cursor=pointer]
+          - button "SGD" [ref=f21e21] [cursor=pointer]
+          - button "LKR" [ref=f21e22] [cursor=pointer]
+          - button "CNY" [ref=f21e23] [cursor=pointer]
+      - generic [ref=f21e24]:
+        - generic [ref=f21e25]:
+          - generic [ref=f21e26]: 出发日期（可选）
+          - textbox "出发日期（可选）" [ref=f21e27]
+        - generic [ref=f21e28]:
+          - generic [ref=f21e29]: 返程日期（可选）
+          - textbox "返程日期（可选）" [ref=f21e30]
+      - generic [ref=f21e31]:
+        - generic [ref=f21e32]: 你的称呼
+        - textbox "你的称呼" [ref=f21e33]:
+          - /placeholder: 例如：Remy
+      - generic [ref=f21e34]:
+        - generic [ref=f21e35]: 同行人（先占位，之后发邀请链接给他们各自认领）
+        - generic [ref=f21e36]:
+          - textbox "同行人名字" [ref=f21e37]
+          - button "移除" [ref=f21e38] [cursor=pointer]
+        - button "+ 加一位同行人" [ref=f21e39] [cursor=pointer]
+      - button "创建行程" [ref=f21e40] [cursor=pointer]
+  - alert [ref=f21e41]

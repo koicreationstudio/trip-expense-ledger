@@ -1,0 +1,68 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e3]:
+    - banner [ref=f4e4]:
+      - generic [ref=f4e5]:
+        - generic [ref=f4e6]:
+          - heading "2026曼谷" [level=1] [ref=f4e7]
+          - paragraph [ref=f4e8]: 本位币 MYR
+        - generic [ref=f4e9]:
+          - generic [ref=f4e10]:
+            - link "我的账号" [ref=f4e11] [cursor=pointer]:
+              - /url: /account?from=ec5bff02-9ff3-4a03-b857-4e88a3f42b23
+            - button "退出登录" [ref=f4e12] [cursor=pointer]
+          - button "2026曼谷" [ref=f4e14] [cursor=pointer]:
+            - text: 2026曼谷
+            - generic [aria-hidden] [ref=f4e15]: ▾
+      - navigation [ref=f4e16]:
+        - link "行程主页" [ref=f4e17] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23
+        - link "结算" [ref=f4e18] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/settlement
+        - link "支付方式" [ref=f4e19] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/payment-methods
+        - link "邀请管理" [ref=f4e20] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/invites
+    - main [ref=f4e21]:
+      - heading "邀请管理" [level=1] [ref=f4e22]
+      - generic [ref=f4e23]:
+        - generic [ref=f4e48]:
+          - heading "生成新邀请链接" [level=2] [ref=f4e49]
+          - generic [ref=f4e50]:
+            - generic [ref=f4e51]:
+              - generic [ref=f4e52]: 对方名字（可选，方便自己认出这条链接是给谁的）
+              - textbox "对方名字（可选，方便自己认出这条链接是给谁的）" [ref=f4e53]:
+                - /placeholder: 例如：Ben
+            - generic [ref=f4e54]:
+              - generic [ref=f4e55]: 有效期（天，留空=不设有效期）
+              - spinbutton "有效期（天，留空=不设有效期）" [ref=f4e56]
+            - button "生成邀请链接" [ref=f4e57] [cursor=pointer]
+        - generic [ref=f4e58]:
+          - heading "直接添加参与者" [level=2] [ref=f4e59]
+          - paragraph [ref=f4e60]: 不需要对方点邀请链接认领，适合对方不方便操作手机的场合，加进来的人只是个占位名字。
+          - generic [ref=f4e61]:
+            - generic [ref=f4e62]:
+              - generic [ref=f4e63]: 名字
+              - textbox "名字" [ref=f4e64]:
+                - /placeholder: 例如：司机阿明
+            - button "＋ 添加" [ref=f4e65] [cursor=pointer]
+        - generic [ref=f4e26]:
+          - heading "现有邀请链接" [level=2] [ref=f4e27]
+          - paragraph [ref=f4e28]: 还没生成过邀请链接。
+        - generic [ref=f4e29]:
+          - heading "参与者认领状态" [level=2] [ref=f4e30]
+          - paragraph [ref=f4e31]: 认领错人、换手机号了，可以把某个人重置回未认领状态，让他重新用邀请链接认领。
+          - list [ref=f4e38]:
+            - listitem [ref=f4e39]:
+              - generic [ref=f4e40]:
+                - generic [aria-hidden] [ref=f4e41]: R
+                - text: Remy
+                - generic [ref=f4e42]: 创建者
+                - generic [ref=f4e43]: 已认领
+            - listitem [ref=f4e44]:
+              - generic [ref=f4e45]:
+                - generic [aria-hidden] [ref=f4e46]: H
+                - text: Htoo
+                - generic [ref=f4e47]: 未认领
+    - link "记一笔消费" [ref=f4e35] [cursor=pointer]:
+      - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/expenses/new
+  - alert [ref=f4e37]

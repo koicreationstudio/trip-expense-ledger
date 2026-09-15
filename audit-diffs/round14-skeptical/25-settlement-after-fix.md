@@ -1,0 +1,36 @@
+- generic [active] [ref=f30e1]:
+  - generic [ref=f30e3]:
+    - banner [ref=f30e4]:
+      - generic [ref=f30e5]:
+        - generic [ref=f30e6]:
+          - heading "2026曼谷" [level=1] [ref=f30e7]
+          - paragraph [ref=f30e8]: 本位币 MYR
+        - generic [ref=f30e9]:
+          - generic [ref=f30e10]:
+            - link "我的账号" [ref=f30e11] [cursor=pointer]:
+              - /url: /account?from=ec5bff02-9ff3-4a03-b857-4e88a3f42b23
+            - button "退出登录" [ref=f30e12] [cursor=pointer]
+          - button "2026曼谷" [ref=f30e14] [cursor=pointer]:
+            - text: 2026曼谷
+            - generic [aria-hidden] [ref=f30e15]: ▾
+      - navigation [ref=f30e16]:
+        - link "行程主页" [ref=f30e17] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23
+        - link "结算" [ref=f30e18] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/settlement
+        - link "支付方式" [ref=f30e19] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/payment-methods
+        - link "邀请管理" [ref=f30e20] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/invites
+    - main [ref=f30e21]:
+      - heading "结算" [level=1] [ref=f30e22]
+      - generic [ref=f30e23]:
+        - heading "每人净值" [level=2] [ref=f30e24]
+        - list [ref=f30e25]
+      - generic [ref=f30e26]:
+        - heading "转账清单" [level=2] [ref=f30e27]
+        - paragraph [ref=f30e28]: 目前不需要任何转账。
+      - button "标记已结算" [ref=f30e30] [cursor=pointer]
+    - link "记一笔消费" [ref=f30e33] [cursor=pointer]:
+      - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/expenses/new
+  - alert [ref=f30e35]

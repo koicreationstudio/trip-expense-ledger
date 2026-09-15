@@ -104,18 +104,12 @@ export function SettlementBody({
 
   return (
     <>
-      {!alreadySettled &&
-        isOwner &&
-        (totalTransfers > 0 ? (
-          <MarkSettledButton
-            tripId={tripId}
-            disabled={!allConfirmed}
-            disabledReason={`转账进度：${confirmedCount}/${totalTransfers} 笔已确认收款，全部确认后才能标记已结算`}
-          />
-        ) : (
-          <MarkSettledButton tripId={tripId} />
-        ))}
-
+      {/* fix(2026-09-16 round14 地毯式核对)：Artifact 把这颗按钮放在两份清单最后面，
+          当成"看完净值+转账清单再确认"的最后一步 CTA；这里之前放在最顶上，先于两份
+          清单出现，进页面第一眼就看到一个"标记已结算"按钮，还没看数字就先看到确认
+          按钮，跟 Artifact 的"review 完了才按"顺序不一样，也不方便——往下勾"已收款"
+          时按钮的解锁状态在屏幕外看不到。这次挪到底部，逻辑（disabled/文案）完全没动，
+          只是 JSX 位置从两份清单前面搬到后面。 */}
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-ink">每人净值</h2>
         <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
@@ -210,6 +204,18 @@ export function SettlementBody({
           </>
         )}
       </section>
+
+      {!alreadySettled &&
+        isOwner &&
+        (totalTransfers > 0 ? (
+          <MarkSettledButton
+            tripId={tripId}
+            disabled={!allConfirmed}
+            disabledReason={`转账进度：${confirmedCount}/${totalTransfers} 笔已确认收款，全部确认后才能标记已结算`}
+          />
+        ) : (
+          <MarkSettledButton tripId={tripId} />
+        ))}
     </>
   );
 }

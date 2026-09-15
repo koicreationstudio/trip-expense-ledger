@@ -1,0 +1,158 @@
+- generic [active] [ref=f21e1]:
+  - generic [ref=f21e42]:
+    - banner [ref=f21e43]:
+      - generic [ref=f21e44]:
+        - generic [ref=f21e45]:
+          - heading "round14-核实用-用完即删" [level=1] [ref=f21e46]
+          - paragraph [ref=f21e47]: 本位币 MYR
+        - generic [ref=f21e48]:
+          - generic [ref=f21e49]:
+            - link "我的账号" [ref=f21e50] [cursor=pointer]:
+              - /url: /account?from=a668f0ad-5423-4466-a125-b2b6b46c9466
+            - button "退出登录" [ref=f21e51] [cursor=pointer]
+          - button "round14-核实用-用完即删" [ref=f21e53] [cursor=pointer]:
+            - text: round14-核实用-用完即删
+            - generic [aria-hidden] [ref=f21e54]: ▾
+      - navigation [ref=f21e55]:
+        - link "行程主页" [ref=f21e56] [cursor=pointer]:
+          - /url: /trips/a668f0ad-5423-4466-a125-b2b6b46c9466
+        - link "结算" [ref=f21e57] [cursor=pointer]:
+          - /url: /trips/a668f0ad-5423-4466-a125-b2b6b46c9466/settlement
+        - link "支付方式" [ref=f21e58] [cursor=pointer]:
+          - /url: /trips/a668f0ad-5423-4466-a125-b2b6b46c9466/payment-methods
+        - link "邀请管理" [ref=f21e59] [cursor=pointer]:
+          - /url: /trips/a668f0ad-5423-4466-a125-b2b6b46c9466/invites
+    - main [ref=f21e60]:
+      - paragraph [ref=f21e61]: 本位币 MYR · 记账中
+      - generic [ref=f21e63]:
+        - generic [ref=f21e64]:
+          - generic [ref=f21e65]: 我的净额
+          - generic [ref=f21e66]: +RM 0.00
+          - generic [ref=f21e67]: 该收回 · 0 笔消费
+        - link "查看结算明细 →" [ref=f21e68] [cursor=pointer]:
+          - /url: /trips/a668f0ad-5423-4466-a125-b2b6b46c9466/settlement
+      - generic [ref=f21e69]:
+        - generic [ref=f21e70]:
+          - generic [ref=f21e71]: 我的钱包
+          - generic [ref=f21e72]:
+            - generic [ref=f21e73]: 仅自己可见
+            - group "钱包卡背景色阶" [ref=f21e74]:
+              - 'button "换成背景色 #1A1A19" [ref=f21e75] [cursor=pointer]'
+              - 'button "换成背景色 #242422" [ref=f21e76] [cursor=pointer]'
+              - 'button "换成背景色 #2E2E2C" [pressed] [ref=f21e77] [cursor=pointer]'
+        - button "新建钱包" [ref=f21e80] [cursor=pointer]: ＋
+        - button "💱 取款 / 换汇" [ref=f21e81] [cursor=pointer]
+      - generic [ref=f21e83]:
+        - generic [ref=f21e84]: ⚡ 快速记账
+        - generic [ref=f21e85]:
+          - generic [ref=f21e86]:
+            - combobox "分类" [ref=f21e88]
+            - combobox "币种" [ref=f21e89]:
+              - option "MYR" [selected]
+              - option "USD"
+              - option "HKD"
+              - option "THB"
+              - option "PHP"
+              - option "SGD"
+              - option "LKR"
+              - option "CNY"
+            - spinbutton "金额" [ref=f21e90]
+            - button "记" [ref=f21e91] [cursor=pointer]
+          - generic [ref=f21e92]:
+            - generic [ref=f21e93]: 分摊
+            - button "仅我自己" [ref=f21e94] [cursor=pointer]
+            - button "平分" [pressed] [ref=f21e95] [cursor=pointer]
+            - button "自定义分摊" [ref=f21e96] [cursor=pointer]
+      - generic [ref=f21e97]:
+        - button "💱 当前汇率比价 收起 ▲" [ref=f21e98] [cursor=pointer]:
+          - generic [ref=f21e99]: 💱 当前汇率比价
+          - generic [ref=f21e100]: 收起 ▲
+        - generic [ref=f21e101]:
+          - generic [ref=f21e102]:
+            - button "THB" [ref=f21e103] [cursor=pointer]
+            - button "HKD" [ref=f21e104] [cursor=pointer]
+            - button "SGD" [ref=f21e105] [cursor=pointer]
+            - button "LKR" [ref=f21e106] [cursor=pointer]
+          - generic [ref=f21e107]:
+            - generic [ref=f21e108]:
+              - generic [ref=f21e109]: 名义金额（THB）
+              - spinbutton "名义金额（THB）" [ref=f21e110]: "100"
+            - button "🔄 刷新" [ref=f21e111] [cursor=pointer]
+          - generic [ref=f21e112]:
+            - button "支付宝 ✓最划算 RM 12.30 汇率 0.2043" [disabled] [ref=f21e113]:
+              - generic [ref=f21e114]:
+                - generic [ref=f21e115]:
+                  - text: 支付宝
+                  - generic [ref=f21e116]: ✓最划算
+                - generic [ref=f21e117]: RM 12.30
+              - generic [ref=f21e118]: 汇率 0.2043
+            - button "Wise RM 12.35 汇率 0.1230" [disabled] [ref=f21e119]:
+              - generic [ref=f21e120]:
+                - generic [ref=f21e121]: Wise
+                - generic [ref=f21e122]: RM 12.35
+              - generic [ref=f21e123]: 汇率 0.1230
+            - button "HSBC 大马 Visa Signature RM 12.43 汇率 0.1243" [disabled] [ref=f21e124]:
+              - generic [ref=f21e125]:
+                - generic [ref=f21e126]: HSBC 大马 Visa Signature
+                - generic [ref=f21e127]: RM 12.43
+              - generic [ref=f21e128]: 汇率 0.1243
+      - generic [ref=f21e129]:
+        - button "🔀 换汇渠道比价 收起 ▲" [ref=f21e130] [cursor=pointer]:
+          - generic [ref=f21e131]: 🔀 换汇渠道比价
+          - generic [ref=f21e132]: 收起 ▲
+        - generic [ref=f21e133]:
+          - generic [ref=f21e134]:
+            - generic [ref=f21e135]:
+              - generic [ref=f21e136]: 我持有
+              - combobox "我持有" [ref=f21e137]:
+                - option "MYR" [selected]
+            - generic [ref=f21e138]:
+              - generic [ref=f21e139]: 金额
+              - spinbutton "金额" [ref=f21e140]: "1000"
+          - generic [ref=f21e142]:
+            - generic [ref=f21e143]: 1 MYR
+            - generic [ref=f21e144]: = 8.120 ฿
+          - button "THB" [ref=f21e146] [cursor=pointer]
+          - generic [ref=f21e147]:
+            - checkbox "包含支付宝渠道" [checked] [ref=f21e148]
+            - text: 包含支付宝渠道
+          - list [ref=f21e149]:
+            - listitem [ref=f21e150]:
+              - generic [ref=f21e151]:
+                - generic [ref=f21e152]:
+                  - text: Wise
+                  - generic [ref=f21e153]: ✓最划算
+                - generic [ref=f21e154]: 接近中间价 · 约 0.7% 手续费
+              - generic [ref=f21e155]: ฿8062.02
+            - listitem [ref=f21e156]:
+              - generic [ref=f21e157]:
+                - generic [ref=f21e158]: TNG 跨境
+                - generic [ref=f21e159]: DuitNow 跨境 · 约 -1.5%
+              - generic [ref=f21e160]: ฿7996.98
+            - listitem [ref=f21e161]:
+              - generic [ref=f21e162]:
+                - generic [ref=f21e163]: 支付宝
+                - generic [ref=f21e164]: 约 -1.8%（估算值，待真实数据更新）
+              - generic [ref=f21e165]: ฿7973.84
+            - listitem [ref=f21e166]:
+              - generic [ref=f21e167]:
+                - generic [ref=f21e168]: ATM 取款
+                - generic [ref=f21e169]: 银行外汇费约 2% + ฿220 固定手续费
+              - generic [ref=f21e170]: ฿7939.98
+            - listitem [ref=f21e171]:
+              - generic [ref=f21e172]:
+                - generic [ref=f21e173]: 换钱店
+                - generic [ref=f21e174]: 市区 Superrich · 约 -2.5%，机场更差
+              - generic [ref=f21e175]: ฿7916.03
+          - paragraph [ref=f21e176]: 参考汇率是固定表，不是实时拉取；跟上面「当前汇率比价」比的是不同东西——那个比的是刷卡该用哪张卡，这个比的是换钱走哪个渠道。
+      - generic [ref=f21e177]:
+        - heading "活动流" [level=2] [ref=f21e178]
+        - paragraph [ref=f21e179]: 还没记过账，点下面「记一笔消费」开始。
+      - generic [ref=f21e180]:
+        - generic [ref=f21e181]:
+          - heading "换汇 · EXCHANGE" [level=2] [ref=f21e182]
+          - generic [ref=f21e183]: 仅自己可见
+        - paragraph [ref=f21e184]: 还没有换汇记录，点上面「取款 / 换汇」开始记。
+    - link "记一笔消费" [ref=f21e187] [cursor=pointer]:
+      - /url: /trips/a668f0ad-5423-4466-a125-b2b6b46c9466/expenses/new
+  - alert [ref=f21e41]

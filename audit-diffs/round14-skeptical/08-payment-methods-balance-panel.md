@@ -1,0 +1,110 @@
+- generic [ref=f3e1]:
+  - generic [ref=f3e3]:
+    - banner [ref=f3e4]:
+      - generic [ref=f3e5]:
+        - generic [ref=f3e6]:
+          - heading "2026曼谷" [level=1] [ref=f3e7]
+          - paragraph [ref=f3e8]: 本位币 MYR
+        - generic [ref=f3e9]:
+          - generic [ref=f3e10]:
+            - link "我的账号" [ref=f3e11] [cursor=pointer]:
+              - /url: /account?from=ec5bff02-9ff3-4a03-b857-4e88a3f42b23
+            - button "退出登录" [ref=f3e12] [cursor=pointer]
+          - button "2026曼谷" [ref=f3e14] [cursor=pointer]:
+            - text: 2026曼谷
+            - generic [aria-hidden] [ref=f3e15]: ▾
+      - navigation [ref=f3e16]:
+        - link "行程主页" [ref=f3e17] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23
+        - link "结算" [ref=f3e18] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/settlement
+        - link "支付方式" [ref=f3e19] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/payment-methods
+        - link "邀请管理" [ref=f3e20] [cursor=pointer]:
+          - /url: /trips/ec5bff02-9ff3-4a03-b857-4e88a3f42b23/invites
+    - main [ref=f3e21]:
+      - generic [ref=f3e22]:
+        - heading "支付方式" [level=1] [ref=f3e23]
+        - paragraph [ref=f3e24]: 支付方式挂在你自己身上，跟人走不跟行程走，用来算记账时哪张卡/现金最划算。
+      - generic [ref=f3e25]:
+        - generic [ref=f3e26]:
+          - heading "已配置的支付方式" [level=2] [ref=f3e27]
+          - list [ref=f3e63]:
+            - listitem [ref=f3e64]:
+              - generic [ref=f3e65]:
+                - generic [aria-hidden] [ref=f3e66]: 💳
+                - generic [ref=f3e67]:
+                  - generic [ref=f3e68]: HSBC 大马 Visa Signature（卡 · MYR）
+                  - generic [ref=f3e69]: 汇率加点 1% · 境外手续费 0% · 返现 0%
+              - button "删除" [ref=f3e70] [cursor=pointer]
+            - listitem [ref=f3e71]:
+              - generic [ref=f3e72]:
+                - generic [aria-hidden] [ref=f3e73]: 💳
+                - generic [ref=f3e74]:
+                  - generic [ref=f3e75]: Wise（卡 · MYR）
+                  - generic [ref=f3e76]: 汇率加点 0% · 境外手续费 0.4% · 返现 0%
+              - button "删除" [ref=f3e77] [cursor=pointer]
+            - listitem [ref=f3e78]:
+              - generic [ref=f3e79]:
+                - generic [aria-hidden] [ref=f3e80]: 💳
+                - generic [ref=f3e81]:
+                  - generic [ref=f3e82]: 支付宝（卡 · CNY）
+                  - generic [ref=f3e83]: 汇率加点 0% · 境外手续费 0% · 返现 0%
+              - button "删除" [ref=f3e84] [cursor=pointer]
+        - generic [ref=f3e29]:
+          - heading "本行程启用的支付方式" [level=2] [ref=f3e30]
+          - paragraph [ref=f3e31]: 这行程要用到哪几张卡/钱包，不用的可以取消勾选，记账时下拉选单会更短。
+          - list [ref=f3e85]:
+            - listitem [ref=f3e86]:
+              - checkbox "HSBC 大马 Visa Signature（卡 · MYR）" [checked] [ref=f3e87]
+              - generic [ref=f3e88]: HSBC 大马 Visa Signature（卡 · MYR）
+            - listitem [ref=f3e89]:
+              - checkbox "Wise（卡 · MYR）" [checked] [ref=f3e90]
+              - generic [ref=f3e91]: Wise（卡 · MYR）
+            - listitem [ref=f3e92]:
+              - checkbox "支付宝（卡 · CNY）" [checked] [ref=f3e93]
+              - generic [ref=f3e94]: 支付宝（卡 · CNY）
+        - generic [ref=f3e33]:
+          - heading "新增支付方式" [level=2] [ref=f3e34]
+          - generic [ref=f3e35]:
+            - generic [ref=f3e36]:
+              - generic [ref=f3e37]:
+                - generic [ref=f3e38]: 名称
+                - textbox "名称" [ref=f3e39]:
+                  - /placeholder: 例如：HSBC 万事达卡
+              - generic [ref=f3e40]:
+                - generic [ref=f3e41]: 类型
+                - combobox "类型" [ref=f3e42]:
+                  - option "卡" [selected]
+                  - option "现金"
+            - generic [ref=f3e43]:
+              - generic [ref=f3e44]: 结算币种
+              - combobox "结算币种" [ref=f3e45]:
+                - option "MYR" [selected]
+                - option "USD"
+                - option "HKD"
+                - option "THB"
+                - option "PHP"
+                - option "SGD"
+                - option "LKR"
+                - option "CNY"
+            - generic [ref=f3e46]:
+              - generic [ref=f3e47]:
+                - generic [ref=f3e48]: 汇率加点 %
+                - spinbutton "汇率加点 %" [ref=f3e49]: "0"
+              - generic [ref=f3e50]:
+                - generic [ref=f3e51]: 境外手续费 %
+                - spinbutton "境外手续费 %" [ref=f3e52]: "0"
+              - generic [ref=f3e53]:
+                - generic [ref=f3e54]: 固定费（结算币种，元）
+                - spinbutton "固定费（结算币种，元）" [ref=f3e55]: "0"
+              - generic [ref=f3e56]:
+                - generic [ref=f3e57]: 返现 %
+                - spinbutton "返现 %" [ref=f3e58]: "0"
+            - button "添加支付方式" [ref=f3e59] [cursor=pointer]
+        - generic [ref=f3e60]:
+          - button "⚙ 设置当前余额" [active] [ref=f3e61] [cursor=pointer]
+          - generic [ref=f3e95]:
+            - paragraph [ref=f3e96]: 这里改的是这趟行程里每个钱包的余额（不是上面账号级的支付方式费率配置）。
+            - paragraph [ref=f3e97]: 还没建过钱包，先去行程主页新建。
+  - alert [ref=f3e62]

@@ -1,0 +1,21 @@
+- generic [active] [ref=f24e1]:
+  - main [ref=f24e3]:
+    - generic [ref=f24e4]:
+      - generic [ref=f24e5]:
+        - heading "我的行程" [level=1] [ref=f24e6]
+        - link "我的账号" [ref=f24e7] [cursor=pointer]:
+          - /url: /account
+      - link "创建新行程" [ref=f24e8] [cursor=pointer]:
+        - /url: /trips/new
+    - generic [ref=f24e12]:
+      - button "2026曼谷 MYR 创建者 记账中 该收 RM 1,150.00 总消费 RM 3,150.00 · 3 笔 打开中…" [disabled] [ref=f24e23]:
+        - generic [ref=f24e14]: 2026曼谷
+        - generic [ref=f24e15]:
+          - generic [ref=f24e16]: MYR
+          - generic [ref=f24e17]: 创建者
+          - generic [ref=f24e18]: 记账中
+        - generic [ref=f24e19]: 该收 RM 1,150.00
+        - generic [ref=f24e20]: 总消费 RM 3,150.00 · 3 笔
+        - generic [ref=f24e24]: 打开中…
+      - button "改名「2026曼谷」" [ref=f24e21] [cursor=pointer]: ✎
+  - alert [ref=f24e22]

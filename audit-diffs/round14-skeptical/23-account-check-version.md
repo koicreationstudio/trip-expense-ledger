@@ -1,0 +1,15 @@
+- generic [active] [ref=f28e1]:
+  - main [ref=f28e3]:
+    - link "← 返回首页" [ref=f28e4] [cursor=pointer]:
+      - /url: /
+    - heading "我的账号" [level=1] [ref=f28e5]
+    - generic [ref=f28e6]:
+      - paragraph [ref=f28e7]: 这条链接是你重新登录这个账号唯一的方式，没有邮箱密码。换设备、清了浏览器数据时，打开这条链接就能回来。
+      - generic [ref=f28e8]:
+        - code [ref=f28e9]: https://trip-expense-ledger.remybali.workers.dev/id/g6EDgnEiTvoZECZS28xz-wp39RvlbSfdTqB6HD3UuUM
+        - button "复制链接" [ref=f28e10] [cursor=pointer]
+    - generic [ref=f28e11]:
+      - paragraph [ref=f28e12]: 不确定看到的是不是最新内容？点这个直接跟服务器重新要一份，不会用本地缓存的旧内容。
+      - button "强制刷新最新版本" [ref=f28e13] [cursor=pointer]
+    - paragraph [ref=f28e19]: 版本 b990777-dirty · 部署于 2026/09/16 00:10（UTC+8）
+  - alert [ref=f28e20]

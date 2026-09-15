@@ -1,0 +1,19 @@
+- generic [active] [ref=f7e1]:
+  - main [ref=f7e3]:
+    - generic [ref=f7e4]:
+      - generic [ref=f7e5]:
+        - heading "我的行程" [level=1] [ref=f7e6]
+        - link "我的账号" [ref=f7e7] [cursor=pointer]:
+          - /url: /account
+      - link "创建新行程" [ref=f7e8] [cursor=pointer]:
+        - /url: /trips/new
+    - generic [ref=f7e12]:
+      - button "2026曼谷 MYR 创建者 记账中 该收 RM 0.00" [ref=f7e13] [cursor=pointer]:
+        - generic [ref=f7e14]: 2026曼谷
+        - generic [ref=f7e15]:
+          - generic [ref=f7e16]: MYR
+          - generic [ref=f7e17]: 创建者
+          - generic [ref=f7e18]: 记账中
+        - generic [ref=f7e19]: 该收 RM 0.00
+      - button "改名「2026曼谷」" [ref=f7e20] [cursor=pointer]: ✎
+  - alert [ref=f7e21]
