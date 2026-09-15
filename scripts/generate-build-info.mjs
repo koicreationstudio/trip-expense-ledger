@@ -31,10 +31,19 @@ function safeExec(cmd, fallback) {
 }
 
 const commitRaw = safeExec('git rev-parse --short HEAD', 'unknown');
-// 只看"已被 git 追踪的文件有没有改动"（-uno 关掉 untracked 列表），不把 untracked
-// 文件算进"dirty"——这个仓库一直有 audit-diffs/ 这类走查截图长期不进 git（约定
-// 如此，不是遗漏），如果连 untracked 都算，"-dirty" 会变成常态、失去诊断意义。
-const hasUncommittedChanges = safeExec('git status --porcelain --untracked-files=no', '') !== '';
+// "dirty" 只想回答一件事：马上要打出来的构建产物，代码是不是跟 HEAD 这个 commit
+// 完全一致。所以：
+// - 不看 untracked 文件（--untracked-files=no）—— 这个仓库一直有 audit-diffs/
+//   这类走查截图长期不进 git（约定如此不是遗漏），连它们都算的话 "-dirty" 会变成
+//   常态，诊断意义归零。
+// - 排掉 *.md —— PENDING-DECISIONS-trip-expense-ledger.md 这类文档本来就设计成
+//   "写完不进 git" 的本地记事本（任务方要求），常年处于已修改状态，跟"构建产物
+//   是不是等于 HEAD"这件事完全无关。
+// - 排掉这份文件自己（lib/build-info.ts）—— 它每次跑这个脚本都会被重写一遍，
+//   拿它自己的改动去判断"要不要标记 dirty"是自我循环，没有意义。
+const DIRTY_CHECK_PATHSPECS = ['.', ':!*.md', ':!lib/build-info.ts'];
+const hasUncommittedChanges =
+  safeExec(`git status --porcelain --untracked-files=no -- ${DIRTY_CHECK_PATHSPECS.join(' ')}`, '') !== '';
 const commit = hasUncommittedChanges && commitRaw !== 'unknown' ? `${commitRaw}-dirty` : commitRaw;
 const buildTime = new Date().toISOString();
 
