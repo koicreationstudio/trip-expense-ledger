@@ -150,8 +150,13 @@ export default async function TripPage({ params }: { params: { tripId: string } 
             一笔分摊份额都没有）时整块不渲染，避免空数据还占一块地方。 */}
         {hasAnyMyShare && (
           <div className="mt-1 flex flex-col gap-1 border-t border-white/15 pt-[7px]">
+            {/* fix(2026-09-16 第十五轮)：没有 excludeFromSplit 分类时 myShareIncludedLabel
+                退化成"我承担的消费"，直接拼进这行会变成"我承担 · 我承担的消费 · 已扣分摊份额"，
+                同一个意思说两遍。只有真的有排除分类（"不含机票、宝石"这种）时才值得在标题行
+                里再报一次是什么，没有排除分类就不重复这段，行内的分类明细（下面 {myShareIncludedLabel}
+                那一行）不受影响，那里单独出现"我承担的消费"作为一行的行首标签是合理的。 */}
             <span className="text-[10px] text-hero-label">
-              我承担 · {myShareIncludedLabel} · 已扣分摊份额
+              我承担{myShareExcluded.length > 0 ? ` · ${myShareIncludedLabel}` : ''} · 已扣分摊份额
             </span>
             <span className="font-serif text-lg font-medium tabular-nums tracking-tight text-white">
               {formatMoney(myShareNet, trip.baseCurrency)}
