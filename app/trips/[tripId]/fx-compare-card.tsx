@@ -363,9 +363,19 @@ export function FxCompareCard({
             })}
           </div>
 
-          {holdCandidates.length > 1 && (
+          {/* fix(2026-09-16 第十八轮，自己走查真实截图抓到的真 bug)：这排"我持有→目标"
+              tab 之前无条件把 holdCandidates 全部铺出来，没有排除"持有币种正好等于
+              目标币种"这种自己换自己的无意义组合——真机截图上出现过"USD → USD"这种
+              选项（这趟行程 enabledCurrencies 里 MYR/HKD/USD 都在，目标选到 USD 时
+              就会连"USD → USD"一起列出来）。上面的基准换算卡片那块已经有
+              `if (rate === undefined) return null` 兜底不会显示自己换自己（
+              FX_RATES 表里没有一个币种对自己的汇率），但这排 tab 是独立渲染的，没有
+              复用那层判断，漏了。 */}
+          {holdCandidates.filter((h) => h !== effectiveTarget).length > 1 && (
             <div className="flex w-fit flex-wrap gap-1 rounded-full bg-gold-lt p-[3px] text-[10px]">
-              {holdCandidates.map((h) => (
+              {holdCandidates
+                .filter((h) => h !== effectiveTarget)
+                .map((h) => (
                 <button
                   key={h}
                   type="button"
