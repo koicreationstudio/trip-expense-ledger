@@ -530,7 +530,15 @@ export function ExpenseForm({
           跟"邀请管理"页参与者数据同步（那边加了新参与者，这里下次进来就读得到）。
           底层数据模型（splitMode: onlyMe/equal/custom）完全没动，只是 UI 呈现变了，
           handleSubmit/handleSelectSplitMode 这些既有逻辑原样复用。 */}
-      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-paper p-3">
+      {/* fix(2026-09-16 第十七轮，Remy 反馈"不只首页，其它屏也一样"后逐屏核对发现)：
+          Artifact 这一整块只有开关行(.split-toggle-row)本身没有卡片外壳，展开的
+          内容才是一张 `.split-panel{background:var(--cream)}` 米黄卡片——之前这里
+          把开关行跟展开内容一起塞进同一个 `border-sand bg-paper` 灰白盒子里，跟
+          "快速记账"卡那个 seg3 一样，展开内容里的按钮组也是"选中态用 accent-700
+          蓝黑色"，不是 spec 里"未选中白底、选中深色实底"这套配色。这次把外层灰白
+          盒子拿掉（开关行本身不需要卡片包装），展开内容改成真正的 `.split-panel`
+          米黄卡片，`.btns button`/`.btns button.on` 逐值照抄。 */}
+      <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-col">
             <span className="field-label">跟其他人 split 这笔</span>
@@ -557,14 +565,14 @@ export function ExpenseForm({
         </div>
 
         {splitMode !== 'onlyMe' && (
-          <div className="flex flex-col gap-2 border-t border-sand pt-2">
+          <div className="flex flex-col gap-[7px] rounded-[12px] bg-cream p-2">
             {/* fix(2026-09-15 round10)：Artifact 这个开关打开后是「跟谁分？→谁垫的钱？→
                 怎么分？」三组独立问题，「跟谁分？」是这次新补的一组——之前只有「怎么分？」
                 (平分/自定义) 一组，平分时到底跟谁分是隐性的（后端默认全体参与者），
                 这里补成一排可勾选的参与者 chip，跟自定义分摊共用同一份 splitIncluded
                 state，勾选结果对平分/自定义都生效。 */}
             <div className="flex flex-col gap-1">
-              <span className="field-label">跟谁分？</span>
+              <span className="text-[9px] font-semibold text-gold-dk">跟谁分？</span>
               <div className="flex flex-wrap gap-1.5">
                 {participants.map((p) => {
                   const included = splitIncluded[p.id] ?? true;
@@ -576,8 +584,8 @@ export function ExpenseForm({
                       aria-pressed={included}
                       className={
                         included
-                          ? 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[10px] text-[10px] font-medium text-white transition-colors'
-                          : 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[10px] text-[10px] font-medium text-muted transition-colors hover:text-ink'
+                          ? 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-ink px-[10px] text-[10px] font-medium text-white transition-colors'
+                          : 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-white px-[10px] text-[10px] font-medium text-ink transition-colors hover:opacity-80'
                       }
                     >
                       {p.displayName}
@@ -588,14 +596,14 @@ export function ExpenseForm({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="field-label" htmlFor="payer">
+              <label className="text-[9px] font-semibold text-gold-dk" htmlFor="payer">
                 谁垫的钱？
               </label>
               <select
                 id="payer"
                 value={payerParticipantId}
                 onChange={(e) => setPayerParticipantId(e.target.value)}
-                className="field-input"
+                className="rounded-lg border border-sand bg-white px-[7px] py-[5px] text-[10px] text-ink focus:border-accent-700 focus:outline-none"
               >
                 {participants.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -606,7 +614,7 @@ export function ExpenseForm({
             </div>
 
             <div className="flex flex-col gap-1">
-              <span className="field-label">怎么分？</span>
+              <span className="text-[9px] font-semibold text-gold-dk">怎么分？</span>
               <div className="flex flex-wrap gap-1.5">
                 {SPLIT_SUB_MODE_OPTIONS.map((opt) => (
                   <button
@@ -616,8 +624,8 @@ export function ExpenseForm({
                     aria-pressed={splitMode === opt.value}
                     className={
                       splitMode === opt.value
-                        ? 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[10px] text-[10px] font-medium text-white transition-colors'
-                        : 'inline-flex min-h-[28px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[10px] text-[10px] font-medium text-muted transition-colors hover:text-ink'
+                        ? 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-ink px-[10px] text-[10px] font-medium text-white transition-colors'
+                        : 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-white px-[10px] text-[10px] font-medium text-ink transition-colors hover:opacity-80'
                     }
                   >
                     {opt.label}
@@ -625,7 +633,7 @@ export function ExpenseForm({
                 ))}
               </div>
               {splitMode === 'equal' && (
-                <p className="text-[10px] text-muted">按上面「跟谁分？」勾选的人平均分摊这笔消费。</p>
+                <p className="text-[10px] text-gold-dk">按上面「跟谁分？」勾选的人平均分摊这笔消费。</p>
               )}
             </div>
 

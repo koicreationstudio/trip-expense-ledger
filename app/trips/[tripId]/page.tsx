@@ -14,12 +14,6 @@ import { FxRateCard } from './fx-rate-card';
 import { FxChannelCompareCard } from './fx-channel-compare-card';
 import { loadEnabledPaymentMethodIds, paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 
-const STATUS_LABEL: Record<string, string> = {
-  active: '记账中',
-  settled: '已结算',
-  archived: '已归档',
-};
-
 export default async function TripPage({ params }: { params: { tripId: string } }) {
   const identity = await getCurrentIdentity();
   if (!identity || identity.tripId !== params.tripId) {
@@ -105,14 +99,17 @@ export default async function TripPage({ params }: { params: { tripId: string } 
   const enabledPaymentMethods = myPaymentMethods.filter((m) => enabledPaymentMethodIds.has(m.id));
 
   return (
-    <main className="flex flex-col gap-6">
-      {/* fix(2026-09-12 标题栏走查反馈)：行程名不在这里重复显示了——头部导航的
-          TripSwitcher（layout.tsx）已经是这个行程唯一的大标题+切换入口，这里再放
-          一次同样的名字纯粹是重复信息，删掉只留这页自己的补充信息（本位币/状态）。 */}
-      <p className="text-[10px] text-muted">
-        本位币 {trip.baseCurrency} · {STATUS_LABEL[trip.status] ?? trip.status}
-      </p>
-
+    // fix(2026-09-16 第十七轮)：gap-6(24px) 太松——Artifact 卡片间距量出来是 10-14px 这个
+    // 量级（.hero/.wallet-block/.quickadd 各自 margin-bottom:10px，.fx-section 14px），
+    // 收到 gap-2.5(10px) 对齐这套紧凑化基调，不再是页面上每张卡都隔老远。
+    <main className="flex flex-col gap-2.5">
+      {/* fix(2026-09-16 第十七轮)：这行"本位币 HKD·记账中"重复文案删掉了——不是"这条信息
+          该不该展示"的产品判断，是这条信息已经在头部大标题下面显示过一次了（layout.tsx
+          的 TripHeaderNav，Artifact `.title-block p` 本来就是这一行"本位币 MYR · 记账中"，
+          从来不是独立 subheader）。之前这里又插一遍，加上 header 那边还多了条
+          `border-b`分隔线，凑成了 Remy 截图里"多出一条线+一行字"那组差异。真代码库
+          之前这份注释说"头部已经是唯一大标题"，但漏看了头部那份副标题其实跟这里是
+          同一句话，两处各写各的，是真的重复，不是需要问她要不要保留的模糊地带。 */}
       {/* fix(2026-09-13 Artifact Version 10 落地，第四轮拍板)：净额 Hero 卡跟「我的钱包」
           拆回两张独立卡片（Artifact 本身就是 .hero + .wallet-block 两个分开的卡，第十六轮
           "合并成一张深色卡"的方案C这次被更新的拍板版本推翻）——钱包卡需要自己的三档
@@ -133,9 +130,14 @@ export default async function TripPage({ params }: { params: { tripId: string } 
               {myNet >= 0 ? '该收回' : '该付出'} · {unsettledCount} 笔消费
             </span>
           </div>
+          {/* fix(2026-09-16 第十七轮，坐实 round16 留下的那条差距)：Artifact `.link-btn`
+              是 `background:rgba(255,255,255,.16); padding:4px 9px; border-radius:999px;
+              text-decoration:none` 的深色小胶囊，不是下划线文字——DESIGN-BRIEF.md 第 669
+              行也是这么写的，round16 已经查过是真差距只是没人动手改，这次直接照 Artifact
+              数值改掉，不再是悬案。 */}
           <Link
             href={`/trips/${trip.id}/settlement`}
-            className="inline-flex min-h-[32px] shrink-0 items-center text-[9.5px] text-hero-label underline underline-offset-2"
+            className="inline-flex shrink-0 items-center rounded-full bg-white/[.16] px-[9px] py-1 text-[10px] font-medium text-white"
           >
             查看结算明细 →
           </Link>
@@ -207,16 +209,6 @@ export default async function TripPage({ params }: { params: { tripId: string } 
           settlementCurrency: m.settlementCurrency,
         }))}
       />
-
-      {/* 「新建钱包」表单的落点：WalletGrid 在 embedded-dark 模式下把表单 portal 到这里，
-          让它渲染在深色钱包卡外面（浅色表单塞进深色卡里会看不清），设计稿没规格这段所以
-          维持现有浅色表单样式，别自己发明深色版本。default 模式的 WalletGrid 用不到这个插槽。
-          fix(2026-09-12 间距走查)：这个插槽收起时 height 是 0，但
-          但 <main> 是 flex flex-col gap-6，gap 是加在"每一对相邻 flex item 之间"的，这个空插槽
-          即使 0 高度依然算一个 item，会在钱包卡和它之间、它和 FxRateCard 之间各吃一份 gap-6。
-          加 empty:hidden：插槽真的空的时候（:empty，无子节点）整个从 flex 布局摘掉，不再吃 gap；
-          portal 挂表单进来后不再是 :empty，恢复参与 flex 布局正常显示，行为不变。 */}
-      <div id="wallet-form-slot" className="empty:hidden" />
 
       <FxRateCard tripId={trip.id} baseCurrency={trip.baseCurrency} hasPaymentMethods={myPaymentMethods.length > 0} />
 

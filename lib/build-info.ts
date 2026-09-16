@@ -5,5 +5,5 @@
 // 是不是当前 commit 不重要，重要的是每次实际部署前 prebuild 都会把它覆盖成
 // 真实值。commit 后缀 "-dirty" 代表生成这份文件那一刻工作树有未提交改动
 // （部署的代码不完全等于 HEAD 那个 commit，给 Remy 一个诚实提示）。
-export const BUILD_COMMIT = "c7dd494-dirty";
-export const BUILD_TIME = "2026-09-15T17:03:22.289Z";
+export const BUILD_COMMIT = "e31e8b1-dirty";
+export const BUILD_TIME = "2026-09-16T00:44:33.044Z";

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
@@ -74,15 +74,17 @@ export function WalletGrid({
   // 列出币种不一致的选项只会让人绑了也白绑（app/api/trips/[tripId]/expenses/route.ts）。
   const eligibleMethods = paymentMethods.filter((m) => m.settlementCurrency === currency);
 
-  // embedded-dark 时「新建钱包」表单不跟着做深色版本（设计稿没规格），而是原样保留浅色
-  // 表单外观，用 portal 挂到 page.tsx 在合并卡下方留的 #wallet-form-slot 插槽，让它渲染在
-  // 深色卡外面（而不是塞进卡内部看不清）。default 模式没有这个插槽，表单照旧就地渲染。
-  const [formSlot, setFormSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    if (isDark) {
-      setFormSlot(document.getElementById('wallet-form-slot'));
-    }
-  }, [isDark]);
+  // fix(2026-09-16 第十七轮，Remy 真实截图坐实的真 bug + 核实 Artifact 设计意图)：
+  // 之前 embedded-dark 模式把表单 portal 到 page.tsx 里 `#wallet-form-slot` 这个插槽，
+  // 但那个插槽在 DOM 里排在 WalletCard 整个 Fragment（钱包卡 + 快速记账卡两个 section）
+  // 之后——WalletCard 把这两张卡包在同一个 Fragment 里返回，所以插槽实际位置落在
+  // "快速记账"卡下面，不是"我的钱包"卡下面，这是 Remy 截图里表单跑错地方的直接原因。
+  // 重新核对了 Artifact 侧栏这屏的标题——"新建钱包（弹层）"，唯一带"（弹层）"后缀的
+  // 一屏（其它记账/结算/邀请管理这些都是纯屏名，没有这个后缀），说明设计意图就是
+  // 一个浮层/弹窗，不是"挪个位置继续内联撑开页面"。这次直接做成真正的 modal（用
+  // components/confirm-dialog.tsx 同一套 `fixed inset-0 + bg-ink/40` 语言，不新发明一套），
+  // 用 React Portal 挂到 document.body，不再依赖 page.tsx 里那个位置写死的插槽 div，
+  // 也就顺带删掉了 page.tsx 那个 `#wallet-form-slot`。
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -126,8 +128,8 @@ export function WalletGrid({
   // 消失，看不出这格是什么）。账户类型图标原本跟起始余额挤同一个 grid-cols-2 半栏
   // （只有约 155px 宽却要塞 7 颗 28px 圆钮），flex 没设 shrink-0 导致被压扁成
   // 20×28 的椭圆；这次让图标行独占一整行宽度，够摆下 7 颗不用挤。
-  const formNode = creating && (
-    <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] p-3">
+  const formFields = (
+    <>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">
           <label className="field-label" htmlFor="wallet-label">
@@ -239,6 +241,14 @@ export function WalletGrid({
           取消
         </button>
       </div>
+    </>
+  );
+
+  // default（浅色）变体：表单原地内联展开，自己带一层浅底边框盒子（这个盒子的浅灰底
+  // 色是靠反衬页面纯 bg-paper 底色出效果的，跟弹层模式的白色卡片底不是一回事）。
+  const inlineFormNode = creating && (
+    <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] p-3">
+      {formFields}
     </form>
   );
 
@@ -256,8 +266,11 @@ export function WalletGrid({
                 <span aria-hidden="true">{w.emoji}</span>
                 <span className="truncate">{w.label}</span>
               </div>
-              <div className="font-serif text-[11.5px] tabular-nums text-white">
-                {formatMoney(w.currentBalance, w.currency)}
+              <div className="flex items-baseline gap-[3px]">
+                <span className="font-serif text-[11.5px] tabular-nums text-white">
+                  {formatMoney(w.currentBalance, w.currency)}
+                </span>
+                <span className="font-mono text-[7.5px] text-hero-label">{w.currency}</span>
               </div>
             </div>
           ) : (
@@ -293,10 +306,42 @@ export function WalletGrid({
         )}
       </div>
 
-      {/* default 模式表单原地渲染；embedded-dark 模式表单改走下面的 portal，挂到深色卡外面的插槽 */}
-      {!isDark && formNode}
+      {/* default 模式表单原地内联展开；embedded-dark 模式表单走下面的弹层 modal（见上面的
+          注释——Artifact 侧栏标题写的是"新建钱包（弹层）"，不是内联展开）。 */}
+      {!isDark && inlineFormNode}
     </div>
-    {isDark && formNode && formSlot ? createPortal(formNode, formSlot) : null}
+    {isDark && creating && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 px-0 sm:items-center sm:px-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="新建钱包"
+            onClick={() => setCreating(false)}
+          >
+            <div
+              className="max-h-[85vh] w-full max-w-[380px] overflow-y-auto rounded-t-[20px] border border-sand bg-paper p-4 shadow-card sm:rounded-[20px]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="text-[15px] font-bold text-ink">新建钱包</h3>
+                <button
+                  type="button"
+                  onClick={() => setCreating(false)}
+                  aria-label="关闭"
+                  className="tap-link text-[12.5px] text-muted"
+                >
+                  ✕
+                </button>
+              </div>
+              <form onSubmit={handleCreate} className="flex flex-col gap-2">
+                {formFields}
+              </form>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null}
     </>
   );
 }

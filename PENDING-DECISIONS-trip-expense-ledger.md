@@ -1,5 +1,64 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-16，Remy 拍板：这个项目现在有专属 PM 了，`trip-expense-ledger-pm`，以后接手任何任务先转给它】
+
+背景：过去 14 轮验收全部拿测试行程（"2026曼谷出差"这类 demo 数据）过一遍就报"已完成"，从没测过 Remy 真正在用的那条真实行程"🇭🇰2026香港"，直到第十五轮她自己拿真实截图当面推翻结论才发现这个盲区。Remy 拍板照 invest-pm/gem-pm 的模式给这个项目建一个专属 PM，由 lifeos-pm 落地。
+
+- 新 agent：`~/.claude/agents/trip-expense-ledger-pm.md`。以后任何关于 trip-expense-ledger 的任务，lifeos-pm 判路由时会自动转给它，不再自己顶上处理。路由条目在 `~/Desktop/Claude/scripts/pm_routing.json`。
+- **写死了这个项目专属的第一铁律**：每轮验收必须用 Remy 真实在用的行程数据测试，不能只用测试/demo 行程；派工给别的 agent 实现或验收时必须把这条要求原样带进 prompt；汇报格式里"有没有在真实行程上验证过"是必答项。
+- UI 相关改动照旧强制过 `ui-auditor` 真机走查，两个条件（ui-auditor 报告 + 真实行程验证）都满足才算完成。
+- 新 PM 接手任何任务前会先读这份交接文档最新一轮往前看，不会重新发明流程或忽略已拍板又悬空的决定（比如汇率区块两张卡要不要合并这类还没表态的产品判断）。
+- 也已在 `team-board/departments.source.json` 登记（归财务管理部，跟 remy-expense 同组），跑过 `gen_team_board_departments.py` 重新生成，还没走 `team-board/deploy.sh` 推上线，看板显示会有延迟，不影响路由实际生效。
+
+---
+
+## 【2026-09-16，第十七轮，trip-expense-ledger-pm 首次接手，Remy 自截 13 张真实截图逐条打回后的修复，新 session 从这里读起】
+
+背景：Remy 情绪很激动（"你很多地方都没有对齐，压根就没有照着方案走"），自己截了 13 张真实截图（线上 vs Artifact V10 方案图逐对比），点名"02 行程主页"这一屏 8 处具体差异，事后又追加"不只这 8 个，其它屏估计也一样"。这是新建的 `trip-expense-ledger-pm` 第一次真正接手任务，全程用她真实在用的行程"🇭🇰2026香港"（`f78a6b5e-8612-4097-8bfd-88a5db664045`）验证，不是测试行程。
+
+### 逐条对应 Remy 提的 8 点（首页/行程主页那屏）
+
+1. **header 没对齐方案** → 已修。标题 `text-base(16px) font-semibold` 改成 `text-[15px] font-bold`（对齐 Artifact `.title-block h3`），副标题从"本位币 HKD"单独一行 + 页面正文里又重复一次"本位币 HKD·记账中"（两处重复），改成只在 header 里出现一次"本位币 HKD · 记账中"（用新建的 `lib/domain/trip-status.ts` 共享状态文案）。"我的账号"/"退出登录"两个链接统一成 10.5px + 常驻下划线（不是只有 hover 才有）——这条第一次部署时漏了 `logout-button.tsx`（独立组件，没被这轮改到），被独立 ui-auditor 复核抓到，当场补修+二次部署验证过。
+2. **切换行程下拉跟方案不一样** → 已修，且是结构性改动不是调 CSS 数值。原实现是 `absolute` 悬浮在触发按钮右下角、宽度只有 `min-w-[220px]`，手机宽度下会溢出裁切。查 Artifact 源码确认它的 DOM 顺序是 `.topbar-row → .dropdown-panel → .navtabs` 三者同级纵向排列，下拉展开时是普通文档流内容（把 subtab 往下推），不是悬浮层。为此把原来的 `trip-switcher.tsx`（触发按钮+悬浮面板）和 `nav-links.tsx`（subtab）合并重写成一个新文件 `app/trips/[tripId]/trip-header-nav.tsx`，下拉面板现在跟标题行、subtab 是同一个 flex-col 容器里的兄弟节点，宽度天然占满内容列，不再悬浮裁切。ui-auditor 桌面+手机都展开验证过，面板没有裁切、没有溢出。
+3. **subtab 大小不对+没有选中态** → 查实际截图后发现真相跟 Remy 描述的"选中态该有下划线"不完全一样：Artifact 里 subtab 从头到尾**没有任何下划线**，选中态是靠深色胶囊背景区分的；线上当时的 bug 是所有 tab（选中的和没选中的）全部带下划线——根因是 `nav-links.tsx` 复用了全站共享的 `.tap-link` class（这个 class 是给"编辑/删除/撤销"这类行内文字链接用的，天生带 `underline`），被 subtab 借用后带出了不该有的下划线。这次改成独立样式，去掉下划线，字号/padding 对齐 Artifact `.navtabs button`（11px / padding 6px 12px）。
+4. **多出一条分隔线+一行 subheader** → 已修，不是"要不要保留"的模糊地带，是查实之后确认的真重复：Artifact 的"本位币 MYR · 记账中"这句话本来就长在 header 的 title-block 里（跟第1条是同一句话），页面正文里 `page.tsx` 又单独插了一遍一模一样的文案，加上 header 外层多了一条 `border-b` 分隔线——这不是方案设计需要保留的信息展示，是代码里两处各写各的、真的重复了两次。已删掉页面正文里那份重复的，也删掉了多余的分隔线。
+5. **净额卡片没显示支付币种** → 已修，但用的是比"加一行文字"更彻底的根因修复。查了 `lib/money.ts`，发现 `formatMoney` 用的 `Intl currencyDisplay:'narrowSymbol'` 对 USD/HKD/SGD 这三个币种全部退化成裸的"$"（MYR/THB/CNY 等其它币种是正常的"RM"/"฿"/"¥"，本来就看得出币种，问题只出在这三个"$"系币种），这正是"$60.50 看不出是港币还是美金"的根因。改成只对这三个币种加前缀消歧（HK$/US$/S$），其它币种不动。ui-auditor 实测确认"+HK$60.50"正确带了前缀。
+6. **新建钱包表单弹在错误位置** → 已修，而且核实了 Artifact 的真实设计意图不是"挪个位置"。根因：`WalletCard` 组件把"我的钱包"卡和"⚡快速记账"卡包在同一个 React Fragment 里返回，`page.tsx` 里 `#wallet-form-slot` 插槽写在这整个 Fragment 之后，导致表单 portal 目标物理位置落在"快速记账"卡下面。同时重新核对了 Artifact 侧栏标题——"新建钱包（弹层）"是全部 9 屏里唯一带"（弹层）"后缀的一屏，确认设计意图就是一个真正的浮层/modal，不是内联展开。这次直接做成弹窗（`fixed inset-0` 暗蒙层 + 卡片，复用 `components/confirm-dialog.tsx` 同一套视觉语言），portal 到 `document.body`，删掉了原来位置写死的 `#wallet-form-slot`。ui-auditor 用像素采样验证过背景确实被蒙层压暗（(247,247,246)→(170,170,170)），不是肉眼猜的。
+7. **卡片间距太松** → 已修。`page.tsx` 的 `<main>` 从 `gap-6`(24px) 收到 `gap-2.5`(10px)，对齐 Artifact 卡片 `margin-bottom:10px` 的量级；顺手把全站其它页面同类过松的 `gap-8`/`gap-6` 顶层容器（结算/支付方式/邀请管理/我的账号/首页/新建行程/记一笔消费/编辑消费/邀请认领/开号引导，共 10+ 处）一并收到 `gap-3.5`(14px) 或 `gap-2.5`(10px)，不是只改了 Remy 截图指到的那一屏。
+8. **快速记账"自定义分摊"排版跟方案不一样** → 已修，颜色是反的。Artifact `.seg3` 是暖米黄色（`--cream:#F3E9D2`，这个颜色 token 项目里原来没有，这次加进了 `tailwind.config.ts`）轨道，选中项深色实底白字嵌在轨道里，未选中项是轨道底色上的纯深色文字。线上原来是选中态"白底黑字"、未选中态"半透明白底白字"，颜色整个反了，也没有共享轨道容器。这次照 `.seg3`/`.seg3 button`/`.seg3 button.on` 三条规则逐值改。顺手发现"记一笔消费"页（`expense-form.tsx`）的"跟其他人 split"展开面板也有同一类问题（灰白盒子+accent-700蓝黑选中态，不是 Artifact 的米黄面板+ink/white配色），一并改了。
+
+### Remy 追加反馈"不只这 8 个，其它屏也是"之后，扫了全部 9 屏
+
+用完整读了一遍 Artifact V10 全部 1431 行源码（CSS token + 9 屏 HTML）跟真代码逐屏比对，除了上面已经列的：
+- 首页·我的行程 / 新建行程 / 记一笔消费 / 编辑消费 / 邀请认领页 / 开号引导页：标题字号统一成 `text-[15px]`（原来散落着好几处 `text-base`(16px) 的孤例：`invites/page.tsx`、`trips/new/page.tsx`、`expenses/new/page.tsx`、`expenses/[expenseId]/edit/page.tsx`、`invite/[code]/page.tsx`、`trips/new/provision-gate.tsx` 三处、`app/page.tsx` 两处），这是真实的字号漂移，不是猜的——已经有好几个页面（结算/支付方式/我的账号）在更早的轮次就改成了 15px，这几处是当时漏改的孤例。
+- 结算/支付方式/邀请管理：结构、按钮顺序（"标记已结算"在两份清单之后）都已经是对的，是更早几轮做的，这次复核确认没有回退。
+
+### 这轮特意没动的地方（如实标注，不是漏做）
+
+- **"每人净值"/"转账清单"这类 section 小标题用 `text-[12.5px] font-semibold`，跟 Artifact `section.blk h4{font-size:10px;color:gold-dk}`（小号灰色大写字母风格）不一样** —— 这个 12.5px 深色标题风格在"活动流"/"换汇"/结算/支付方式/邀请管理好几个页面都是统一这么用的，是个一贯的、看起来是刻意的选择（不是某一处孤立的漂移），这次没找到任何 Remy 反馈过要改这个的记录，怕是又把已经拍板过的东西改回去，没有动手，如实标注不确定，需要 Remy 确认这个是不是也要改成方案的小号灰字风格。
+- **"支付方式"页顶部说明文字**跟 Artifact 原文措辞不完全一样（"跟人走不跟行程走，用来算记账时哪张卡/现金最划算" vs Artifact 的"这趟旅行结束了，卡的设定还留着"），这是文案内容差异不是样式差异，没有动，怕是之前哪一轮 Remy 亲自改过的措辞。
+- 汇率区块两张卡合并、目标币种 tab-vs-下拉——这是第七轮就搁置到现在的产品悬案，这轮没有再碰，还是等 Remy 表态。
+
+### 验证
+
+**真实行程验证**：全程用"🇭🇰2026香港"（tripId `f78a6b5e-8612-4097-8bfd-88a5db664045`，Remy 真实账号，真实身份链接登录，不是伪造 session/测试行程）。
+
+**ui-auditor 走查（两轮，独立 agent，非自证）**：
+- 第一轮：桌面 1280×900 + 手机 390×844，覆盖全部 9 屏（首页/行程主页含下拉展开+自定义分摊展开/记一笔消费含split展开/结算/支付方式/邀请管理/新建行程/我的账号/新建钱包弹窗），逐条核对上面列的每一项，发现 1 处不符合（"退出登录"链接漏改，还是 12.5px 无下划线）。
+- 补修 `logout-button.tsx` 后二次部署（Version ID `a62f7ddf-fb80-44da-a1b8-1f60e4bd2ad7`），第二轮独立复核确认这一处已修复生效。
+- 全程未提交任何真实表单（新建钱包/新建行程/记一笔消费都是打开截图后取消关闭），未删除/未登出，无脏数据残留。
+- 截图：`/Users/linotan/Desktop/Claude/.playwright-mcp/tel-round18/`（01-26）+ 补充复核 `links-zoom-big.png`/`header-check.png`。
+
+**代码验证**：`./deploy.sh` 五关（lint / typecheck / 单测 67 个 / opennextjs-cloudflare build / wrangler deploy）两次部署全过。最终线上 Version ID：`a62f7ddf-fb80-44da-a1b8-1f60e4bd2ad7`。
+
+### 需要 Remy 确认的悬案（如实列出，没有替她拍板）
+
+1. Section 小标题（每人净值/转账清单/活动流/换汇这类）用深色 12.5px 还是方案的小号灰色大写字母风格——这次没动，怕改错。
+2. 支付方式页顶部说明文案措辞要不要改回 Artifact 原文。
+3. 汇率区块两张卡合并 + tab-vs-下拉——第七轮就搁置的老问题，这轮仍未处理。
+
+---
+
 ## 【2026-09-16，第十六轮，独立 ui-auditor 复核第十五轮结论（真实浏览器截图，非同一 agent 自证），新 session 从这里读起】
 
 背景：第十五轮自己承认"这轮做完的东西没有经过 ui-auditor 走查"，lifeos-pm 派了独立的 `ui-auditor` agent（跟做第十五轮修复的不是同一个 agent）重新核实，尤其要确认第十五轮"复现不出 Remy 说的浅色主题反转"这个结论是不是真的，不是自己人说了算。

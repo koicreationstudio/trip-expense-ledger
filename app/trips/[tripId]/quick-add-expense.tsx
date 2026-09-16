@@ -250,21 +250,29 @@ export function QuickAddExpense({
           />
         )}
 
-        <div className="flex flex-wrap items-center gap-1">
+        {/* fix(2026-09-16 第十七轮，Remy 截图坐实的真差异)：Artifact `.seg3` 是一条暖米黄色
+            (--cream) 轨道，选中项是深色实底(--ink)白字嵌在轨道里，未选中项是轨道底色上的
+            纯深色文字（不是单独一颗颜色反过来的白底黑字）——之前这里选中态是"白底黑字"，
+            未选中态是"半透明白底白字"，颜色整个反了，而且没有共享的米黄色轨道容器，
+            三颗按钮看起来像各自独立的小方块。这次照 `.seg3`/`.seg3 button`/`.seg3 button.on`
+            三条规则逐值改，不是凭印象调深浅。 */}
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[9.5px] text-hero-label">分摊</span>
-          {SPLIT_MODE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => handleSelectSplitMode(opt.value)}
-              aria-pressed={splitMode === opt.value}
-              className={`inline-flex min-h-[22px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-2 text-[9.5px] font-medium transition-colors ${
-                splitMode === opt.value ? 'bg-white text-ink' : 'bg-white/[.1] text-white hover:bg-white/[.16]'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+          <div className="flex flex-1 gap-1 rounded-full bg-cream p-[3px]">
+            {SPLIT_MODE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => handleSelectSplitMode(opt.value)}
+                aria-pressed={splitMode === opt.value}
+                className={`inline-flex min-h-[22px] flex-1 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-2 text-[9.5px] font-medium transition-colors ${
+                  splitMode === opt.value ? 'bg-ink text-white' : 'text-ink/80 hover:text-ink'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {splitMode === 'custom' && (

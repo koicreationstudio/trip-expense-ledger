@@ -33,7 +33,9 @@ export default async function HomePage({ searchParams }: { searchParams?: { iden
     const { showSummary, activeCount, netByCurrency } = computeHomepageSummary(tripsWithBalance);
 
     return (
-      <main className="flex flex-col gap-6">
+      // fix(2026-09-16 第十七轮)：gap-6(24px) 收到 gap-3.5(14px)，跟其它屏这轮统一收紧
+      // 的"标题到正文"间距对齐。
+      <main className="flex flex-col gap-3.5">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-[15px] font-semibold text-ink">我的行程</h1>
@@ -70,14 +72,16 @@ export default async function HomePage({ searchParams }: { searchParams?: { iden
   // ③ 都没有 → 2026-09-09 第十六轮登录系统换血：不再要求先跳 /login，
   // 直接进 /trips/new，没账号会在那里自动开号（见 ProvisionGate）。
   return (
-    <main className="flex flex-col gap-6">
+    // fix(2026-09-16 第十七轮)：gap-6(24px) 收到 gap-3.5(14px)，标题字号 text-base(16px)
+    // 改 text-[15px]，跟本站其它屏的标题规格统一（这个未登录态入口页之前漏掉了）。
+    <main className="flex flex-col gap-3.5">
       {searchParams?.identity_invalid && (
         <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
           这条身份链接无效或已失效，请重新确认链接是否正确。
         </p>
       )}
       <div>
-        <h1 className="text-base font-semibold text-ink">消费记录</h1>
+        <h1 className="text-[15px] font-semibold text-ink">消费记录</h1>
         <p className="mt-2 text-[10px] text-muted">
           出差记账 + 同行人代垫结清 + 汇率比对，帮你算清这笔该用哪张卡最划算。数据只存在你自己部署的服务器上。
         </p>

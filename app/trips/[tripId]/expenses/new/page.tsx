@@ -31,8 +31,9 @@ export default async function NewExpensePage({ params }: { params: { tripId: str
   const enabledPaymentMethods = myPaymentMethods.filter((m) => enabledIds.has(m.id));
 
   return (
-    <main className="flex flex-col gap-6">
-      <h1 className="text-base font-semibold text-ink">记一笔消费</h1>
+    // fix(2026-09-16 第十七轮)：标题字号跟 gap 同一批漂移，理由跟 invites/page.tsx 那条一样。
+    <main className="flex flex-col gap-3.5">
+      <h1 className="text-[15px] font-semibold text-ink">记一笔消费</h1>
       <ExpenseForm
         tripId={trip.id}
         baseCurrency={trip.baseCurrency}

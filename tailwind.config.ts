@@ -76,6 +76,11 @@ const config: Config = {
         // 209-265行候选D区块 + DESIGN-BRIEF-color-directions.md 第六提案候选D表格，
         // First Star 稀释更淡，深灰 Hero 底上够亮好读（原硬编码 slate-400/200 冷灰对比度不够）。
         'hero-label': 'color-mix(in srgb, #DBDAD6 70%, white)',
+        // 2026-09-16 第十七轮补：Artifact `--cream:#F3E9D2`，"快速记账"卡里"分摊"三段式
+        // 分段控件（.seg3）的轨道底色——深色卡片上垫一条暖米黄色的浅色轨道，选中项是
+        // 深色实底 pill 嵌在里面，是方案里専门跟"仅我自己/平分/自定义分摊"这组配色对应
+        // 的语义色，不能借用 gold-lt（那个是偏灰不是偏黄，视觉上不是同一个东西）。
+        cream: '#F3E9D2',
       },
       borderRadius: {
         hero: '22px',

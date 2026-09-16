@@ -20,11 +20,12 @@ export default async function NewTripPage() {
   // 之前不可能有 tripId），能明确回去的地方只有首页——不管是从首页"创建新行程"
   // 点进来的，还是从某个行程的切换下拉点进来的，首页都是唯一确定回得去的地方。
   return (
-    <main className="flex flex-col gap-6">
+    // fix(2026-09-16 第十七轮)：标题字号跟 gap 同一批漂移，理由跟 invites/page.tsx 那条一样。
+    <main className="flex flex-col gap-3.5">
       <Link href="/" className="tap-link self-start text-[10px] text-muted hover:text-ink">
         ← 返回首页
       </Link>
-      <h1 className="text-base font-semibold text-ink">创建新行程</h1>
+      <h1 className="text-[15px] font-semibold text-ink">创建新行程</h1>
       <NewTripForm />
     </main>
   );

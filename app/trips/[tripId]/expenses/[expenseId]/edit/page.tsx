@@ -51,8 +51,9 @@ export default async function EditExpensePage({
   );
 
   return (
-    <main className="flex flex-col gap-6">
-      <h1 className="text-base font-semibold text-ink">编辑消费</h1>
+    // fix(2026-09-16 第十七轮)：gap-6(24px)→gap-3.5(14px)、标题 16px→15px，跟本站其它屏统一。
+    <main className="flex flex-col gap-3.5">
+      <h1 className="text-[15px] font-semibold text-ink">编辑消费</h1>
       <ExpenseForm
         tripId={trip.id}
         baseCurrency={trip.baseCurrency}

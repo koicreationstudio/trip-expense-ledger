@@ -204,7 +204,8 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
       : (wallets ?? []).filter((w) => !w.paymentMethodId || enabledPaymentMethodIds.has(w.paymentMethodId));
 
   return (
-    <div className="flex flex-col gap-8">
+    // fix(2026-09-16 第十七轮)：gap-8(32px) 收到 gap-2.5(10px)，理由同 invites-manager.tsx。
+    <div className="flex flex-col gap-2.5">
       <section className="flex flex-col gap-2">
         <h2 className="text-[12.5px] font-semibold text-ink">已配置的支付方式</h2>
         {methods === null ? (

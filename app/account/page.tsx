@@ -68,7 +68,8 @@ export default async function AccountPage({ searchParams }: { searchParams?: { f
   }).format(new Date(BUILD_TIME));
 
   return (
-    <main className="flex flex-col gap-6">
+    // fix(2026-09-16 第十七轮)：gap-6(24px) 收到 gap-3.5(14px)，理由同 settlement/page.tsx。
+    <main className="flex flex-col gap-3.5">
       <Link href={backHref} className="tap-link self-start text-[10px] text-muted hover:text-ink">
         ← {backLabel}
       </Link>

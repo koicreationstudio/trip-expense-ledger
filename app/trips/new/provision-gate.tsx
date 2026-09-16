@@ -75,7 +75,7 @@ export function ProvisionGate() {
 
   if (step === 'ask') {
     return (
-      <main className="flex flex-col gap-6">
+      <main className="flex flex-col gap-3.5">
         {/* fix(2026-09-12 死路走查)：这一步没有账号，还没走到"建行程"这个动作本身，
             改主意想先回首页看看（比如想找找有没有身份链接/邀请链接）应该随时能走，
             不用被卡在这一步只能物理返回键。 */}
@@ -83,7 +83,8 @@ export function ProvisionGate() {
           ← 返回首页
         </Link>
         <div>
-          <h1 className="text-base font-semibold text-ink">先确认一下</h1>
+          {/* fix(2026-09-16 第十七轮)：16px(text-base)→15px，跟本站其它屏标题规格统一。 */}
+          <h1 className="text-[15px] font-semibold text-ink">先确认一下</h1>
           <p className="mt-2 text-[10px] text-muted">
             这个浏览器/设备还没有登录记录。如果你之前已经用过这个工具（比如换了手机、换了浏览器，或者是新加的
             &ldquo;添加到主屏幕&rdquo;图标），继续下去会建一个全新的、跟你原本行程对不上的账号。
@@ -102,9 +103,9 @@ export function ProvisionGate() {
 
   if (step === 'recover') {
     return (
-      <main className="flex flex-col gap-6">
+      <main className="flex flex-col gap-3.5">
         <div>
-          <h1 className="text-base font-semibold text-ink">粘贴你的专属身份链接</h1>
+          <h1 className="text-[15px] font-semibold text-ink">粘贴你的专属身份链接</h1>
           <p className="mt-2 text-[10px] text-muted">
             开号那一刻展示过一次，格式类似 .../id/一串随机字符。存在备忘录、聊天记录或者发给自己的邮件里的话，
             找出来贴在下面就行，贴完整链接或者只贴那串字符都可以。
@@ -139,9 +140,9 @@ export function ProvisionGate() {
 
   if (step === 'result' && identityUrl) {
     return (
-      <main className="flex flex-col gap-6">
+      <main className="flex flex-col gap-3.5">
         <div>
-          <h1 className="text-base font-semibold text-ink">保存好你的专属身份链接</h1>
+          <h1 className="text-[15px] font-semibold text-ink">保存好你的专属身份链接</h1>
           <p className="mt-2 text-[10px] text-muted">
             这条链接是你以后唯一能重新登录这个账号的方式——没有邮箱密码，链接丢了就找不回账号。建议现在复制存到备忘录或密码管理器，之后随时能在&ldquo;我的账号&rdquo;页面里再看一次。
           </p>

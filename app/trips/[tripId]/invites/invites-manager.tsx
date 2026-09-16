@@ -140,7 +140,9 @@ export function InvitesManager({ tripId }: { tripId: string }) {
 
 
   return (
-    <div className="flex flex-col gap-8">
+    // fix(2026-09-16 第十七轮)：gap-8(32px) 收到 gap-2.5(10px)，对齐 Artifact
+    // `section.blk{margin-bottom:10px}`，跟这轮其它屏一起收紧的间距同一个量级。
+    <div className="flex flex-col gap-2.5">
       {!genInviteOpen ? (
         <button type="button" onClick={() => setGenInviteOpen(true)} className="btn-primary self-start">
           ＋ 生成新邀请

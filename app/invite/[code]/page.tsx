@@ -20,7 +20,7 @@ export default async function InviteClaimPage({ params }: { params: { code: stri
   if (result.status !== 'ok') {
     return (
       <main className="flex flex-col gap-4">
-        <h1 className="text-base font-semibold text-ink">邀请链接</h1>
+        <h1 className="text-[15px] font-semibold text-ink">邀请链接</h1>
         <p className="text-[10px] text-muted">{STATUS_MESSAGE[result.status]}</p>
         <Link href="/" className="tap-link self-start text-[10px] text-muted hover:text-ink">
           ← 去首页看看
@@ -30,12 +30,13 @@ export default async function InviteClaimPage({ params }: { params: { code: stri
   }
 
   return (
-    <main className="flex flex-col gap-6">
+    // fix(2026-09-16 第十七轮)：gap-6(24px)→gap-3.5(14px)、标题 16px→15px，跟本站其它屏统一。
+    <main className="flex flex-col gap-3.5">
       <Link href="/" className="tap-link self-start text-[10px] text-muted hover:text-ink">
         ← 返回首页
       </Link>
       <div>
-        <h1 className="text-base font-semibold text-ink">加入「{result.view.tripName}」</h1>
+        <h1 className="text-[15px] font-semibold text-ink">加入「{result.view.tripName}」</h1>
         <p className="mt-1 text-[10px] text-muted">选一下你是名单里的哪一位，认领后就能开始记账了。</p>
       </div>
       <ClaimForm code={params.code} tripId={result.view.tripId} unclaimedParticipants={result.view.unclaimedParticipants} />

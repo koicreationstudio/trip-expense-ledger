@@ -51,7 +51,9 @@ export default async function SettlementPage({ params }: { params: { tripId: str
   }));
 
   return (
-    <main className="flex flex-col gap-8">
+    // fix(2026-09-16 第十七轮)：gap-8(32px) 收到 gap-3.5(14px)，对齐 Artifact
+    // `.title-block` margin-bottom:14px，也跟这轮其它屏一起收紧的间距同一个量级。
+    <main className="flex flex-col gap-3.5">
       {/* fix(2026-09-15)：16px(text-base) 改成 15px，对齐"我的行程"/"我的账号"/
           "支付方式"三处已经统一的标题规格。 */}
       <h1 className="text-[15px] font-semibold text-ink">结算</h1>
