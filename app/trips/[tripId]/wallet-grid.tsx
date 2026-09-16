@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
@@ -49,6 +49,7 @@ export function WalletGrid({
   wallets,
   paymentMethods,
   variant = 'default',
+  defaultCurrency,
 }: {
   tripId: string;
   wallets: WalletItem[];
@@ -57,18 +58,36 @@ export function WalletGrid({
   // （套 DESIGN-BRIEF-hero-wallet-variants.html .wallet-c-chip 规格），不影响「新建钱包」
   // 表单——那段设计稿完全没提规格，继续用现有浅色表单样式渲染在深色卡外面。
   variant?: 'default' | 'embedded-dark';
+  // fix(2026-09-17 第十九轮)：新建钱包默认币种之前写死 COMMON_CURRENCIES[0]（MYR），
+  // 跟这趟行程本位币（比如香港行程的 HKD）不一致时，"绑定支付方式"下拉会因为
+  // eligibleMethods（按币种精确匹配）算出空列表而完全不显示——独立 ui-auditor 盲测
+  // 就是在这个默认状态下看到"完全没有这个字段"，不是真的没做，是默认值选错了币种。
+  // 传行程本位币做默认值，覆盖最常见的"新建一个本位币钱包"场景。
+  defaultCurrency?: string;
 }) {
   const isDark = variant === 'embedded-dark';
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [label, setLabel] = useState('');
-  const [currency, setCurrency] = useState<string>(COMMON_CURRENCIES[0]);
+  const [currency, setCurrency] = useState<string>(defaultCurrency ?? COMMON_CURRENCIES[0]);
   const [emoji, setEmoji] = useState<string>(ICON_CHOICES[0].emoji);
   const [paymentMethodId, setPaymentMethodId] = useState(NO_LINK);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selectedIconLabel = ICON_CHOICES.find((c) => c.emoji === emoji)?.label ?? '';
+
+  // fix(2026-09-17 第十九轮，独立 ui-auditor 第二轮盲测发现的小问题)：这个弹层
+  // modal 只能点右上角 ✕ 关闭，按 Esc 没反应——大部分弹层的通用习惯是 Esc 也能关，
+  // 补上。只在 isDark（真正是 modal 的那个变体）+ creating（弹层真的开着）时监听。
+  useEffect(() => {
+    if (!(isDark && creating)) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setCreating(false);
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isDark, creating]);
 
   // 只有跟当前选的钱包币种完全一致的支付方式才有意义绑——扣款逻辑要求币种精确匹配，
   // 列出币种不一致的选项只会让人绑了也白绑（app/api/trips/[tripId]/expenses/route.ts）。
@@ -184,26 +203,30 @@ export function WalletGrid({
           </select>
         </div>
       </div>
-      {eligibleMethods.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <label className="field-label" htmlFor="wallet-payment-method">
-            绑定支付方式
-          </label>
-          <select
-            id="wallet-payment-method"
-            className="field-input"
-            value={paymentMethodId}
-            onChange={(e) => setPaymentMethodId(e.target.value)}
-          >
-            <option value={NO_LINK}>不绑定支付方式（可以之后再绑）</option>
-            {eligibleMethods.map((m) => (
-              <option key={m.id} value={m.id}>
-                记账选「{m.label}」时自动扣这个钱包
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      {/* fix(2026-09-17 第十九轮)：这个字段之前只在 eligibleMethods.length > 0 时才渲染——
+          新建钱包默认币种如果跟已配置的支付方式结算币种不一致（改前默认 MYR，Remy 名下
+          唯一一个支付方式是 HKD 现金），下拉就完全消失，独立 ui-auditor 盲测看到的正是
+          这种情况，误判成"这个字段整个没做"。现在改成永远渲染这个字段——没有任何一个
+          币种匹配的支付方式时，下拉里就只有"不绑定"这一个选项，跟 Artifact 静态原型
+          在任何数据状态下都长这个样子的表现一致，不再因为币种选择而整个消失。 */}
+      <div className="flex flex-col gap-1">
+        <label className="field-label" htmlFor="wallet-payment-method">
+          绑定支付方式
+        </label>
+        <select
+          id="wallet-payment-method"
+          className="field-input"
+          value={paymentMethodId}
+          onChange={(e) => setPaymentMethodId(e.target.value)}
+        >
+          <option value={NO_LINK}>不绑定支付方式（可以之后再绑）</option>
+          {eligibleMethods.map((m) => (
+            <option key={m.id} value={m.id}>
+              记账选「{m.label}」时自动扣这个钱包
+            </option>
+          ))}
+        </select>
+      </div>
       {/* fix(2026-09-13 Artifact Version 10 落地，第四轮拍板)：起始余额输入框整个拿掉，
           余额改由「支付方式」页新增的"设置当前余额"功能统一承担（见 payment-methods-manager.tsx）。
           新钱包一律从 0 开始，之后要设余额得去那边操作——这是刻意的依赖关系，不是漏做。 */}
@@ -233,14 +256,24 @@ export function WalletGrid({
           底，同色盒子叠同色底会看不出盒子只剩边框，索性跟 quick-add-expense.tsx 的错误提示
           一样只用纯文字，字号仍收到跟其它说明性小字同一档 10px。 */}
       {error && <p className="text-[10px] text-coral">{error}</p>}
-      <div className="flex items-center gap-2">
-        <button type="submit" disabled={submitting} className="btn-primary">
-          {submitting ? '建立中…' : '建立钱包'}
-        </button>
-        <button type="button" onClick={() => setCreating(false)} className="tap-link text-[12.5px] text-muted">
+      {/* fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 这一屏是
+          `<button class="big-cta">建立钱包</button>`，跟表单等宽，没有旁边贴"取消"——
+          之前用 .btn-primary 这个紧凑胶囊+旁边"取消"文字链接，是全站同一批"表单主按钮
+          误用紧凑 class"问题的其中一处（另一处是记一笔消费"记这笔账"，一并修了）。
+          弹层模式本来就有右上角 ✕ 关闭，这里不用再重复一个"取消"；default 内联变体
+          （目前生产环境没在用）保留一个降级的取消文字链接，避免唯一退出方式消失。 */}
+      <button type="submit" disabled={submitting} className="big-cta">
+        {submitting ? '建立中…' : '建立钱包'}
+      </button>
+      {!isDark && (
+        <button
+          type="button"
+          onClick={() => setCreating(false)}
+          className="tap-link self-center text-[11px] text-muted"
+        >
           取消
         </button>
-      </div>
+      )}
     </>
   );
 

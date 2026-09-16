@@ -188,6 +188,10 @@ export function SettlementBody({
                         onChange={() => toggleConfirm(t)}
                         aria-label={`${t.fromName} 转给 ${t.toName} 已收款`}
                       />
+                      {/* fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 每一行
+                          checkbox 旁边都有个可见的"已收款"文字标签（`<span class="hint">已收款</span>`），
+                          之前只写了 aria-label，屏幕上看不到任何文字说明这个勾选框是干嘛的。 */}
+                      <span className="text-[9.5px] text-muted">已收款</span>
                       <Avatar name={t.fromName} size={18} />
                       <span className={isConfirmed ? 'text-muted line-through' : ''}>{t.fromName}</span>
                       <span className="text-muted" aria-hidden="true">
@@ -211,17 +215,13 @@ export function SettlementBody({
         )}
       </section>
 
-      {!alreadySettled &&
-        isOwner &&
-        (totalTransfers > 0 ? (
-          <MarkSettledButton
-            tripId={tripId}
-            disabled={!allConfirmed}
-            disabledReason={`转账进度：${confirmedCount}/${totalTransfers} 笔已确认收款，全部确认后才能标记已结算`}
-          />
-        ) : (
-          <MarkSettledButton tripId={tripId} />
-        ))}
+      {/* fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 底部只有一个元素——
+          `<button class="big-cta" disabled>等所有转账确认收款后 · 整个行程才会标记已结算</button>`，
+          没收齐时按钮本身的文字就是这句话，不是"按钮 + 按钮下面单独再写一遍转账进度"。
+          之前 MarkSettledButton 收到一个 disabledReason 在按钮下方另起一行，
+          内容跟上面「转账清单」区块已经出现过的"转账进度：X/Y笔已确认收款"重复了两遍。
+          这次拿掉 disabledReason，"没收齐"这个状态改成按钮自己的文案，不再重复。 */}
+      {!alreadySettled && isOwner && <MarkSettledButton tripId={tripId} disabled={!allConfirmed} />}
     </>
   );
 }

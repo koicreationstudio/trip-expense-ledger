@@ -27,12 +27,15 @@ function formatDateRange(start: string | null, end: string | null): string | nul
   return fmt((start ?? end)!);
 }
 
-// 状态从裸文字换成 pill（DESIGN-BRIEF.md 第五版已定案、settlement/invites-manager 已落地的
-// ok/live 三态色，首页只是接上这套现成的东西）。archived 没有对应色阶，
-// 降级成 text-muted 灰阶裸文字，不强套 pill（同一份简报视觉决定第3条）。
-const STATUS_PILL: Record<string, { label: string; className: string }> = {
-  active: { label: '记账中', className: 'bg-live-bg text-live' },
-  settled: { label: '已结算', className: 'bg-ok-bg text-ok' },
+// fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 这一屏三个 chip
+// （币种/身份/状态）统一是同一个 `.chip{background:#fff;color:gold-dk}` 白底灰字样式，
+// 状态没有单独的彩色区分——之前"记账中"接了 DESIGN-BRIEF.md 第五版定的 ok/live
+// 三态色（跟结算页"有效/已确认"这类进度徽章共用配色），在这一屏跟另外两个 chip
+// 风格不统一，是真差异。这次首页卡片的状态 chip 改回跟另外两个一样的中性配色，
+// ok/live 这套色板本身没有废弃，继续给结算/邀请管理那些真正表达"进度"的徽章用。
+const STATUS_LABEL: Record<string, string> = {
+  active: '记账中',
+  settled: '已结算',
 };
 const ARCHIVED_LABEL = '已归档';
 
@@ -134,7 +137,7 @@ function TripCard({
   ended?: boolean;
 }) {
   const router = useRouter();
-  const statusPill = STATUS_PILL[trip.status];
+  const statusLabel = STATUS_LABEL[trip.status];
   const dateRange = formatDateRange(trip.tripStartDate, trip.tripEndDate);
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(trip.name);
@@ -177,21 +180,24 @@ function TripCard({
           ended ? 'bg-paper opacity-70' : 'bg-[rgba(164,163,160,.14)] shadow-card'
         }`}
       >
+        {/* fix(2026-09-17 第十九轮)：Artifact 卡片内字段顺序是"标题→标签行→日期行→金额"，
+            之前是"标题→日期行→标签行→金额"，日期和标签顺序反了——这次对调，同时把
+            三个标签统一成同一个 `.chip` 白底灰字样式（原本"创建者/同行人"是裸文字，
+            不是 chip；币种是灰底 chip；这次三个都用同一套 pill 外观，跟 Artifact 三个
+            chip 视觉统一一致）。 */}
         <span className="pr-5 font-medium">{trip.name}</span>
-        {dateRange && <span className="text-[10px] text-muted">📅 {dateRange}</span>}
-        <span className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
-          <span className="inline-flex items-center rounded-full bg-sand px-[7px] py-[1px] font-mono text-[9.5px] font-medium text-muted">
+        <span className="flex flex-wrap items-center gap-1.5 text-[9.5px] text-muted">
+          <span className="inline-flex items-center rounded-full border border-sand bg-white px-[7px] py-[1px] font-mono font-medium text-muted">
             {trip.baseCurrency}
           </span>
-          <span>{trip.isOwner ? '创建者' : '同行人'}</span>
-          {statusPill ? (
-            <span className={`inline-flex items-center rounded-full px-[9px] py-[3px] text-[9.5px] font-medium ${statusPill.className}`}>
-              {statusPill.label}
-            </span>
-          ) : (
-            <span>{ARCHIVED_LABEL}</span>
-          )}
+          <span className="inline-flex items-center rounded-full border border-sand bg-white px-[7px] py-[1px] font-medium text-muted">
+            {trip.isOwner ? '创建者' : '同行人'}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-sand bg-white px-[7px] py-[1px] font-medium text-muted">
+            {statusLabel ?? ARCHIVED_LABEL}
+          </span>
         </span>
+        {dateRange && <span className="text-[10px] text-muted">📅 {dateRange}</span>}
         <span
           className={`text-[12.5px] font-medium ${
             trip.netBalance >= 0 ? 'text-positive' : 'text-negative'

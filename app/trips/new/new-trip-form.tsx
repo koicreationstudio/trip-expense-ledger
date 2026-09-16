@@ -4,6 +4,18 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 
+// fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact"同时启用哪些币种"这排
+// chip 的相对顺序是 MYR/THB/USD/CNY/SGD/HKD，线上 COMMON_CURRENCIES 常量顺序是
+// MYR/USD/HKD/THB/PHP/SGD/LKR/CNY——这个常量全站共用（记一笔消费/钱包/支付方式结算
+// 币种都在用），不能为了这一屏改顺序动到别处。PHP/LKR 是这个常量比方案多出的两个真实
+// 候选，不是要砍掉的东西，只是这一屏排列时把方案原有 6 个先按方案顺序排好，
+// 多出来的两个接在后面。
+const NEW_TRIP_CHIP_ORDER = ['MYR', 'THB', 'USD', 'CNY', 'SGD', 'HKD'];
+const NEW_TRIP_CURRENCY_CHIPS = [
+  ...NEW_TRIP_CHIP_ORDER.filter((c) => (COMMON_CURRENCIES as readonly string[]).includes(c)),
+  ...COMMON_CURRENCIES.filter((c) => !NEW_TRIP_CHIP_ORDER.includes(c)),
+];
+
 export function NewTripForm() {
   const router = useRouter();
   const [name, setName] = useState('');
@@ -79,8 +91,10 @@ export function NewTripForm() {
       </div>
 
       <div className="flex flex-col gap-1">
+        {/* fix(2026-09-17 第十九轮)：Artifact 原文是"主要币种 用于统计汇总/净额"，逐字改
+            （之前是意译版本"本位币（结算/比较用的币种）"）。 */}
         <label className="field-label" htmlFor="base-currency">
-          本位币（结算/比较用的币种）
+          主要币种 <span className="text-muted">用于统计汇总/净额</span>
         </label>
         <select
           id="base-currency"
@@ -105,7 +119,7 @@ export function NewTripForm() {
       <div className="flex flex-col gap-1">
         <span className="field-label">同时启用哪些币种（多选）</span>
         <div className="flex flex-wrap gap-1.5">
-          {COMMON_CURRENCIES.map((c) => {
+          {NEW_TRIP_CURRENCY_CHIPS.map((c) => {
             const selected = enabledCurrencies.includes(c);
             return (
               <button
@@ -126,26 +140,25 @@ export function NewTripForm() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="field-label" htmlFor="trip-start">
-            出发日期（可选）
-          </label>
+      {/* fix(2026-09-17 第十九轮)：Artifact 是单个"行程日期"标题统领两个日期框
+          （`<label>行程日期</label><div class="row2">...`），之前拆成"出发日期（可选）/
+          返程日期（可选）"两个独立字段各自带标签。两个日期本来就都是可选的（后端
+          不要求必填），合并成一个标题，"可选"这层信息不用在每个字段名里重复说。 */}
+      <div className="flex flex-col gap-1">
+        <span className="field-label">行程日期（可选）</span>
+        <div className="grid grid-cols-2 gap-3">
           <input
             id="trip-start"
             type="date"
+            aria-label="出发日期"
             value={tripStartDate}
             onChange={(e) => setTripStartDate(e.target.value)}
             className="field-input"
           />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="field-label" htmlFor="trip-end">
-            返程日期（可选）
-          </label>
           <input
             id="trip-end"
             type="date"
+            aria-label="返程日期"
             value={tripEndDate}
             onChange={(e) => setTripEndDate(e.target.value)}
             className="field-input"
@@ -204,7 +217,7 @@ export function NewTripForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="btn-primary"
+        className="big-cta"
       >
         {submitting ? '创建中…' : '创建行程'}
       </button>

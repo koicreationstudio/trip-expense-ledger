@@ -86,7 +86,13 @@ export function WalletCard({
         </div>
       </div>
 
-      <WalletGrid variant="embedded-dark" tripId={tripId} wallets={wallets} paymentMethods={paymentMethods} />
+      <WalletGrid
+        variant="embedded-dark"
+        tripId={tripId}
+        wallets={wallets}
+        paymentMethods={paymentMethods}
+        defaultCurrency={baseCurrency}
+      />
 
       <button
         type="button"

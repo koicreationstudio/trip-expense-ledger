@@ -485,8 +485,11 @@ export function ExchangeForm({
 
       {error && <p className="text-[10px] text-coral">{error}</p>}
 
-      <div className="flex items-center gap-3">
-        <button type="submit" disabled={submitting} className="btn-primary">
+      {/* fix(2026-09-17 第十九轮)：Artifact 这个表单的提交按钮同样是 `.big-cta`
+          （方案原文 `<button class="big-cta">保存充值记录</button>`），一并纳入这轮
+          "表单主按钮统一改 .big-cta" 的范围，不是遗漏。 */}
+      <div className="flex flex-col items-center gap-2">
+        <button type="submit" disabled={submitting} className="big-cta">
           {submitting ? '保存中…' : '保存充值记录'}
         </button>
         {onSuccess ? (

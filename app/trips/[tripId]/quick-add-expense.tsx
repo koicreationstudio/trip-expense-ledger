@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { COMMON_CATEGORIES } from '@/lib/domain/categories';
@@ -60,6 +60,7 @@ export function QuickAddExpense({
   const [amountYuan, setAmountYuan] = useState('');
   const [category, setCategory] = useState('');
   const [currency, setCurrency] = useState(baseCurrency);
+  const [merchant, setMerchant] = useState('');
   const [fxRateUsed, setFxRateUsed] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export function QuickAddExpense({
     setAmountYuan('');
     setCategory('');
     setCurrency(baseCurrency);
+    setMerchant('');
     setFxRateUsed('');
     setSplitMode('equal');
     setSplitIncluded(Object.fromEntries(participants.map((p) => [p.id, true])));
@@ -164,6 +166,7 @@ export function QuickAddExpense({
           currency,
           fxRateUsed: needsManualFxRate ? Number(fxRateUsed) : undefined,
           category: category.trim(),
+          merchant: merchant.trim() || undefined,
           expenseDate: new Date().toISOString(),
           splits,
         }),
@@ -198,26 +201,34 @@ export function QuickAddExpense({
             "分类→币种→金额"，纯粹换位置，三个字段各自的交互（分类走 CategoryCombobox
             下拉、币种走 select）都不动。 */}
         <div className="flex flex-wrap items-center gap-1.5">
+          {/* fix(2026-09-17 第十九轮，独立 ui-auditor 第二轮盲测坐实)：这排"分类"
+              旁边的"币种"是带边框胶囊+▾ 箭头（一眼看出能点开），分类却没有箭头，
+              两个功能上都是可展开下拉，视觉语言却不统一——补上跟币种同款的 ▾，
+              颜色用深色卡片专用的浅白色（同 Artifact `.qa-dd-trigger .chev`）。
+              第二次追加修复：`flex-1` 之前挂在真正的 `<input>` 上（没有意义,input
+              不是这排 flex 行的直接 flex item, 那层是外面 `.relative` 容器)，第一次
+              修复把它挪到容器上后终于真的生效——但没设上限，宽屏下这个字段被撑成
+              远比"HKD"胶囊宽好几倍的长条，反而制造出新的不协调（独立 ui-auditor
+              第二轮盲测截图坐实）。这次加 `max-w-[160px]` 封顶，保留 flex-1
+              能吃掉一部分多余空间（窄屏依然舒服），但不会无限撑宽到失衡。 */}
           <CategoryCombobox
             value={category}
             onChange={setCategory}
             options={COMMON_CATEGORIES}
             placeholder="分类"
             ariaLabel="分类"
-            inputClassName="field-input-dark min-w-[64px] flex-1"
+            inputClassName="field-input-dark"
+            containerClassName="min-w-[64px] max-w-[160px] flex-1"
+            showChevron
+            chevronClassName="text-white/50"
           />
-          <select
+          <DarkChipDropdown
             value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            aria-label="币种"
-            className="field-input-dark shrink-0"
-          >
-            {currencyOptions.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            onChange={setCurrency}
+            options={currencyOptions}
+            ariaLabel="币种"
+            triggerClassName="field-input-dark shrink-0"
+          />
           <input
             type="number"
             min="0.01"
@@ -236,6 +247,18 @@ export function QuickAddExpense({
             {submitting ? '记中…' : '记'}
           </button>
         </div>
+
+        {/* fix(2026-09-17 第十九轮)：Artifact 这张卡在"分类/币种/金额"这行下面还有一个
+            `<input class="qa-input" placeholder="商家名称（可选）">`，独立 ui-auditor
+            盲测发现线上这里完全没有这个字段——不是条件渲染隐藏，是真的漏做了，补上。 */}
+        <input
+          type="text"
+          value={merchant}
+          onChange={(e) => setMerchant(e.target.value)}
+          placeholder="商家名称（可选）"
+          aria-label="商家名称"
+          className="field-input-dark"
+        />
 
         {needsManualFxRate && (
           <input
@@ -321,6 +344,79 @@ export function QuickAddExpense({
             （本来配对深底"该付"金额用），在这块深色底上刚好够亮好读，不新造颜色。 */}
         {error && <p className="text-[10px] text-negative-dk">{error}</p>}
       </form>
+    </div>
+  );
+}
+
+/**
+ * fix(2026-09-17 第十九轮)：Artifact 快速记账卡的"币种"字段是 `.qa-input.qa-dd-trigger`
+ * 按钮（深色卡片配色）+ 点开后一份白底 `.cat-dropdown-list` 弹层——独立 ui-auditor 盲测
+ * 抓到线上这里是浏览器原生 `<select>`，样式跟全站自定义下拉体系脱节。这个小组件只做
+ * "点了展开白底选项列表"这一件事，不是重新发明 CategoryCombobox 那套自由输入+建议，
+ * 币种是受控枚举，选择式下拉就够。
+ */
+function DarkChipDropdown({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+  triggerClassName,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  ariaLabel: string;
+  triggerClassName: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        className={`flex items-center justify-between gap-1 ${triggerClassName}`}
+      >
+        <span>{value}</span>
+        <span aria-hidden="true" className="text-[8px] text-white/50">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute left-0 top-full z-10 mt-1 max-h-[170px] w-full min-w-[80px] overflow-y-auto rounded-xl border border-sand bg-white p-1 shadow-card"
+        >
+          {options.map((opt) => (
+            <li
+              key={opt}
+              role="option"
+              aria-selected={opt === value}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(opt);
+                setOpen(false);
+              }}
+              className="cursor-pointer rounded-lg px-[6px] py-[5px] text-[10.5px] text-ink hover:bg-[rgba(164,163,160,.14)]"
+            >
+              {opt}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -57,6 +57,19 @@ body {
     @apply inline-flex min-h-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-700 px-[10px] text-[11px] font-medium text-white transition-colors hover:bg-accent-800 disabled:opacity-50;
   }
 
+  /* 全宽表单主 CTA：Artifact `.big-cta{display:block;width:100%;...}`——记这笔账/
+     建立钱包/创建行程/添加支付方式/生成邀请/标记已结算这类"整张表单只有这一个
+     主要动作"的提交按钮统一走这个，撑满表单宽度、跟表单本身等宽居中。
+     跟 .btn-primary（inline-flex 胶囊）是两个不同用途：.btn-primary 给"添加支付方式"
+     这类旁边还有别的控件、不需要独占一整行的场景用。
+     2026-09-17 第十九轮：独立 ui-auditor 盲测抓到好几处表单主按钮（记这笔账/建立钱包/
+     支付方式两个"⚙设置当前余额"类按钮）误用了 .btn-primary，退化成小号胶囊+旁边贴
+     "取消"文字链接，不再是 Artifact 要求的整行按钮——这个 class 是补回来的那个缺口，
+     不是新发明一套按钮规格。 */
+  .big-cta {
+    @apply block w-full rounded-full bg-accent-700 px-[10px] py-[7px] text-center text-[11px] font-medium text-white transition-colors hover:bg-accent-800 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
   /* 次要操作按钮：比价/平均分摊/移除这类不需要抢主按钮风头的动作，触控高度跟主 CTA/FAB 拉开一级。
      第十六轮：min-h 36px→32px 再收紧一档（跟 .tap-link 的 32px 同档，靠背景/边框区分不靠高度）；
      shrink-0+whitespace-nowrap 这次提到全局 class 层（原本只在 payment-methods-manager.tsx/

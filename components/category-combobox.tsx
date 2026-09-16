@@ -32,7 +32,10 @@ export function CategoryCombobox({
   placeholder,
   ariaLabel,
   inputClassName,
+  containerClassName,
   required,
+  showChevron,
+  chevronClassName,
 }: {
   id?: string;
   value: string;
@@ -42,7 +45,26 @@ export function CategoryCombobox({
   /** 没有关联 <label htmlFor> 时用这个（quick-add-expense.tsx 场景） */
   ariaLabel?: string;
   inputClassName: string;
+  /** fix(2026-09-17 第十九轮，独立 ui-auditor 第二轮盲测坐实的新 bug)：外层
+   * `.relative` 容器本身没有 display:flex，`inputClassName` 里的布局类（flex-1/
+   * min-w-* 这种）挂在真正的 `<input>` 上其实不影响它作为"某个 flex 行/列的一个格子"
+   * 该多宽——影响宽度的是外层这个容器。之前布局类和视觉类（边框/背景/字号）混在
+   * 同一个 inputClassName 字符串里传，容器没拿到布局类，输入框走browser默认窄宽度，
+   * 加 ▾ 箭头后箭头贴着容器右边、输入框缩在最左边，中间露一大截空白，像两个不相关
+   * 的东西。这个新 prop 专门装布局类，跟视觉类（inputClassName）分开；输入框自己
+   * 永远 `w-full` 撑满这个容器，容器多宽由 containerClassName 说了算，不再让浏览器
+   * 默认宽度决定输入框实际渲染尺寸。 */
+  containerClassName?: string;
   required?: boolean;
+  /** fix(2026-09-17 第十九轮)：Artifact 的分类字段是 `.dd-fake`（带 ▾ 箭头的选择器
+   * 外观），独立 ui-auditor 盲测反馈"记一笔消费"这里看起来像纯文本框、没有下拉箭头——
+   * 加一个纯装饰的 ▾ 提示"这里可以点开选"，不影响输入/打字，组件本身的自由输入能力
+   * 不变（expense-form.tsx 用，quick-add-expense.tsx 深色卡片场景不用，那边配色不同）。 */
+  showChevron?: boolean;
+  /** showChevron 箭头颜色，深色卡片场景（quick-add-expense.tsx）要传浅色，不然
+   * 默认的 text-muted 灰色在深底上几乎看不见（Artifact `.qa-dd-trigger .chev` 是
+   * `rgba(255,255,255,.5)`）。 */
+  chevronClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -104,7 +126,7 @@ export function CategoryCombobox({
       : undefined;
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className={`relative ${containerClassName ?? ''}`}>
       <input
         ref={inputRef}
         id={id}
@@ -129,8 +151,16 @@ export function CategoryCombobox({
         onClick={() => setOpen(true)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className={inputClassName}
+        className={`w-full ${inputClassName} ${showChevron ? 'pr-[22px]' : ''}`}
       />
+      {showChevron && (
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute right-[9px] top-1/2 -translate-y-1/2 text-[9.5px] ${chevronClassName ?? 'text-muted'}`}
+        >
+          ▾
+        </span>
+      )}
       {open && filtered.length > 0 && (
         <ul
           id={listboxId}

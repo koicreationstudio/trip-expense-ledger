@@ -243,12 +243,15 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
                     </span>
                   </div>
                 </div>
+                {/* fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact `.del-icon`
+                    是纯图标🗑（coral 色），不是"删除"文字按钮。 */}
                 <button
                   type="button"
                   onClick={() => setConfirmingId(m.id)}
-                  className="btn-secondary shrink-0"
+                  aria-label={`删除支付方式「${m.label}」`}
+                  className="shrink-0 p-[3px] text-[11px] text-coral"
                 >
-                  删除
+                  🗑
                 </button>
               </li>
             ))}
@@ -403,10 +406,13 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
 
           {error && <p className="text-sm text-coral">{error}</p>}
 
+          {/* fix(2026-09-17 第十九轮)：Artifact 这一屏的主按钮是 `.big-cta`（跟表单等宽），
+              之前用 .btn-primary 紧凑胶囊，是全站同一批"表单主按钮误用紧凑 class"问题
+              的其中一处。 */}
           <button
             type="submit"
             disabled={submitting}
-            className="btn-primary"
+            className="big-cta"
           >
             {submitting ? '添加中…' : '添加支付方式'}
           </button>
@@ -419,7 +425,16 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
           行程里具体每张卡/现金的余额），不是上面账号级 paymentMethods（那份只存费率配置，
           没有余额字段），Artifact 把它画在"支付方式"页只是信息架构上的归类，底层数据没变。 */}
       <section className="flex flex-col gap-2">
-        <button type="button" onClick={() => setBalancePanelOpen((v) => !v)} className="btn-primary">
+        {/* fix(2026-09-17 第十九轮)：跟上面同一批"改成 .big-cta 全宽"，颜色沿用 Artifact
+            `style="background:var(--gold-dk)"`——跟"添加支付方式"那颗纯黑主按钮区分开，
+            是方案里同一颗按钮组件的第二种配色，不是新发明的按钮样式。图标 ⚙（0x2699）
+            核对过就是 Artifact 原文用的字符，不是 ⊙，这次没有改图标本身。 */}
+        <button
+          type="button"
+          onClick={() => setBalancePanelOpen((v) => !v)}
+          className="big-cta"
+          style={{ backgroundColor: '#6E6E6C' }}
+        >
           ⚙ 设置当前余额
         </button>
         {balancePanelOpen && (

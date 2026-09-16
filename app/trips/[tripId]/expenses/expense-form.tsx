@@ -134,7 +134,14 @@ export function ExpenseForm({
   const [amountYuan, setAmountYuan] = useState(initialExpense ? String(centsToYuan(initialExpense.amount)) : '');
   const [currency, setCurrency] = useState(initialExpense?.currency ?? baseCurrency);
   const [payerParticipantId, setPayerParticipantId] = useState(initialExpense?.payerParticipantId ?? myParticipantId);
-  const [category, setCategory] = useState(initialExpense?.category ?? '');
+  // fix(2026-09-17 第十九轮)：Artifact 这一屏的分类字段是预填了"🍜 餐饮"的选择器
+  // （`<div class="dd-fake"><span id="exp-cat-label">🍜 餐饮</span>`），新建消费时
+  // 默认给第一个候选分类，不是空字段——之前留空导致独立 ui-auditor 盲测看到的是一个
+  // "占位符'例如：餐饮'的纯文本框"，看起来完全不像下拉选择器。这里只改默认值，
+  // CategoryCombobox 本身"可以自由打字"的能力保留（2026-09-12 因 iOS Safari datalist
+  // 渲染缺陷换成这个组件，见 category-combobox.tsx 顶部注释，是刻意保留的真实能力，
+  // 不是要退化成方案demo那种纯选择器，只是外观上要看得出"这是可以点开选的下拉"）。
+  const [category, setCategory] = useState(initialExpense?.category ?? COMMON_CATEGORIES[0]);
   const [merchant, setMerchant] = useState(initialExpense?.merchant ?? '');
   const [expenseDate, setExpenseDate] = useState(
     initialExpense ? initialExpense.expenseDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
@@ -419,6 +426,8 @@ export function ExpenseForm({
           options={COMMON_CATEGORIES}
           placeholder="例如：餐饮"
           inputClassName="field-input"
+          containerClassName="w-full"
+          showChevron
         />
       </div>
 
@@ -543,7 +552,7 @@ export function ExpenseForm({
           <div className="flex flex-col">
             <span className="field-label">跟其他人 split 这笔</span>
             <span className="text-[10px] text-muted">
-              关掉开关＝这笔账是自己的消费，不是垫钱；打开才需要决定谁垫的钱、跟谁分——分摊名单会跟着「邀请管理」页面的参与者实时同步。
+              关掉开关 = 这笔就是自己的消费，不问是谁垫的；打开才需要决定跟谁分、谁先垫钱。跟谁分的名单现在会跟着「邀请管理」页面的参与者实时同步（这版已经接起来了）：邀请管理那边加了新参与者，这里下次进来会读到最新名单。
             </span>
           </div>
           <button
@@ -705,15 +714,21 @@ export function ExpenseForm({
         </p>
       )}
 
-      <div className="flex items-center gap-3">
+      {/* fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：round17 那句"这个按钮本来就是
+          走全站表单主按钮统一规则（跟表单等宽、居中）"核实错了——Artifact 这一屏的原文
+          注释其实写的正是"跟表单等宽、居中"这句话本身（`.big-cta{width:100%}`），但当时
+          没有真的截图比对，线上实际是 .btn-primary 这个紧凑胶囊+旁边贴"取消"文字链接，
+          跟表单宽度对不上。这次改用 .big-cta（全宽，跟输入框同宽），"取消"降级挪到
+          按钮下方的次要位置，不再跟主按钮平起平坐抢视觉重量。 */}
+      <div className="flex flex-col items-center gap-2">
         <button
           type="submit"
           disabled={submitting || splitMismatch}
-          className="btn-primary"
+          className="big-cta"
         >
           {submitting ? '保存中…' : isEdit ? '保存修改' : '记这笔账'}
         </button>
-        <Link href={`/trips/${tripId}`} className="tap-link text-[12.5px] text-muted">
+        <Link href={`/trips/${tripId}`} className="tap-link text-[11px] text-muted">
           取消
         </Link>
       </div>

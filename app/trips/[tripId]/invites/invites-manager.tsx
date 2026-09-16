@@ -143,8 +143,71 @@ export function InvitesManager({ tripId }: { tripId: string }) {
     // fix(2026-09-16 第十七轮)：gap-8(32px) 收到 gap-2.5(10px)，对齐 Artifact
     // `section.blk{margin-bottom:10px}`，跟这轮其它屏一起收紧的间距同一个量级。
     <div className="flex flex-col gap-2.5">
+      {/* fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 顺序是"现有邀请
+          列表 → 生成新邀请按钮 → 直接添加参与者"，之前这里顺序是"生成新邀请 → 直接
+          添加参与者 → 现有邀请链接 → 参与者认领状态"。这次把"现有邀请链接"挪到最前面，
+          对齐方案顺序；"参与者认领状态"是比方案更完整的真功能（round14 已确认），
+          留在最后，不在方案覆盖范围内，不用非得塞进方案排的位置。 */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">现有邀请链接</h2>
+        {invites === null ? (
+          <p className="text-xs text-muted">载入中…</p>
+        ) : invites.length === 0 ? (
+          <p className="text-xs text-muted">还没生成过邀请链接。</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {invites.map((invite) => {
+              const isRevoked = invite.revokedAt !== null;
+              const isExpired = invite.expiresAt !== null && new Date(invite.expiresAt).getTime() < Date.now();
+              return (
+                <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
+                  <span className="flex items-start gap-1.5">
+                    <span aria-hidden="true">🔗</span>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      {invite.inviteeName && <span className="text-[11px] font-medium text-ink">{invite.inviteeName}</span>}
+                      <code className="break-all font-mono text-[9px] text-muted">{inviteUrl(invite.code)}</code>
+                    </span>
+                  </span>
+                  <div className="flex flex-wrap items-center gap-3 text-[10px] text-muted">
+                    {isRevoked || isExpired ? (
+                      <span>
+                        {isRevoked ? '已撤销' : '已过期'}
+                        {invite.expiresAt && !isRevoked ? ` · 到期 ${new Date(invite.expiresAt).toLocaleDateString()}` : ''}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="rounded-full bg-live-bg px-[9px] py-[3px] text-[9.5px] font-medium text-live">有效</span>
+                        {invite.expiresAt && (
+                          <span>{`到期 ${new Date(invite.expiresAt).toLocaleDateString()}`}</span>
+                        )}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(invite.code)}
+                      className="inline-flex min-h-[24px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
+                    >
+                      {copiedCode === invite.code ? '已复制' : '复制链接'}
+                    </button>
+                    {!isRevoked && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirming({ type: 'revoke', id: invite.id })}
+                        className="tap-link text-coral"
+                      >
+                        撤销
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
       {!genInviteOpen ? (
-        <button type="button" onClick={() => setGenInviteOpen(true)} className="btn-primary self-start">
+        <button type="button" onClick={() => setGenInviteOpen(true)} className="big-cta">
           ＋ 生成新邀请
         </button>
       ) : (
@@ -228,64 +291,6 @@ export function InvitesManager({ tripId }: { tripId: string }) {
           {addParticipantError && <p className="text-sm text-coral">{addParticipantError}</p>}
         </section>
       )}
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">现有邀请链接</h2>
-        {invites === null ? (
-          <p className="text-xs text-muted">载入中…</p>
-        ) : invites.length === 0 ? (
-          <p className="text-xs text-muted">还没生成过邀请链接。</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {invites.map((invite) => {
-              const isRevoked = invite.revokedAt !== null;
-              const isExpired = invite.expiresAt !== null && new Date(invite.expiresAt).getTime() < Date.now();
-              return (
-                <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
-                  <span className="flex items-start gap-1.5">
-                    <span aria-hidden="true">🔗</span>
-                    <span className="flex min-w-0 flex-col gap-0.5">
-                      {invite.inviteeName && <span className="text-[11px] font-medium text-ink">{invite.inviteeName}</span>}
-                      <code className="break-all font-mono text-[9px] text-muted">{inviteUrl(invite.code)}</code>
-                    </span>
-                  </span>
-                  <div className="flex flex-wrap items-center gap-3 text-[10px] text-muted">
-                    {isRevoked || isExpired ? (
-                      <span>
-                        {isRevoked ? '已撤销' : '已过期'}
-                        {invite.expiresAt && !isRevoked ? ` · 到期 ${new Date(invite.expiresAt).toLocaleDateString()}` : ''}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1">
-                        <span className="rounded-full bg-live-bg px-[9px] py-[3px] text-[9.5px] font-medium text-live">有效</span>
-                        {invite.expiresAt && (
-                          <span>{`到期 ${new Date(invite.expiresAt).toLocaleDateString()}`}</span>
-                        )}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(invite.code)}
-                      className="inline-flex min-h-[24px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
-                    >
-                      {copiedCode === invite.code ? '已复制' : '复制链接'}
-                    </button>
-                    {!isRevoked && (
-                      <button
-                        type="button"
-                        onClick={() => setConfirming({ type: 'revoke', id: invite.id })}
-                        className="tap-link text-coral"
-                      >
-                        撤销
-                      </button>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">参与者认领状态</h2>

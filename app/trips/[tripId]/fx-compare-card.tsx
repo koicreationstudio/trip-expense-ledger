@@ -112,11 +112,18 @@ function resolveHoldCandidates(enabledCurrencies: string[] | null): string[] {
   return allHolds.filter((h) => enabledCurrencies.includes(h));
 }
 
-function resolveTargetCandidates(hold: string, enabledCurrencies: string[] | null): string[] {
-  const keys = Object.keys(FX_RATES[hold] ?? {}).filter((c) => c !== hold);
-  if (!enabledCurrencies || enabledCurrencies.length === 0) return keys;
-  const filtered = keys.filter((c) => enabledCurrencies.includes(c));
-  return filtered.length > 0 ? filtered : keys;
+// fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 这一屏"🎯目标币种"
+// 下拉是固定 5 项（THB/USD/SGD/CNY/HKD）；之前这里按行程 enabledCurrencies 收窄，
+// 香港行程只勾了 MYR/HKD/USD/CNY，目标候选就只剩 USD/CNY 两个，THB/SGD 完全选不到。
+// 判断：按行程实际启用币种动态收窄这个方向本身没错（避免列一堆这趟行程用不上的
+// 币种），但不该收窄到"方案原本能选的候选都选不到"这个地步——FX_RATES 这张静态表
+// 本身能覆盖的候选（对 MYR/USD/HKD 三个基准分别是 THB/USD/SGD/CNY/HKD 这 5 个，
+// 刚好就是方案写死的那份清单）现在改成一律全部给选，不再按 enabledCurrencies 收窄：
+// 这张表能力有限，只服务这几个候选币种，收窄只会让方案要求的候选变得选不到，
+// 没有实际好处（不像 holdCandidates「我持有」那排 tab，收窄到行程真的持有的币种
+// 还是有意义的，那处没有改）。
+function resolveTargetCandidates(hold: string): string[] {
+  return Object.keys(FX_RATES[hold] ?? {}).filter((c) => c !== hold);
 }
 
 interface CompareRow {
@@ -151,7 +158,7 @@ export function FxCompareCard({
     holdCandidates.includes(baseCurrency) ? baseCurrency : (holdCandidates[0] ?? 'MYR')
   );
   const effectiveHold = holdCandidates.includes(holdCurrency) ? holdCurrency : (holdCandidates[0] ?? '');
-  const targetCandidates = effectiveHold ? resolveTargetCandidates(effectiveHold, enabledCurrencies) : [];
+  const targetCandidates = effectiveHold ? resolveTargetCandidates(effectiveHold) : [];
 
   const [targetCurrency, setTargetCurrency] = useState<string>('THB');
   const effectiveTarget = targetCandidates.includes(targetCurrency) ? targetCurrency : (targetCandidates[0] ?? '');

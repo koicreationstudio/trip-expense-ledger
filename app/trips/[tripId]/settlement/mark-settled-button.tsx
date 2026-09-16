@@ -7,14 +7,12 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 export function MarkSettledButton({
   tripId,
   disabled = false,
-  disabledReason,
 }: {
   tripId: string;
   // 2026-09-13 落地第四轮拍板：转账清单按笔勾选"已收款"没勾完之前，这颗按钮禁用变灰，
-  // 全部勾完才解锁——由父组件（settlement/page.tsx 的客户端包装）算好 disabled 状态传下来，
-  // 这个组件自己不查确认状态。
+  // 全部勾完才解锁——由父组件（settlement-body.tsx 算好 disabled 状态传下来，这个
+  // 组件自己不查确认状态。
   disabled?: boolean;
-  disabledReason?: string;
 }) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -38,23 +36,27 @@ export function MarkSettledButton({
   }
 
   return (
-    // fix(2026-09-12 走查)：外层用 flex flex-col 只是想让按钮和下面的错误提示上下堆叠，
-    // 没料到 flex-col 容器默认 align-items:stretch 会把里面这个 inline-flex 的
-    // .btn-primary 撑满整行宽度，变成贯穿全宽的深色胶囊——这不是 .btn-primary 本身的
-    // 问题（同一个 class 用在 expense-form.tsx"记这笔账"/FAB"记一笔消费"上都是紧凑尺寸，
-    // 因为那两处外层用的是 flex items-center 这种"行"容器，交叉轴是高度不是宽度，不会被
-    // 撑宽）。加 items-start 让这个 flex-col 容器的交叉轴（水平方向）改成"按内容宽度对齐
-    // 到起点"，按钮就恢复跟其它 .btn-primary 一样的胶囊比例，不用改 class 本身。
-    <div className="flex flex-col items-start gap-1">
+    // fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 这颗按钮是
+    // `<button class="big-cta" style="background:var(--gold-dk)" disabled>等所有转账
+    // 确认收款后 · 整个行程才会标记已结算</button>`——跟表单/清单同宽的整行按钮，
+    // 没收齐时按钮本身的文字就是这句提示，不是"紧凑按钮 + 下面单独一行小字"。
+    // 2026-09-12 那次"修复"把 .btn-primary 从意外撑满全宽改回了紧凑胶囊，
+    // 这次连同 .btn-primary→.big-cta 一起改，是真的要撑满，不是要避免撑满，
+    // 那次的 items-start 手法（防止 flex-col 意外拉宽）已经不需要了，删掉。
+    <div className="flex flex-col gap-1">
       <button
         type="button"
         onClick={() => setConfirming(true)}
         disabled={submitting || disabled}
-        className="btn-primary"
+        className="big-cta"
+        style={disabled ? { backgroundColor: '#6E6E6C' } : undefined}
       >
-        {submitting ? '处理中…' : '标记已结算'}
+        {submitting
+          ? '处理中…'
+          : disabled
+            ? '等所有转账确认收款后 · 整个行程才会标记已结算'
+            : '标记已结算'}
       </button>
-      {disabled && disabledReason && <p className="text-[10px] text-muted">{disabledReason}</p>}
       {error && (
         <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
           {error}

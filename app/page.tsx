@@ -57,11 +57,13 @@ export default async function HomePage({ searchParams }: { searchParams?: { iden
               我的账号
             </Link>
           </div>
+          {/* fix(2026-09-17 第十九轮)：Artifact `.trip-pill` 文案是"＋ 创建新行程"，带
+              加号——之前漏了这个加号。 */}
           <Link
             href="/trips/new"
             className="btn-primary"
           >
-            创建新行程
+            ＋ 创建新行程
           </Link>
         </div>
         <MyTrips trips={tripsWithBalance} />
@@ -88,7 +90,7 @@ export default async function HomePage({ searchParams }: { searchParams?: { iden
       </div>
       <Link
         href="/trips/new"
-        className="btn-primary"
+        className="big-cta"
       >
         创建新行程
       </Link>
