@@ -151,7 +151,8 @@ export function InvitesManager({ tripId }: { tripId: string }) {
         // fix(2026-09-15)：Artifact 这块是带边框的卡片容器（border + padding 7px +
         // 圆角 14px），之前是裸 section 没有这层包装。
         <section className="flex flex-col gap-3 rounded-[14px] border border-sand p-[7px]">
-          <h2 className="text-[12.5px] font-semibold text-ink">生成新邀请链接</h2>
+          {/* fix(2026-09-16 第十八轮)：小标题统一成 Artifact `section.blk h4` 规格。 */}
+          <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">生成新邀请链接</h2>
           <form onSubmit={handleCreateInvite} className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1">
               <label className="field-label" htmlFor="invitee-name">
@@ -205,7 +206,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
         </button>
       ) : (
         <section className="flex flex-col gap-3">
-          <h2 className="text-[12.5px] font-semibold text-ink">直接添加参与者</h2>
+          <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">直接添加参与者</h2>
           <p className="text-[10px] text-muted">不需要对方点邀请链接认领，适合对方不方便操作手机的场合，加进来的人只是个占位名字。</p>
           <form onSubmit={handleAddParticipant} className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1">
@@ -229,7 +230,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
       )}
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-ink">现有邀请链接</h2>
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">现有邀请链接</h2>
         {invites === null ? (
           <p className="text-xs text-muted">载入中…</p>
         ) : invites.length === 0 ? (
@@ -287,7 +288,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-ink">参与者认领状态</h2>
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">参与者认领状态</h2>
         <p className="text-xs text-muted">认领错人、换手机号了，可以把某个人重置回未认领状态，让他重新用邀请链接认领。</p>
         {participants === null ? (
           <p className="text-xs text-muted">载入中…</p>

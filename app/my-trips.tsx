@@ -94,7 +94,11 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
       )}
       {activeTrips.length > 0 && (
         <div className="flex flex-col gap-2">
-          {showSectionLabels && <h2 className="text-[10px] font-medium text-muted">进行中</h2>}
+          {/* fix(2026-09-16 第十八轮)：颜色本来就跟 gold-dk 同色号，补上 letter-spacing
+              对齐 Artifact `section.blk h4` 完整规格（这次全站统一扫的同一批）。 */}
+          {showSectionLabels && (
+            <h2 className="text-[10px] font-medium tracking-[0.08em] text-muted">进行中</h2>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {activeTrips.map((trip) => (
               <TripCard key={trip.id} trip={trip} switching={switchingId === trip.id} onOpen={handleOpen} />
@@ -104,7 +108,9 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
       )}
       {endedTrips.length > 0 && (
         <div className="flex flex-col gap-2">
-          {showSectionLabels && <h2 className="text-[10px] font-medium text-muted">已结束</h2>}
+          {showSectionLabels && (
+            <h2 className="text-[10px] font-medium tracking-[0.08em] text-muted">已结束</h2>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {endedTrips.map((trip) => (
               <TripCard key={trip.id} trip={trip} switching={switchingId === trip.id} onOpen={handleOpen} ended />

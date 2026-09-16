@@ -4,8 +4,11 @@ import { formatMoney } from '@/lib/money';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
 
 /**
- * 比价结果的排序渲染，从 expense-form.tsx 抽出来，跟独立的「当前汇率比价」
- * 卡片（fx-rate-card.tsx）共用，避免两处各写一套导致视觉/文案长歪。
+ * 比价结果的排序渲染，从 expense-form.tsx 抽出来给"记一笔消费"表单的支付方式
+ * 选择器用。2026-09-16 第十八轮：原本还跟行程主页的「当前汇率比价」卡片
+ * （旧 fx-rate-card.tsx，这轮已经合并进 fx-compare-card.tsx 删掉了）共用这个
+ * 渲染组件，合并后的新卡片自己重写了一套行内渲染（要跟渠道比价行混排统一排序，
+ * 这个组件的展示结构不够用），现在这个文件只剩 expense-form.tsx 一处引用。
  */
 export function FxCompareList({
   recommendations,

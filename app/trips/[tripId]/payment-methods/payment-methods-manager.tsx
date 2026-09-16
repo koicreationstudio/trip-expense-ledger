@@ -207,7 +207,8 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
     // fix(2026-09-16 第十七轮)：gap-8(32px) 收到 gap-2.5(10px)，理由同 invites-manager.tsx。
     <div className="flex flex-col gap-2.5">
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-ink">已配置的支付方式</h2>
+        {/* fix(2026-09-16 第十八轮)：小标题统一成 Artifact `section.blk h4` 规格。 */}
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">已配置的支付方式</h2>
         {methods === null ? (
           <p className="text-xs text-muted">载入中…</p>
         ) : methods.length === 0 ? (
@@ -261,7 +262,7 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
           这个勾选结果，不看「已配置的支付方式」那份账号级全量列表。行存在于
           trip_payment_method_enabled 即勾选，删行即取消勾选（PUT enablement 端点）。 */}
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-ink">本行程启用的支付方式</h2>
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">本行程启用的支付方式</h2>
         <p className="text-[10px] text-muted">这行程要用到哪几张卡/钱包，不用的可以取消勾选，记账时下拉选单会更短。</p>
         {methods === null ? (
           <p className="text-xs text-muted">载入中…</p>
@@ -291,7 +292,7 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-[12.5px] font-semibold text-ink">新增支付方式</h2>
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">新增支付方式</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">

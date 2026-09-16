@@ -10,8 +10,7 @@ import { formatMoney } from '@/lib/money';
 import { ExpenseList } from './expense-list';
 import { WalletCard } from './wallet-card';
 import { ExchangeRecordList } from './exchange-record-list';
-import { FxRateCard } from './fx-rate-card';
-import { FxChannelCompareCard } from './fx-channel-compare-card';
+import { FxCompareCard } from './fx-compare-card';
 import { loadEnabledPaymentMethodIds, paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 
 export default async function TripPage({ params }: { params: { tripId: string } }) {
@@ -210,9 +209,15 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         }))}
       />
 
-      <FxRateCard tripId={trip.id} baseCurrency={trip.baseCurrency} hasPaymentMethods={myPaymentMethods.length > 0} />
-
-      <FxChannelCompareCard enabledCurrencies={trip.enabledCurrencies} />
+      {/* fix(2026-09-16 第十八轮，Remy 拍板"要根治")：原本两张独立卡片（当前汇率比价/
+          换汇渠道比价）合并成 Artifact V10 的单卡结构，两边查询能力都保留——具体怎么
+          在一张卡里装下两种比价逻辑，见 fx-compare-card.tsx 顶部大段注释。 */}
+      <FxCompareCard
+        tripId={trip.id}
+        baseCurrency={trip.baseCurrency}
+        hasPaymentMethods={myPaymentMethods.length > 0}
+        enabledCurrencies={trip.enabledCurrencies}
+      />
 
       {/* fix(2026-09-14 Artifact Version 10 走查补做)：行程主页的「参与者」卡片整块删掉——
           Version 10 notes 原话是这个区块从行程主页删除，邀请管理页（参与者认领状态）跟
@@ -222,7 +227,10 @@ export default async function TripPage({ params }: { params: { tripId: string } 
           `netBalances` 还要算上面 Hero 卡的 myNet，都留着。 */}
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-ink">活动流</h2>
+        {/* fix(2026-09-16 第十八轮)：小标题样式统一成 Artifact `section.blk h4` 规格
+            （10px/gold-dk/letter-spacing），文案"活动流"本身是 Remy 更早一轮的原话
+            要求（盖过 Artifact"记录·HISTORY"），这次只改样式不改字。 */}
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">活动流</h2>
         <ExpenseList
           tripId={trip.id}
           myParticipantId={identity.participantId}
@@ -252,8 +260,8 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-[12.5px] font-semibold text-ink">
-            换汇 · <span className="font-mono text-[10px] uppercase tracking-wide">EXCHANGE</span>
+          <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">
+            换汇 · <span className="font-mono uppercase tracking-wide">EXCHANGE</span>
           </h2>
           <span className="text-[10px] text-muted">仅自己可见</span>
         </div>

@@ -111,7 +111,13 @@ export function SettlementBody({
           时按钮的解锁状态在屏幕外看不到。这次挪到底部，逻辑（disabled/文案）完全没动，
           只是 JSX 位置从两份清单前面搬到后面。 */}
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-ink">每人净值</h2>
+        {/* fix(2026-09-16 第十八轮，Remy 拍板"区块小标题统一成方案的灰色大写风格")：
+            Artifact `section.blk h4{font-size:10px;font-weight:500;color:gold-dk;
+            letter-spacing:.08em}`——这次全站扫了一遍同类小标题（每人净值/转账清单/
+            活动流/换汇/已配置的支付方式/本行程启用的支付方式/新增支付方式/生成新邀请
+            链接/直接添加参与者/现有邀请链接/参与者认领状态），统一改成这套值，不是
+            只改这一处。 */}
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">每人净值</h2>
         <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
           {netEntries.map((entry) => {
             const isExpanded = expandedId === entry.participantId;
@@ -162,7 +168,7 @@ export function SettlementBody({
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-[12.5px] font-semibold text-ink">转账清单</h2>
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">转账清单</h2>
         {transfers.length === 0 ? (
           <p className="text-xs text-muted">目前不需要任何转账。</p>
         ) : (

@@ -17,8 +17,14 @@ export default async function PaymentMethodsPage({ params }: { params: { tripId:
             其它屏标题（我的行程/我的账号也是 text-[15px]）实际是同一档，这里之前用
             text-base（16px）看着比旁边字号大一截，改成 text-[15px] 对齐。 */}
         <h1 className="text-[15px] font-semibold text-ink">支付方式</h1>
-        <p className="mt-1 text-[10px] text-muted">
-          支付方式挂在你自己身上，跟人走不跟行程走，用来算记账时哪张卡/现金最划算。
+        {/* fix(2026-09-16 第十八轮，Remy 拍板"跟着方案为准"，逐字抄 Artifact V10
+            "05 支付方式"屏原文，不再意译)：`<p style="font-size:10.5px;
+            color:var(--gold-dk)">支付方式挂在你自己身上，跟着你走，不跟着行程走——
+            这趟旅行结束了，卡的设定还留着，下一趟行程一样能直接用。</p>`，字号/颜色
+            也一并对齐（10.5px / gold-dk，之前是 10px / muted，两个颜色虽然同色号但
+            这次统一按 spec 语义写）。 */}
+        <p className="mt-1 text-[10.5px] text-gold-dk">
+          支付方式挂在你自己身上，跟着你走，不跟着行程走——这趟旅行结束了，卡的设定还留着，下一趟行程一样能直接用。
         </p>
       </div>
       <PaymentMethodsManager tripId={params.tripId} />
