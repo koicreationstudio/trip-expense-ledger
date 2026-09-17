@@ -116,7 +116,12 @@ export default async function TripPage({ params }: { params: { tripId: string } 
       <section className="relative flex flex-col gap-1 overflow-hidden rounded-hero bg-hero-gradient p-[9px] text-white shadow-hero">
         <div className="flex items-baseline justify-between gap-2">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-hero-label">我的净额</span>
+            {/* fix(2026-09-17 第二十轮)：round15 曾以"这个数字可正可负，'消费总金额'
+                听起来该是正数"为由把这行标签改成"我的净额"，round19 交给 Remy 确认，
+                她这轮明确表态"照方案原文改，不要保留论证"——改回 Artifact V10 原文
+                "消费总金额"，不再自行论证语义对不对。下面数字本身（myNet，正负号+颜色）
+                完全没动，只改这行标签文字。 */}
+            <span className="text-[10px] uppercase tracking-wide text-hero-label">消费总金额</span>
             <span
               className={`font-serif text-2xl font-medium tabular-nums tracking-tight ${
                 myNet >= 0 ? 'text-positive-dk' : 'text-negative-dk'
@@ -144,7 +149,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
         {/* 「我承担」区块（2026-09-16 新增，落地"机票/宝石消费明细"这个真功能，
             之前只是 Artifact demo 假数据，见 PENDING-DECISIONS 对应章节）——
-            跟上面"我的净额"是两个不同的数字："我的净额"是付出减分摊的净额（该收/
+            跟上面"消费总金额"是两个不同的数字：上面那个是付出减分摊的净额（该收/
             该付），这里是"我自己该承担多少钱"的毛份额，被标了 excludeFromSplit
             的消费（机票/宝石这类业务差旅成本默认如此）从主数字里摘出来、按分类
             单独成行，不影响上面的结算计算。myShareGroups 为空（这趟行程她自己

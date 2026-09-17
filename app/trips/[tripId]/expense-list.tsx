@@ -7,6 +7,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { formatMoney } from '@/lib/money';
 import { Avatar } from '@/components/avatar';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { SelectDropdown } from '@/components/select-dropdown';
 
 export interface ExpenseListItem {
   id: string;
@@ -130,72 +131,62 @@ export function ExpenseList({
       {error && <p className="text-base text-coral">{error}</p>}
 
       {/* 排序下拉 + 4 个筛选 chip：chip 用跟 fx-channel-compare-card.tsx 目标币种
-          按钮同一套 pill 视觉语言（rounded-full、chip padding 3/9px），实现上是原生
-          `<select>`（选项一多，纯按钮组会换行占太多空间），不是纯装饰——选了真的会
-          重排/隐藏下面的行。 */}
+          按钮同一套 pill 视觉语言（rounded-full、chip padding 3/9px），不是纯装饰——
+          选了真的会重排/隐藏下面的行。fix(2026-09-17 第二十轮，全站原生 select 根治)：
+          原本是原生 `<select>`（选项一多，纯按钮组会换行占太多空间），改成
+          SelectDropdown 白底弹层，跟全站自定义下拉体系统一。 */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <select
-          aria-label="排序方式"
+        <SelectDropdown
+          ariaLabel="排序方式"
           value={sortMode}
-          onChange={(e) => setSortMode(e.target.value as SortMode)}
-          className="min-h-[26px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
-        >
-          <option value="manual">排序：手动</option>
-          <option value="date">排序：日期</option>
-          <option value="amount">排序：金额</option>
-        </select>
-        <select
-          aria-label="按分类筛选"
+          onChange={(next) => setSortMode(next as SortMode)}
+          triggerClassName="min-h-[26px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
+          options={[
+            { value: 'manual', label: '排序：手动' },
+            { value: 'date', label: '排序：日期' },
+            { value: 'amount', label: '排序：金额' },
+          ]}
+        />
+        <SelectDropdown
+          ariaLabel="按分类筛选"
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="min-h-[26px] max-w-[104px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
-        >
-          <option value={ALL}>分类：全部</option>
-          {categoryOptions.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="按垫付人筛选"
+          onChange={setCategoryFilter}
+          triggerClassName="min-h-[26px] max-w-[104px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
+          options={[
+            { value: ALL, label: '分类：全部' },
+            ...categoryOptions.map((c) => ({ value: c, label: c })),
+          ]}
+        />
+        <SelectDropdown
+          ariaLabel="按垫付人筛选"
           value={payerFilter}
-          onChange={(e) => setPayerFilter(e.target.value)}
-          className="min-h-[26px] max-w-[96px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
-        >
-          <option value={ALL}>垫付人：全部</option>
-          {payerOptions.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="按日期筛选"
+          onChange={setPayerFilter}
+          triggerClassName="min-h-[26px] max-w-[96px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
+          options={[
+            { value: ALL, label: '垫付人：全部' },
+            ...payerOptions.map((p) => ({ value: p, label: p })),
+          ]}
+        />
+        <SelectDropdown
+          ariaLabel="按日期筛选"
           value={dateFilter}
-          onChange={(e) => setDateFilter(e.target.value)}
-          className="min-h-[26px] max-w-[100px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
-        >
-          <option value={ALL}>日期：全部</option>
-          {dateOptions.map((d) => (
-            <option key={d} value={d}>
-              {d.slice(5)}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="按支付方式筛选"
+          onChange={setDateFilter}
+          triggerClassName="min-h-[26px] max-w-[100px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
+          options={[
+            { value: ALL, label: '日期：全部' },
+            ...dateOptions.map((d) => ({ value: d, label: d.slice(5) })),
+          ]}
+        />
+        <SelectDropdown
+          ariaLabel="按支付方式筛选"
           value={paymentMethodFilter}
-          onChange={(e) => setPaymentMethodFilter(e.target.value)}
-          className="min-h-[26px] max-w-[112px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
-        >
-          <option value={ALL}>支付方式：全部</option>
-          {paymentMethodOptions.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
+          onChange={setPaymentMethodFilter}
+          triggerClassName="min-h-[26px] max-w-[112px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
+          options={[
+            { value: ALL, label: '支付方式：全部' },
+            ...paymentMethodOptions.map((m) => ({ value: m, label: m })),
+          ]}
+        />
         {hasActiveFilter && (
           <button type="button" onClick={resetFilters} className="tap-link text-[10px] text-muted">
             清除筛选

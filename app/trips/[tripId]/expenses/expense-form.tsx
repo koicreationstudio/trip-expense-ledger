@@ -9,6 +9,7 @@ import { equalSplit, rescaleSplitToBaseCurrency } from '@/lib/domain/split';
 import type { SplitShare } from '@/lib/domain/split';
 import { COMMON_CATEGORIES } from '@/lib/domain/categories';
 import { CategoryCombobox } from '@/components/category-combobox';
+import { SelectDropdown } from '@/components/select-dropdown';
 
 interface Participant {
   id: string;
@@ -351,18 +352,16 @@ export function ExpenseForm({
           <label className="field-label" htmlFor="currency">
             币种
           </label>
-          <select
+          <SelectDropdown
             id="currency"
             value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            className="field-input"
-          >
-            {Array.from(new Set([baseCurrency, ...COMMON_CURRENCIES])).map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            onChange={setCurrency}
+            triggerClassName="field-input w-full"
+            options={Array.from(new Set([baseCurrency, ...COMMON_CURRENCIES])).map((c) => ({
+              value: c,
+              label: c,
+            }))}
+          />
         </div>
       </div>
 
@@ -475,19 +474,16 @@ export function ExpenseForm({
           支付方式
         </label>
         {paymentMethods.length > 0 ? (
-          <select
+          <SelectDropdown
             id="payment-method"
             value={selectedPaymentMethodId ?? ''}
-            onChange={(e) => setSelectedPaymentMethodId(e.target.value || null)}
-            className="field-input"
-          >
-            <option value="">不指定</option>
-            {paymentMethods.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => setSelectedPaymentMethodId(next || null)}
+            triggerClassName="field-input w-full"
+            options={[
+              { value: '', label: '不指定' },
+              ...paymentMethods.map((m) => ({ value: m.id, label: m.label })),
+            ]}
+          />
         ) : (
           <p className="text-[10px] text-muted">
             这趟行程还没有启用的支付方式，先去{' '}
@@ -608,18 +604,16 @@ export function ExpenseForm({
               <label className="text-[9px] font-semibold text-gold-dk" htmlFor="payer">
                 谁垫的钱？
               </label>
-              <select
+              <SelectDropdown
                 id="payer"
                 value={payerParticipantId}
-                onChange={(e) => setPayerParticipantId(e.target.value)}
-                className="rounded-lg border border-sand bg-white px-[7px] py-[5px] text-[10px] text-ink focus:border-accent-700 focus:outline-none"
-              >
-                {participants.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.id === myParticipantId ? `${p.displayName}（我）` : p.displayName}
-                  </option>
-                ))}
-              </select>
+                onChange={setPayerParticipantId}
+                triggerClassName="w-full rounded-lg border border-sand bg-white px-[7px] py-[5px] text-[10px] text-ink focus:border-accent-700 focus:outline-none"
+                options={participants.map((p) => ({
+                  value: p.id,
+                  label: p.id === myParticipantId ? `${p.displayName}（我）` : p.displayName,
+                }))}
+              />
             </div>
 
             <div className="flex flex-col gap-1">

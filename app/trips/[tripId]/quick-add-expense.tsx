@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { COMMON_CATEGORIES } from '@/lib/domain/categories';
@@ -8,6 +8,7 @@ import { equalSplit, rescaleSplitToBaseCurrency } from '@/lib/domain/split';
 import type { SplitShare } from '@/lib/domain/split';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { CategoryCombobox } from '@/components/category-combobox';
+import { SelectDropdown } from '@/components/select-dropdown';
 
 interface Participant {
   id: string;
@@ -222,10 +223,10 @@ export function QuickAddExpense({
             showChevron
             chevronClassName="text-white/50"
           />
-          <DarkChipDropdown
+          <SelectDropdown
             value={currency}
             onChange={setCurrency}
-            options={currencyOptions}
+            options={currencyOptions.map((c) => ({ value: c, label: c }))}
             ariaLabel="币种"
             triggerClassName="field-input-dark shrink-0"
           />
@@ -344,79 +345,6 @@ export function QuickAddExpense({
             （本来配对深底"该付"金额用），在这块深色底上刚好够亮好读，不新造颜色。 */}
         {error && <p className="text-[10px] text-negative-dk">{error}</p>}
       </form>
-    </div>
-  );
-}
-
-/**
- * fix(2026-09-17 第十九轮)：Artifact 快速记账卡的"币种"字段是 `.qa-input.qa-dd-trigger`
- * 按钮（深色卡片配色）+ 点开后一份白底 `.cat-dropdown-list` 弹层——独立 ui-auditor 盲测
- * 抓到线上这里是浏览器原生 `<select>`，样式跟全站自定义下拉体系脱节。这个小组件只做
- * "点了展开白底选项列表"这一件事，不是重新发明 CategoryCombobox 那套自由输入+建议，
- * 币种是受控枚举，选择式下拉就够。
- */
-function DarkChipDropdown({
-  value,
-  onChange,
-  options,
-  ariaLabel,
-  triggerClassName,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  options: string[];
-  ariaLabel: string;
-  triggerClassName: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
-
-  return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={ariaLabel}
-        aria-expanded={open}
-        className={`flex items-center justify-between gap-1 ${triggerClassName}`}
-      >
-        <span>{value}</span>
-        <span aria-hidden="true" className="text-[8px] text-white/50">
-          ▾
-        </span>
-      </button>
-      {open && (
-        <ul
-          role="listbox"
-          className="absolute left-0 top-full z-10 mt-1 max-h-[170px] w-full min-w-[80px] overflow-y-auto rounded-xl border border-sand bg-white p-1 shadow-card"
-        >
-          {options.map((opt) => (
-            <li
-              key={opt}
-              role="option"
-              aria-selected={opt === value}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onChange(opt);
-                setOpen(false);
-              }}
-              className="cursor-pointer rounded-lg px-[6px] py-[5px] text-[10.5px] text-ink hover:bg-[rgba(164,163,160,.14)]"
-            >
-              {opt}
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

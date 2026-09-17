@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { PAYMENT_METHOD_SETTLEMENT_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { SelectDropdown } from '@/components/select-dropdown';
 
 interface PaymentMethod {
   id: string;
@@ -315,15 +316,16 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
               <label className="field-label" htmlFor="pm-kind">
                 类型
               </label>
-              <select
+              <SelectDropdown
                 id="pm-kind"
                 value={form.kind}
-                onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as 'card' | 'cash' }))}
-                className="field-input"
-              >
-                <option value="card">卡</option>
-                <option value="cash">现金</option>
-              </select>
+                onChange={(next) => setForm((f) => ({ ...f, kind: next as 'card' | 'cash' }))}
+                triggerClassName="field-input w-full"
+                options={[
+                  { value: 'card', label: '卡' },
+                  { value: 'cash', label: '现金' },
+                ]}
+              />
             </div>
           </div>
 
@@ -331,18 +333,13 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
             <label className="field-label" htmlFor="pm-currency">
               结算币种
             </label>
-            <select
+            <SelectDropdown
               id="pm-currency"
               value={form.settlementCurrency}
-              onChange={(e) => setForm((f) => ({ ...f, settlementCurrency: e.target.value }))}
-              className="field-input"
-            >
-              {PAYMENT_METHOD_SETTLEMENT_CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onChange={(next) => setForm((f) => ({ ...f, settlementCurrency: next }))}
+              triggerClassName="field-input w-full"
+              options={PAYMENT_METHOD_SETTLEMENT_CURRENCIES.map((c) => ({ value: c, label: c }))}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

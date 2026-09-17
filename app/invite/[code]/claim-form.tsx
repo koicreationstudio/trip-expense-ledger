@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { SelectDropdown } from '@/components/select-dropdown';
 
 interface UnclaimedParticipant {
   id: string;
@@ -77,18 +78,13 @@ export function ClaimForm({
         <label className="field-label" htmlFor="participant">
           我是
         </label>
-        <select
+        <SelectDropdown
           id="participant"
           value={participantId}
-          onChange={(e) => setParticipantId(e.target.value)}
-          className="field-input"
-        >
-          {unclaimedParticipants.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.displayName}
-            </option>
-          ))}
-        </select>
+          onChange={setParticipantId}
+          triggerClassName="field-input w-full"
+          options={unclaimedParticipants.map((p) => ({ value: p.id, label: p.displayName }))}
+        />
       </div>
 
       {error && (

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { formatMoney } from '@/lib/money';
+import { SelectDropdown } from '@/components/select-dropdown';
 
 export interface WalletItem {
   id: string;
@@ -186,21 +187,16 @@ export function WalletGrid({
           <label className="field-label" htmlFor="wallet-currency">
             币种
           </label>
-          <select
+          <SelectDropdown
             id="wallet-currency"
-            className="field-input"
+            triggerClassName="field-input w-full"
             value={currency}
-            onChange={(e) => {
-              setCurrency(e.target.value);
+            onChange={(next) => {
+              setCurrency(next);
               setPaymentMethodId(NO_LINK);
             }}
-          >
-            {COMMON_CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            options={COMMON_CURRENCIES.map((c) => ({ value: c, label: c }))}
+          />
         </div>
       </div>
       {/* fix(2026-09-17 第十九轮)：这个字段之前只在 eligibleMethods.length > 0 时才渲染——
@@ -213,19 +209,19 @@ export function WalletGrid({
         <label className="field-label" htmlFor="wallet-payment-method">
           绑定支付方式
         </label>
-        <select
+        <SelectDropdown
           id="wallet-payment-method"
-          className="field-input"
+          triggerClassName="field-input w-full"
           value={paymentMethodId}
-          onChange={(e) => setPaymentMethodId(e.target.value)}
-        >
-          <option value={NO_LINK}>不绑定支付方式（可以之后再绑）</option>
-          {eligibleMethods.map((m) => (
-            <option key={m.id} value={m.id}>
-              记账选「{m.label}」时自动扣这个钱包
-            </option>
-          ))}
-        </select>
+          onChange={setPaymentMethodId}
+          options={[
+            { value: NO_LINK, label: '不绑定支付方式（可以之后再绑）' },
+            ...eligibleMethods.map((m) => ({
+              value: m.id,
+              label: `记账选「${m.label}」时自动扣这个钱包`,
+            })),
+          ]}
+        />
       </div>
       {/* fix(2026-09-13 Artifact Version 10 落地，第四轮拍板)：起始余额输入框整个拿掉，
           余额改由「支付方式」页新增的"设置当前余额"功能统一承担（见 payment-methods-manager.tsx）。

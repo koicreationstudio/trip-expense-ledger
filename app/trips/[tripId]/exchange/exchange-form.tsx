@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan } from '@/lib/money';
+import { SelectDropdown } from '@/components/select-dropdown';
 
 export interface WalletOption {
   id: string;
@@ -252,17 +253,13 @@ export function ExchangeForm({
                 placeholder="比如：日元现金"
                 className="field-input"
               />
-              <select
+              <SelectDropdown
+                ariaLabel="新增来源钱包币种"
                 value={newSourceCurrency}
-                onChange={(e) => setNewSourceCurrency(e.target.value)}
-                className="field-input"
-              >
-                {COMMON_CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+                onChange={setNewSourceCurrency}
+                triggerClassName="field-input w-full"
+                options={COMMON_CURRENCIES.map((c) => ({ value: c, label: c }))}
+              />
             </div>
             {addSourceError && <p className="text-[10px] text-coral">{addSourceError}</p>}
             <button type="button" onClick={handleAddSource} disabled={addingSource} className="btn-secondary w-full text-center">

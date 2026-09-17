@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
+import { SelectDropdown } from '@/components/select-dropdown';
 
 // fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact"同时启用哪些币种"这排
 // chip 的相对顺序是 MYR/THB/USD/CNY/SGD/HKD，线上 COMMON_CURRENCIES 常量顺序是
@@ -96,22 +97,16 @@ export function NewTripForm() {
         <label className="field-label" htmlFor="base-currency">
           主要币种 <span className="text-muted">用于统计汇总/净额</span>
         </label>
-        <select
+        <SelectDropdown
           id="base-currency"
           value={baseCurrency}
-          onChange={(e) => {
-            const next = e.target.value;
+          onChange={(next) => {
             setBaseCurrency(next);
             setEnabledCurrencies((prev) => (prev.includes(next) ? prev : [...prev, next]));
           }}
-          className="field-input"
-        >
-          {COMMON_CURRENCIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+          triggerClassName="field-input w-full"
+          options={COMMON_CURRENCIES.map((c) => ({ value: c, label: c }))}
+        />
       </div>
 
       {/* fix(2026-09-13 落地，开放问题②，未真正拍板)：同时启用哪些币种，多选 chip，
