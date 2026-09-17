@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import { Trash2 } from 'lucide-react';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { formatMoney } from '@/lib/money';
 import { SelectDropdown } from '@/components/select-dropdown';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 export interface WalletItem {
   id: string;
@@ -76,7 +78,40 @@ export function WalletGrid({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 删钱包（2026-09-18，第二十三轮补的真实缺口）：后端 DELETE 端点其实一直都有
+  // （round22 查证过），只是前端从没接过按钮。确认弹层的文案是动态的——有余额/
+  // 有关联换汇记录两种情况都要在点"删除"之前把后果说清楚，不是无差别一句
+  // "确定删除吗"，防的是误删掉还有钱在里面的钱包。
+  const [confirmingWallet, setConfirmingWallet] = useState<WalletItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const selectedIconLabel = ICON_CHOICES.find((c) => c.emoji === emoji)?.label ?? '';
+
+  async function performDeleteWallet() {
+    if (!confirmingWallet) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/wallets/${confirmingWallet.id}`, { method: 'DELETE' });
+      if (res.status === 409) {
+        // 后端这个 409 语义是"这个钱包有关联的换汇记录，删了会留下指向不存在钱包
+        // 的历史记录，拒绝执行"（见 wallets/[walletId]/route.ts DELETE 注释）——
+        // 不是把这情况当成普通失败吞掉，明确告诉 Remy 该去哪里先处理。
+        setDeleteError(`「${confirmingWallet.label}」有关联的换汇记录，没法直接删——先去下面「换汇」列表删掉相关记录，再回来删这个钱包。`);
+        setConfirmingWallet(null);
+        return;
+      }
+      if (!res.ok) {
+        setDeleteError('删除失败，请稍后再试。');
+        setConfirmingWallet(null);
+        return;
+      }
+      setConfirmingWallet(null);
+      router.refresh();
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   // fix(2026-09-17 第十九轮，独立 ui-auditor 第二轮盲测发现的小问题)：这个弹层
   // modal 只能点右上角 ✕ 关闭，按 Esc 没反应——大部分弹层的通用习惯是 Esc 也能关，
@@ -289,9 +324,28 @@ export function WalletGrid({
           isDark ? (
             <div
               key={w.id}
-              className="flex min-w-[64px] shrink-0 flex-col gap-[1px] rounded-[9px] bg-white/[.08] px-2 py-[5px]"
+              className="relative flex min-w-[64px] shrink-0 flex-col gap-[1px] rounded-[9px] bg-white/[.08] px-2 py-[5px]"
             >
-              <div className="flex items-center gap-[3px] text-[8.5px] text-hero-label">
+              {/* fix(2026-09-18 第二十三轮)：钱包卡这排小胶囊本来就很窄（64px 起），塞不下
+                  一颗常驻文字按钮，用角落小图标——同色低透明度不喧宾夺主，点了才需要看清楚，
+                  跟支付方式页 🗑 同一个图标语义，只是尺寸缩小配合这里的紧凑卡片。
+                  fix(独立 ui-auditor 手机端实测坐实)：第一版图标本身当热区（约13×13px），
+                  实测远低于 DESIGN-BRIEF.md 第204行"toolbar icon button 28×28px"这条
+                  基准（expense-list.tsx 编辑/删除图标就是照这条做的）——删除是破坏性操作，
+                  点不中/误触都比一般按钮更值得较真，这里让热区独立撑到 28×28（h-7 w-7），
+                  图标本身视觉尺寸不变（还是 9px 小图标，不会因为热区变大而显得抢戏）。 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteError(null);
+                  setConfirmingWallet(w);
+                }}
+                aria-label={`删除钱包「${w.label}」`}
+                className="absolute right-0 top-0 flex h-7 w-7 items-center justify-center text-white/40 transition-colors hover:text-coral"
+              >
+                <Trash2 className="h-[9px] w-[9px]" aria-hidden="true" />
+              </button>
+              <div className="flex items-center gap-[3px] pr-[22px] text-[8.5px] text-hero-label">
                 <span aria-hidden="true">{w.emoji}</span>
                 <span className="truncate">{w.label}</span>
               </div>
@@ -303,8 +357,22 @@ export function WalletGrid({
               </div>
             </div>
           ) : (
-            <div key={w.id} className="w-[120px] shrink-0 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-2">
-              <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-muted">
+            <div
+              key={w.id}
+              className="relative w-[120px] shrink-0 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-2"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteError(null);
+                  setConfirmingWallet(w);
+                }}
+                aria-label={`删除钱包「${w.label}」`}
+                className="absolute right-0 top-0 flex h-7 w-7 items-center justify-center text-muted transition-colors hover:text-coral"
+              >
+                <Trash2 className="h-[11px] w-[11px]" aria-hidden="true" />
+              </button>
+              <div className="flex items-center gap-1 pr-[22px] text-[10px] font-bold uppercase tracking-wide text-muted">
                 <span aria-hidden="true">{w.emoji}</span>
                 <span className="truncate">{w.label}</span>
               </div>
@@ -338,7 +406,23 @@ export function WalletGrid({
       {/* default 模式表单原地内联展开；embedded-dark 模式表单走下面的弹层 modal（见上面的
           注释——Artifact 侧栏标题写的是"新建钱包（弹层）"，不是内联展开）。 */}
       {!isDark && inlineFormNode}
+      {deleteError && (
+        <p className={isDark ? 'text-[9px] text-negative-dk' : 'text-[10px] text-coral'}>{deleteError}</p>
+      )}
     </div>
+    <ConfirmDialog
+      open={confirmingWallet !== null}
+      message={
+        confirmingWallet
+          ? confirmingWallet.currentBalance !== 0
+            ? `「${confirmingWallet.label}」目前还有余额 ${formatMoney(confirmingWallet.currentBalance, confirmingWallet.currency)}，删除后这笔余额会直接消失（不会自动转到别的钱包，也不会留下任何记录）。确定要删除吗？`
+            : `确定要删除钱包「${confirmingWallet.label}」吗？这个操作不能撤销。`
+          : ''
+      }
+      confirmLabel={deleting ? '删除中…' : '删除'}
+      onConfirm={performDeleteWallet}
+      onCancel={() => setConfirmingWallet(null)}
+    />
     {isDark && creating && typeof document !== 'undefined'
       ? createPortal(
           <div

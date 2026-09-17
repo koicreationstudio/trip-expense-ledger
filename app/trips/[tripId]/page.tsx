@@ -271,6 +271,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
           <span className="text-[10px] text-muted">仅自己可见</span>
         </div>
         <ExchangeRecordList
+          tripId={trip.id}
           records={myExchangeRecords.map((r) => ({
             id: r.id,
             fromLabel: r.fromWalletId ? walletById.get(r.fromWalletId)?.label ?? '未知钱包' : null,
