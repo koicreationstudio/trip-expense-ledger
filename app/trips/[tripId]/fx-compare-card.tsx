@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { yuanToCents, centsToYuan } from '@/lib/money';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
+import { deriveMidRate } from '@/lib/fx/derive-mid-rate';
 
 /**
  * 汇率比价——2026-09-16 第十八轮，Remy 拍板"要根治"：把原本两张独立卡片
@@ -52,9 +53,24 @@ import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
  *    不对称。这次补上 CNY 作为第四个基准，用同一套方法（从 MYR 那行反推，数量级
  *    可追溯）：1 CNY = 1/1.61 MYR ≈ 0.6211 MYR，再用 MYR 那行其它汇率换算出
  *    THB/USD/SGD/HKD，不是凭空编的新数字。
+ * 5. fix(2026-09-17 第二十二轮，Remy 明确要求)："渠道比价"这组数字之前一直是这个
+ *    文件里手写死的 `FX_RATES` 静态表（连注释都写着"数量级可追溯，不是瞎编"，
+ *    但终究还是写死的数字，不会跟着真实汇率波动）。这轮改成真的接实时汇率：
+ *    新增 `GET /api/trips/{tripId}/fx-mid-rates`，跟"我的支付方式"那组一样吃
+ *    `exchange_rate_cache`（`lib/fx/rate-cache.ts` 共享模块，24 小时刷新一次，
+ *    源头同样是 open.er-api.com），区别是这个端点不要求配置过支付方式——渠道
+ *    比价的中间汇率跟"有没有配卡"这件事无关。原来的 `FX_RATES` 表降级成
+ *    `FX_RATES_FALLBACK`，只在实时抓取失败/还没抓到的短暂窗口内顶一下，界面
+ *    上会明确标注"离线参考汇率"，不会悄悄拿旧数字冒充实时数据。各渠道最终
+ *    展示的汇率 = 实时中间价 × (1 + 该渠道固定点差/手续费百分比)——点差/手续费
+ *    这些百分比本身还是参考值（不是接口现查，这个没有变），变的只是"中间价"
+ *    这一个数字的来源。
  */
 
-const FX_RATES: Record<string, Record<string, number>> = {
+// fix(2026-09-17 第二十二轮)：这张表从"唯一数据来源"降级成"实时汇率抓不到时的
+// 离线兜底"——正常情况下页面用的是 `/api/trips/{tripId}/fx-mid-rates` 现抓的
+// 实时汇率，这张表只在 API 失败/加载中的短暂窗口顶一下，界面上会标"离线参考汇率"。
+const FX_RATES_FALLBACK: Record<string, Record<string, number>> = {
   MYR: { THB: 8.12, USD: 0.245, SGD: 0.318, CNY: 1.61, HKD: 1.92 },
   USD: { THB: 33.03, MYR: 4.08, SGD: 1.3, CNY: 6.58, HKD: 7.82 },
   HKD: { THB: 4.229, USD: 0.1276, SGD: 0.1656, CNY: 0.8385, MYR: 0.5208 },
@@ -101,10 +117,13 @@ const STATIC_CHANNELS: StaticChannel[] = [
   },
 ];
 
-function formatAtmFeeNote(targetCurrency: string): string {
-  const myrRates = FX_RATES.MYR;
-  const thbPerMyr = myrRates?.THB;
-  const targetPerMyr = targetCurrency === 'MYR' ? 1 : myrRates?.[targetCurrency];
+// fix(2026-09-17 第二十二轮)：这个固定手续费（220 THB 等值）的换算原来死绑
+// `FX_RATES.MYR`，现在改吃调用方传进来的"当前生效的 MYR 基准汇率表"（实时优先，
+// 抓不到才是离线表），这样 ATM 这一行的手续费文案也会跟着实时汇率变，不再是
+// 用一份写死数字算出来的固定文案。
+function formatAtmFeeNote(targetCurrency: string, myrRates: Record<string, number>): string {
+  const thbPerMyr = myrRates.THB;
+  const targetPerMyr = targetCurrency === 'MYR' ? 1 : myrRates[targetCurrency];
   if (thbPerMyr === undefined || targetPerMyr === undefined) {
     return 'ATM 取款：银行外汇费约 2% + 固定手续费';
   }
@@ -114,8 +133,11 @@ function formatAtmFeeNote(targetCurrency: string): string {
   return `银行外汇费约 2% + ${symbol}${rounded} 固定手续费`;
 }
 
+// "我持有"候选清单是产品需求（哪几个基准值得让用户选），不是汇率数据决定的——
+// 继续从 FX_RATES_FALLBACK 的 key 集合取（MYR/USD/HKD/CNY 四个基准），这个清单
+// 跟当前用的是实时汇率还是离线表无关，两种数据源都覆盖同一组基准币种。
 function resolveHoldCandidates(enabledCurrencies: string[] | null): string[] {
-  const allHolds = Object.keys(FX_RATES);
+  const allHolds = Object.keys(FX_RATES_FALLBACK);
   if (!enabledCurrencies || enabledCurrencies.length === 0) return allHolds;
   return allHolds.filter((h) => enabledCurrencies.includes(h));
 }
@@ -136,6 +158,13 @@ const TARGET_CURRENCY_CANDIDATES = ['THB', 'USD', 'SGD', 'CNY', 'HKD'] as const;
 
 function resolveTargetCandidates(hold: string): string[] {
   return TARGET_CURRENCY_CANDIDATES.filter((c) => c !== hold);
+}
+
+/** ISO 时间戳转成"HH:MM"给脚注用，按浏览器本地时区显示（不强制转成某个固定时区）。 */
+function formatFetchedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 interface CompareRow {
@@ -165,7 +194,7 @@ export function FxCompareCard({
 
   const holdCandidates = resolveHoldCandidates(enabledCurrencies);
   // 默认"我持有"优先选这趟行程的本位币（这样默认就能同时看到渠道+我的卡两组数据，
-  // 不用用户自己再切一次）；本位币不在 FX_RATES 支持范围内（老行程/冷门币种）才退回
+  // 不用用户自己再切一次）；本位币不在支持范围内（老行程/冷门币种）才退回
   // 候选清单第一项。
   const [holdCurrency, setHoldCurrency] = useState<string>(
     holdCandidates.includes(baseCurrency) ? baseCurrency : (holdCandidates[0] ?? 'MYR')
@@ -186,13 +215,55 @@ export function FxCompareCard({
   const [cardsLoading, setCardsLoading] = useState(false);
   const [cardsError, setCardsError] = useState<string | null>(null);
 
+  // fix(2026-09-17 第二十二轮)：渠道比价改接实时中间汇率——`liveRates` 是
+  // "1 MYR = X" 形状（跟 lib/fx/rate-cache.ts 的 MyrRateSnapshot.rates 一致），
+  // null 代表"还没抓到/抓失败"，这种情况下用 FX_RATES_FALLBACK 顶一下，界面上
+  // 会标"离线参考汇率"，不会悄悄假装是实时数据。
+  const [liveRates, setLiveRates] = useState<Record<string, number> | null>(null);
+  const [liveRatesLoading, setLiveRatesLoading] = useState(false);
+  const [liveRatesFetchedAt, setLiveRatesFetchedAt] = useState<string | null>(null);
+  const [liveRatesFailed, setLiveRatesFailed] = useState(false);
+
   const showCards = includeMyCards && hasPaymentMethods && effectiveHold === baseCurrency;
 
-  const midRate = effectiveHold && effectiveTarget ? FX_RATES[effectiveHold]?.[effectiveTarget] : undefined;
+  const fallbackMyrRates: Record<string, number> = { MYR: 1, ...FX_RATES_FALLBACK.MYR };
+  const usingFallbackRates = liveRates === null;
+  const activeRates = liveRates ?? fallbackMyrRates;
+  const midRate = effectiveHold && effectiveTarget ? deriveMidRate(activeRates, effectiveHold, effectiveTarget) : undefined;
   const amount = Number(amountYuan) || 0;
 
+  // 实时中间汇率单独一个 effect，跟"我持有"/"目标币种"切换无关——这张表的形状
+  // 跟具体选了哪个币种没关系，切换币种不用重新打这个请求，只有展开卡片第一次
+  // 或者手动点"↻刷新"才需要问一次。
+  async function loadLiveRates(forceRefresh: boolean) {
+    setLiveRatesLoading(true);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/fx-mid-rates${forceRefresh ? '?forceRefresh=1' : ''}`);
+      if (!res.ok) {
+        setLiveRatesFailed(true);
+        return;
+      }
+      const data = (await res.json()) as { rates: Record<string, number>; fetchedAt: string | null };
+      setLiveRates(data.rates);
+      setLiveRatesFetchedAt(data.fetchedAt);
+      setLiveRatesFailed(false);
+    } catch {
+      setLiveRatesFailed(true);
+    } finally {
+      setLiveRatesLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (expanded && liveRates === null && !liveRatesLoading) {
+      void loadLiveRates(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded]);
+
   // 「我的支付方式」那组数字来自服务器（吃真实汇率+真实卡片设置），金额/目标币种
-  // 变了要重新问一次；渠道那组是纯前端算，不用打网络请求。
+  // 变了要重新问一次；渠道那组是纯前端算，不用打网络请求（但中间价现在也来自
+  // 实时汇率，不是写死数字了）。
   async function loadCardRecommendations(forceRefresh: boolean) {
     if (!showCards || !midRate || amount <= 0) {
       setCardRecommendations(null);
@@ -201,9 +272,10 @@ export function FxCompareCard({
     setCardsLoading(true);
     setCardsError(null);
     try {
-      // 用静态参考汇率把"我持有的本位币金额"换算成"notional 目标币种金额"，
-      // 再拿这个金额去问真实的每张卡成本——这个换算只是为了决定"体验上大概花多少
-      // 目标币种"，卡片本身的实际成本数字还是服务器用实时汇率算的，不是这里估的。
+      // 用当前生效的汇率（实时优先，抓不到才用离线表）把"我持有的本位币金额"
+      // 换算成"notional 目标币种金额"，再拿这个金额去问真实的每张卡成本——这个
+      // 换算只是为了决定"体验上大概花多少目标币种"，卡片本身的实际成本数字
+      // 还是服务器用实时汇率算的，不是这里估的。
       const notionalTargetAmount = Math.round(amount * midRate * 100); // 分
       const res = await fetch(`/api/trips/${tripId}/fx-recommendation`, {
         method: 'POST',
@@ -225,7 +297,7 @@ export function FxCompareCard({
   useEffect(() => {
     if (expanded) void loadCardRecommendations(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, effectiveHold, effectiveTarget, showCards]);
+  }, [expanded, effectiveHold, effectiveTarget, showCards, liveRates]);
 
   const visibleChannels = STATIC_CHANNELS.filter((c) => enabledChannelKeys.has(c.key));
 
@@ -235,7 +307,7 @@ export function FxCompareCard({
         return {
           key: `channel-${c.key}`,
           label: c.name,
-          note: c.key === 'atm' ? formatAtmFeeNote(effectiveTarget) : c.note,
+          note: c.key === 'atm' ? formatAtmFeeNote(effectiveTarget, activeRates) : c.note,
           kind: 'channel',
           effectiveRate,
           amountInTarget: amount * effectiveRate,
@@ -299,10 +371,10 @@ export function FxCompareCard({
                 终点才能选"——这不是方案要求的（方案本身"我持有"也是固定 tab，
                 这条是 Remy 这轮在方案基础上加的新要求，如实记这是新判断不是
                 方案原文）。改成跟目标币种同一套"点开小菜单选"的交互，可选范围
-                还是 holdCandidates（这趟行程真实持有、且 FX_RATES 这张静态表
-                支持当基准的币种——MYR/USD/HKD 三选，不是无限任意币种，这张表
-                目前只服务这三个基准，扩到更多基准是另一件事，需要另外建汇率
-                数据，这次没有做）。 */}
+                还是 holdCandidates（这趟行程真实持有、且这套汇率数据支持当基准
+                的币种——MYR/USD/HKD/CNY 四选，不是无限任意币种，扩到更多基准
+                是另一件事，需要 open.er-api.com 那边也能查到对应汇率，这次
+                没有做）。 */}
             <div className="relative">
               <button
                 type="button"
@@ -402,18 +474,24 @@ export function FxCompareCard({
 
             <button
               type="button"
-              onClick={() => loadCardRecommendations(true)}
-              disabled={cardsLoading}
+              onClick={() => {
+                // fix(2026-09-17 第二十二轮)：刷新按钮现在也要重新拉一次实时中间汇率，
+                // 不只是刷"我的支付方式"那组——不然点了"↻刷新"渠道那组数字纹丝不动，
+                // 用户会以为按钮坏了。
+                void loadLiveRates(true);
+                void loadCardRecommendations(true);
+              }}
+              disabled={cardsLoading || liveRatesLoading}
               className="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk disabled:opacity-50"
             >
-              {cardsLoading ? '刷新中…' : '↻ 刷新'}
+              {cardsLoading || liveRatesLoading ? '刷新中…' : '↻ 刷新'}
             </button>
           </div>
 
           {/* 基准换算卡片 + 「我持有」tab——Artifact `.fx-base-row` + `.navtabs` */}
           <div className="flex flex-wrap gap-[6px]">
             {holdCandidates.map((h) => {
-              const rate = effectiveTarget ? FX_RATES[h]?.[effectiveTarget] : undefined;
+              const rate = effectiveTarget ? deriveMidRate(activeRates, h, effectiveTarget) : undefined;
               if (rate === undefined) return null;
               return (
                 <div
@@ -513,8 +591,17 @@ export function FxCompareCard({
             </ul>
           )}
 
+          {/* fix(2026-09-17 第二十二轮)：这条脚注之前明确写"渠道那组是固定参考表，
+              不是实时拉取"——现在已经不是了，改成如实描述数据来源+新鲜度，抓不到
+              实时数据时也要明确说"这是离线参考汇率"，不能让用户以为一直都是实时的。 */}
           <p className="text-center text-[9px] text-gold-dk">
-            渠道那组（Wise/TNG跨境/ATM取款/换钱店/支付宝）是固定参考表，不是实时拉取；「我的支付方式」那组用的是你自己配置的真实汇率加点+当日实时汇率——两组数据来源不同，精度不一样，不是同一套接口现查的。
+            {usingFallbackRates
+              ? liveRatesFailed
+                ? '⚠️ 实时汇率暂时抓不到，以下用的是离线参考汇率，可能不是最新数字。'
+                : '正在抓实时汇率…'
+              : `中间汇率来自实时数据${liveRatesFetchedAt ? `，更新于 ${formatFetchedAt(liveRatesFetchedAt)}` : ''}（每 24 小时自动刷新一次，来源 open.er-api.com，跟"我的支付方式"那组同一个数据源）。`}
+            <br />
+            渠道那组（Wise/TNG跨境/ATM取款/换钱店/支付宝）= 实时中间价 × 各渠道固定点差/手续费百分比（点差/手续费是参考值，不是接口现查）；「我的支付方式」那组另外用了你自己配置的真实卡片加点/手续费——两组的加点精度不一样，但中间价这一层现在是同一个来源。
           </p>
         </div>
       )}

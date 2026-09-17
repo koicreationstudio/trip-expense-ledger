@@ -205,9 +205,10 @@ export function SettlementBody({
                 各的（rounded-xl/gap-2/px-6 py-4），跟净值清单不统一，这次对齐同一套
                 值。行内 `.p-row{gap:5px}`（之前 gap-2=8px）、姓名字号 10.5px、
                 "已收款"提示字/金额 9.5px（之前整行统一用 11.5px，没有照 Artifact
-                区分"名字比金额/提示字大一号"这个层级）——头像继续保留（方案demo
-                这里连头像都没有，只有"Alex → Remy"一行纯文字，但这趟行程是真实
-                多人协作场景，头像帮助一眼认人是真实价值，判断后保留，不是漏改）。 */}
+                区分"名字比金额/提示字大一号"这个层级）。
+                fix(2026-09-17 第二十二轮，Remy 明确表态"要"去掉头像)：round21 曾判断
+                "保留头像帮助一眼认人"，这轮 Remy 直接拍板照方案字面来——方案demo这里
+                只有"Alex → Remy"纯文字，没有头像，去掉，不再保留论证。 */}
             <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
               {transfers.map((t) => {
                 const key = `${t.fromParticipantId}:${t.toParticipantId}`;
@@ -215,14 +216,12 @@ export function SettlementBody({
                 const canToggle = t.toParticipantId === myParticipantId && !alreadySettled;
                 return (
                   <li key={key} className="flex flex-wrap items-center gap-[5px] py-[2px]">
-                    <Avatar name={t.fromName} size={18} />
                     <span className={`text-[10.5px] ${isConfirmed ? 'text-muted line-through' : ''}`}>
                       {t.fromName}
                     </span>
                     <span className="text-muted" aria-hidden="true">
                       →
                     </span>
-                    <Avatar name={t.toName} size={18} />
                     <span className={`text-[10.5px] ${isConfirmed ? 'text-muted line-through' : ''}`}>
                       {t.toName}
                     </span>
