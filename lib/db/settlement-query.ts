@@ -45,6 +45,10 @@ export async function loadSettlementInput(db: Db, tripId: string): Promise<Settl
 export interface SettlementDetailEntry {
   expenseId: string;
   category: string;
+  // 商家名称，纯展示用（2026-09-18 补上）：Remy 反馈"查看 XX 的分摊明细"只显示
+  // 分类（比如"餐饮"），同一天好几笔餐饮分不清是哪一笔，要跟活动流一样看到具体
+  // 商家名。可空——历史/手动录入的部分消费没有填过商家名，这些行照旧只显示分类。
+  merchant: string | null;
   expenseDate: string; // ISO
   amountBaseCurrency: number; // 带符号：垫付=正，分摊份额=负
   role: 'paid' | 'shared';
@@ -57,8 +61,13 @@ export interface SettlementDetailEntry {
  * 结算页"查看 XX 的分摊明细 ▾"展开功能用（2026-09-13 落地第四轮拍板屏④，之前
  * 完全没有这个功能，是新做的，不是样式微调）。每个参与者名下列出跟他净值相关
  * 的每一笔消费：他代垫的（role='paid'，正数）+ 他要分摊的份额（role='shared'，
- * 负数），只带 category/日期/金额三个字段——跟 loadSettlementInput 同一条纪律，
- * 结算相关查询不带 note/merchant/receiptPath 这类私密字段。
+ * 负数），带 category/商家名/日期/金额——跟 loadSettlementInput 同一条纪律，
+ * 结算算法本身（loadSettlementInput）不带任何展示性字段。
+ * 2026-09-18 补记：merchant 曾经也被当成 note/receiptPath 那类私密字段排除在外，
+ * 但查证 expense-list.tsx（活动流）本来就把商家名展示给整个行程所有参与者看
+ * （只有 paymentMethodLabel 才是真的按录入人做隐私区分），这条排除跟全站其它
+ * 地方的实际做法不一致，不是刻意维护的隐私边界，这次按 Remy 要求把它加回来，
+ * 跟活动流用同一套"商家名优先，没填退回分类"的展示规则（见 settlement-body.tsx）。
  */
 export async function loadSettlementDetail(db: Db, tripId: string): Promise<Map<string, SettlementDetailEntry[]>> {
   const expenseRows = await db
@@ -67,6 +76,7 @@ export async function loadSettlementDetail(db: Db, tripId: string): Promise<Map<
       payerParticipantId: expenses.payerParticipantId,
       amountBaseCurrency: expenses.amountBaseCurrency,
       category: expenses.category,
+      merchant: expenses.merchant,
       expenseDate: expenses.expenseDate,
       excludeFromSplit: expenses.excludeFromSplit,
     })
@@ -101,6 +111,7 @@ export async function loadSettlementDetail(db: Db, tripId: string): Promise<Map<
     push(row.payerParticipantId, {
       expenseId: row.id,
       category: row.category,
+      merchant: row.merchant,
       expenseDate: row.expenseDate.toISOString(),
       amountBaseCurrency: row.amountBaseCurrency,
       role: 'paid',
@@ -110,6 +121,7 @@ export async function loadSettlementDetail(db: Db, tripId: string): Promise<Map<
       push(split.participantId, {
         expenseId: row.id,
         category: row.category,
+        merchant: row.merchant,
         expenseDate: row.expenseDate.toISOString(),
         amountBaseCurrency: -split.shareAmountBaseCurrency,
         role: 'shared',

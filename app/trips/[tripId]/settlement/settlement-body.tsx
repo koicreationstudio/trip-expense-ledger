@@ -8,6 +8,8 @@ import { MarkSettledButton } from './mark-settled-button';
 export interface SettlementDetailEntryDto {
   expenseId: string;
   category: string;
+  // 商家名称，可空（2026-09-18 补上，跟活动流同一套"商家名优先"展示规则）。
+  merchant: string | null;
   expenseDate: string;
   amountBaseCurrency: number;
   role: 'paid' | 'shared';
@@ -160,13 +162,21 @@ export function SettlementBody({
                   // 字段方案demo没有全部对应（demo 不区分"垫付/分摊"角色），这是
                   // 真实需要的信息，塞进 meta 小字里，不因为对齐方案就把真信息丢了。
                   <div className="ml-[25px] mb-[7px] flex flex-col rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[7px] py-[2px]">
-                    {entry.detail.map((d, i) => (
+                    {entry.detail.map((d, i) => {
+                      // fix(2026-09-18)：商家名优先显示（跟活动流 expense-list.tsx
+                      // 的 primaryName 同一条规则），没填商家名的历史/手动记录退回
+                      // 显示分类——分类信息不会凭空消失，填了商家名时挪去 meta 行。
+                      const merchantName = d.merchant?.trim();
+                      const primaryName = merchantName || d.category;
+                      const metaParts = [d.role === 'paid' ? '垫付' : '分摊', new Date(d.expenseDate).toLocaleDateString()];
+                      if (merchantName) metaParts.push(d.category);
+                      return (
                       <div
                         key={`${d.expenseId}-${i}`}
                         className={`flex items-center gap-[7px] py-1 text-[10px] ${i > 0 ? 'border-t border-sand' : ''}`}
                       >
                         <span className="min-w-0 flex-1 truncate font-medium">
-                          {d.category}
+                          {primaryName}
                           {d.excludeFromSplit && (
                             <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.3)] px-[5px] py-[1px] align-middle text-[8px] font-normal text-muted">
                               不计分摊
@@ -174,7 +184,7 @@ export function SettlementBody({
                           )}
                         </span>
                         <span className="shrink-0 text-[9px] text-muted">
-                          {d.role === 'paid' ? '垫付' : '分摊'} · {new Date(d.expenseDate).toLocaleDateString()}
+                          {metaParts.join(' · ')}
                         </span>
                         <span
                           className={`ml-auto shrink-0 font-serif text-[10px] font-semibold tabular-nums ${
@@ -185,7 +195,8 @@ export function SettlementBody({
                           {formatMoney(Math.abs(d.amountBaseCurrency), baseCurrency)}
                         </span>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </li>
