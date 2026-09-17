@@ -1,5 +1,50 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-17，第二十轮，trip-expense-ledger-pm 首次实际执行，Remy 对第十九轮两个悬案拍板"都要做，根治干净"，新 session 从这里读起】
+
+背景：第十九轮留了两条"需要 Remy 确认"的悬案（见下面第十九轮记录第三节），她这次明确回复"都要做，根治干净"。这轮做完后经过一次完全独立的 ui-auditor 复核，视为这次连续多轮方案对齐工作的收尾点。
+
+### 一、Hero 卡顶部标签改回方案原文
+
+`app/trips/[tripId]/page.tsx` 第 119 行，标签从"我的净额"改成 Artifact V10 原文"消费总金额"。round15 当时的语义论证（"这个数字可正可负，用只该是正数的'消费总金额'描述不准确，'我的净额'更准确"）作废——这次不是重新论证语义对不对，是 Remy 明确说"照方案原文改，不要保留论证"，直接执行。下面的金额数字、正负号颜色、"该收回/该付出 · N 笔消费"这行文字完全没动，只改了这一行标签的四个字。
+
+### 二、全站原生 `<select>` 根治
+
+背景：第十九轮"全站搜一遍"漏了具体统计——这轮重新 `grep -rn "<select"` 全仓库，确认真实是 **7 个文件、15 个 `<select>` 元素**（不是"7 处"字面意义的 7 个下拉，是 7 个文件里散布着 15 个）：
+- `wallet-grid.tsx`：币种 + 绑定支付方式（2 个）
+- `expense-form.tsx`：币种 + 支付方式（条件渲染）+ 谁垫的钱（3 个）
+- `payment-methods-manager.tsx`：类型 + 结算币种（2 个）
+- `new-trip-form.tsx`：主要币种（1 个）
+- `exchange-form.tsx`：新增来源钱包币种（1 个）
+- `expense-list.tsx`：排序 + 分类筛选 + 垫付人筛选 + 日期筛选 + 支付方式筛选（5 个，胶囊形状筛选器）
+- `claim-form.tsx`：认领身份选择（1 个）
+
+**做法**：新建共享组件 `components/select-dropdown.tsx`（`SelectDropdown`），把 quick-add-expense.tsx 之前为了修币种下拉局部写的 `DarkChipDropdown`（第十九轮产物）升级抽成全站共享版本——不再留两份功能重复的实现，quick-add-expense.tsx 这处也改成调用新组件。新组件设计：
+- 触发按钮不内置配色，配色决定权交给调用方的 `triggerClassName`（浅色表单传 `field-input`、深色卡片传 `field-input-dark`、expense-list.tsx 筛选胶囊传自己那套 `rounded-full border-sand` 样式），这样每处改造后视觉跟原来所在的上下文（浅色表单/深色卡片/胶囊筛选器）保持一致，不是全部套一个统一外观。
+- 弹层选项列表固定白底圆角描边阴影（对齐 Artifact `.cat-dropdown-list`/`.dd-fake` 规格），跟 `CategoryCombobox`/第十九轮 `DarkChipDropdown` 同一套视觉语言。
+- 交互：点击展开、点选项后回填+关闭、点击外部关闭、Esc 关闭，`<button>` 是 labelable element，原有 `<label htmlFor>` 写法不用改。
+- 已知简化：键盘只做了开关+鼠标点选，没做原生 select 那套方向键滚动/输入字母跳转的完整键盘导航——这个项目当前表单规模下够用，如实记录不是完整复刻。
+
+15 处 `<select>` 逐一替换完，全仓库重新 `grep -rn "<select"` 确认只剩注释提到（且已顺手更新了两处描述"这里是原生 select"的过时注释），代码里真实元素零遗漏。
+
+### 三、验证
+
+**真实行程**：全程"🇭🇰2026香港"（`f78a6b5e-8612-4097-8bfd-88a5db664045`），真实身份链接 `/id/c4NvmB9uBhBxOP2M1a5mIsrCAAj0wEQa_m01d_9omjc` 登录 Remy 真实账号，不是新建测试行程。
+
+**独立 ui-auditor 复核（跟做实现的不是同一个 agent，非自证）**：Hero 标签✅通过；7 处（15 个 select）里 6 处（13 个 select：wallet-grid 2 个、expense-form 3 个、payment-methods-manager 2 个、new-trip-form 1 个、expense-list 5 个）全部实测打开→选值→回填→Esc/点外部关闭全部通过；claim-form（认领页）和 exchange-form（换汇来源钱包币种）**因这条真实行程当前数据状态本身没有可测试的入口未验证**——真实行程当前 0 个钱包（换汇表单被前端拦在"先新建钱包"这一步进不去）、0 条待认领邀请链接（两位参与者都已认领），按指示没有为了测试去新建钱包/生成邀请链接污染真实数据，如实记录为"未覆盖"而不是"通过"。全程未提交/未修改/未新增/未删除任何真实数据（仅切换过一次排序筛选前端状态，已切回原值，不写库）。截图 `/Users/linotan/Desktop/Claude/.playwright-mcp/tel-audit-round20-verify/`（16 张）。
+
+**附带发现（非本轮改动引入，供参考）**：手机端"记一笔消费"悬浮按钮跟顶部"HKD→THB"切换按钮有约 4×11px 的极小重叠（不影响点击），是既有 FAB 固定定位方式带来的老问题，这轮没有动，留给以后如果要精修再处理。
+
+**代码验证**：`./deploy.sh` 五关（lint / typecheck / 单测 67 个 / opennextjs-cloudflare build / wrangler deploy）一次全过。线上 Version ID：`555debb3-856c-4e73-b1aa-bc024bd49fec`。
+
+**git**：commit `15d39be`，push 到 `origin/main`，commit 和 push 分开执行。
+
+### 四、这轮做完之后，目前没有已知遗留差异
+
+第十五到二十轮反复对齐 Artifact V10 的工作到这轮为止，PENDING-DECISIONS 里所有"需要 Remy 确认"条目都已经拍板执行完（Hero 标签、全站 select、区块小标题统一、支付方式文案、汇率两卡合并、按钮全宽统一等）。**没有已知未处理的方案差异清单遗留**——唯二两个"未覆盖"项（换汇来源钱包下拉、认领页下拉）不是发现了问题没修，是这条真实行程当前数据状态本身测不到，组件本身跟其它 13 处用的是同一份 `SelectDropdown` 代码，逻辑上没有理由表现不同，只是没有拿到真实数据走查的实机证据，如实记录这个技术性缺口，不算"发现新差异"。如果 Remy 之后往这条行程加了钱包/生成了邀请链接，建议顺手用那两处功能时留意一下下拉是否正常，等于免费补上这个验证缺口。
+
+---
+
 ## 【2026-09-17，第十九轮，独立盲测审计（比以往扎实很多，逐屏截图核对方案原文）打回全站一大批差异，全部处理，新 session 从这里读起】
 
 背景：一次完全独立、跟之前实现无关的 ui-auditor 做了一轮全站盲测，逐屏截图跟 Artifact V10 原文核对，发现的问题量比以往几轮多很多（功能缺口 + 逐屏差异 + 全站系统性问题）。Remy 要求全部按清单处理，不能挑轻松的改。这轮做完之后又经过三轮独立复核（发现新问题→修→再验证的循环），过程如实记录在下面。
