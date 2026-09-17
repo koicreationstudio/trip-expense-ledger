@@ -332,7 +332,7 @@ export function ExpenseForm({
     // 校验统一交给已经写好的中文错误提示处理。
     <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-[2px]">
           <label className="field-label" htmlFor="amount">
             金额
           </label>
@@ -348,7 +348,7 @@ export function ExpenseForm({
             className="field-input font-serif font-medium tabular-nums"
           />
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-[2px]">
           <label className="field-label" htmlFor="currency">
             币种
           </label>
@@ -366,7 +366,7 @@ export function ExpenseForm({
       </div>
 
       {needsManualFxRate && (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-[2px]">
           <label className="field-label" htmlFor="fx-rate">
             汇率（1 {currency} = 多少 {baseCurrency}）
           </label>
@@ -386,7 +386,7 @@ export function ExpenseForm({
       {/* fix(2026-09-14 Artifact Version 10 走查补做)：字段顺序改成 Artifact 骨架——
           金额+币种 → 商家名称 → 日期 → 分类 → 支付方式 → 备注 → 分摊区块（最下面）。
           「商家名称」「日期」两个字段位置往上挪，「分类」也往上挪到「支付方式」前面。 */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-[2px]">
         <label className="field-label" htmlFor="merchant">
           商家名称（可选）
         </label>
@@ -399,7 +399,7 @@ export function ExpenseForm({
         />
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-[2px]">
         <label className="field-label" htmlFor="expense-date">
           日期
         </label>
@@ -413,7 +413,7 @@ export function ExpenseForm({
         />
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-[2px]">
         <label className="field-label" htmlFor="category">
           分类
         </label>
@@ -469,7 +469,7 @@ export function ExpenseForm({
           （expenses/new、expenses/[expenseId]/edit 两个 page.tsx）已经把 `paymentMethods`
           这个 prop 过滤成"这趟行程勾了启用的那几个"再传进来，这个组件本身不用重新判断
           谁启用谁没启用，照抄 Artifact 原文改成这句提示就好。 */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-[2px]">
         <label className="field-label" htmlFor="payment-method">
           支付方式
         </label>
@@ -500,7 +500,7 @@ export function ExpenseForm({
         )}
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-[2px]">
         <label className="field-label" htmlFor="note">
           备注（可选）
         </label>
@@ -513,7 +513,7 @@ export function ExpenseForm({
         />
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-[2px]">
         <label className="field-label" htmlFor="receipt">
           收据（可选{isEdit && initialExpense.hasReceipt ? '，已有收据，上传新文件会替换' : ''}）
         </label>
@@ -578,7 +578,10 @@ export function ExpenseForm({
                 state，勾选结果对平分/自定义都生效。 */}
             <div className="flex flex-col gap-1">
               <span className="text-[9px] font-semibold text-gold-dk">跟谁分？</span>
-              <div className="flex flex-wrap gap-1.5">
+              {/* fix(2026-09-17 第二十轮，逐 token 核对)：Artifact `.split-panel .btns
+                  {gap:5px}` + 按钮 `padding:var(--ctrl-pad)`=5px 7px——之前 gap-1.5
+                  (6px)/px-[10px]配min-h（约等于 8-9px 竖向）跟这两个值都对不上。 */}
+              <div className="flex flex-wrap gap-[5px]">
                 {participants.map((p) => {
                   const included = splitIncluded[p.id] ?? true;
                   return (
@@ -589,8 +592,8 @@ export function ExpenseForm({
                       aria-pressed={included}
                       className={
                         included
-                          ? 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-ink px-[10px] text-[10px] font-medium text-white transition-colors'
-                          : 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-white px-[10px] text-[10px] font-medium text-ink transition-colors hover:opacity-80'
+                          ? 'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-ink px-[7px] py-[5px] text-[10px] font-medium text-white transition-colors'
+                          : 'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-white px-[7px] py-[5px] text-[10px] font-medium text-ink transition-colors hover:opacity-80'
                       }
                     >
                       {p.displayName}
@@ -608,7 +611,7 @@ export function ExpenseForm({
                 id="payer"
                 value={payerParticipantId}
                 onChange={setPayerParticipantId}
-                triggerClassName="w-full rounded-lg border border-sand bg-white px-[7px] py-[5px] text-[10px] text-ink focus:border-accent-700 focus:outline-none"
+                triggerClassName="w-full rounded-[10px] border border-sand bg-white px-[7px] py-[5px] text-[10px] text-ink focus:border-accent-700 focus:outline-none"
                 options={participants.map((p) => ({
                   value: p.id,
                   label: p.id === myParticipantId ? `${p.displayName}（我）` : p.displayName,
@@ -618,7 +621,7 @@ export function ExpenseForm({
 
             <div className="flex flex-col gap-1">
               <span className="text-[9px] font-semibold text-gold-dk">怎么分？</span>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-[5px]">
                 {SPLIT_SUB_MODE_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
@@ -627,8 +630,8 @@ export function ExpenseForm({
                     aria-pressed={splitMode === opt.value}
                     className={
                       splitMode === opt.value
-                        ? 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-ink px-[10px] text-[10px] font-medium text-white transition-colors'
-                        : 'inline-flex min-h-[26px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-white px-[10px] text-[10px] font-medium text-ink transition-colors hover:opacity-80'
+                        ? 'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-ink px-[7px] py-[5px] text-[10px] font-medium text-white transition-colors'
+                        : 'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-white px-[7px] py-[5px] text-[10px] font-medium text-ink transition-colors hover:opacity-80'
                     }
                   >
                     {opt.label}

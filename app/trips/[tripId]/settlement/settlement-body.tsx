@@ -118,13 +118,17 @@ export function SettlementBody({
             链接/直接添加参与者/现有邀请链接/参与者认领状态），统一改成这套值，不是
             只改这一处。 */}
         <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">每人净值</h2>
-        <ul className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
+        {/* fix(2026-09-17 第二十轮，Remy 要求逐 CSS token 核对结算屏)：`.list`
+            的字面规格是 border-radius:14px（之前是 Tailwind `rounded-xl`=12px，
+            差 2px 肉眼其实能看出来）+ gap:2px（之前 `gap-1`=4px，多了整整一倍）；
+            `.p-row` 的 gap 是 5px（之前 `gap-2`=8px）。padding 3px/5px 之前就是
+            对的，这次连带核对了一遍确认没漂。 */}
+        <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
           {netEntries.map((entry) => {
             const isExpanded = expandedId === entry.participantId;
             return (
               <li key={entry.participantId} className="flex flex-col">
-                {/* fix(2026-09-15)：行内 padding 3px 改 2px，对齐 Artifact 规格 */}
-                <div className="flex items-center gap-2 py-[2px]">
+                <div className="flex items-center gap-[5px] py-[2px]">
                   <Avatar name={entry.name} size={18} />
                   <span className="flex-1 text-[10.5px]">{entry.name}</span>
                   <span className={`text-[9.5px] ${entry.amount >= 0 ? 'text-positive' : 'text-negative'}`}>
@@ -138,28 +142,51 @@ export function SettlementBody({
                   <button
                     type="button"
                     onClick={() => setExpandedId(isExpanded ? null : entry.participantId)}
-                    // fix(2026-09-15)：字号 10px 改 8.5px，对齐 Artifact `.detail-toggle` 规格
-                    className="tap-link self-start pl-[26px] text-[8.5px] text-muted"
+                    // Artifact `.detail-toggle{margin:0 0 4px 25px}`——之前用
+                    // pl-[26px] 凑近似值，这次改成字面一致的 ml-[25px]+mb-1(4px)。
+                    className="tap-link self-start ml-[25px] mb-1 text-[8.5px] text-muted"
                   >
                     查看 {entry.name} 的分摊明细 {isExpanded ? '▲' : '▾'}
                   </button>
                 )}
                 {isExpanded && (
-                  <ul className="ml-[26px] mb-1 flex flex-col gap-0.5 border-l border-sand pl-2">
+                  // fix(2026-09-17 第二十轮)：之前这里是"左边一条竖线缩进"的列表
+                  // （border-l + pl-2），跟 Artifact `.settle-detail` 的真实规格
+                  // （浅底色圆角盒子、盒内用 border-top 分隔行，不是竖线缩进）完全
+                  // 是两套不同的视觉语言。改成字面对齐：bg rgba(164,163,160,.14)
+                  // + border sand + radius 14px + padding 2px 7px + margin-bottom
+                  // 7px，每行 padding 4px 0、gap 7px、字号 10px，meta（垫付/分摊·
+                  // 日期）9px、金额 10px 半粗体——分类/日期/角色/不计分摊标签这些
+                  // 字段方案demo没有全部对应（demo 不区分"垫付/分摊"角色），这是
+                  // 真实需要的信息，塞进 meta 小字里，不因为对齐方案就把真信息丢了。
+                  <div className="ml-[25px] mb-[7px] flex flex-col rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[7px] py-[2px]">
                     {entry.detail.map((d, i) => (
-                      <li key={`${d.expenseId}-${i}`} className="flex items-center justify-between gap-2 text-[10px] text-muted">
-                        <span>
-                          {d.category} · {d.role === 'paid' ? '垫付' : '分摊'} ·{' '}
-                          {new Date(d.expenseDate).toLocaleDateString()}
-                          {d.excludeFromSplit && ' · 不计分摊'}
+                      <div
+                        key={`${d.expenseId}-${i}`}
+                        className={`flex items-center gap-[7px] py-1 text-[10px] ${i > 0 ? 'border-t border-sand' : ''}`}
+                      >
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                          {d.category}
+                          {d.excludeFromSplit && (
+                            <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.3)] px-[5px] py-[1px] align-middle text-[8px] font-normal text-muted">
+                              不计分摊
+                            </span>
+                          )}
                         </span>
-                        <span className={`font-serif tabular-nums ${d.amountBaseCurrency >= 0 ? 'text-positive' : 'text-negative'}`}>
+                        <span className="shrink-0 text-[9px] text-muted">
+                          {d.role === 'paid' ? '垫付' : '分摊'} · {new Date(d.expenseDate).toLocaleDateString()}
+                        </span>
+                        <span
+                          className={`ml-auto shrink-0 font-serif text-[10px] font-semibold tabular-nums ${
+                            d.amountBaseCurrency >= 0 ? 'text-positive' : 'text-negative'
+                          }`}
+                        >
                           {d.amountBaseCurrency >= 0 ? '+' : '-'}
                           {formatMoney(Math.abs(d.amountBaseCurrency), baseCurrency)}
                         </span>
-                      </li>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 )}
               </li>
             );
@@ -173,14 +200,36 @@ export function SettlementBody({
           <p className="text-xs text-muted">目前不需要任何转账。</p>
         ) : (
           <>
-            <ul className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[6px] py-[4px] shadow-card">
+            {/* fix(2026-09-17 第二十轮)：转账清单跟净值清单是同一个 `.list` class，
+                走的是同一套 radius 14px / gap 2px / padding 3px 5px，之前这里各写
+                各的（rounded-xl/gap-2/px-6 py-4），跟净值清单不统一，这次对齐同一套
+                值。行内 `.p-row{gap:5px}`（之前 gap-2=8px）、姓名字号 10.5px、
+                "已收款"提示字/金额 9.5px（之前整行统一用 11.5px，没有照 Artifact
+                区分"名字比金额/提示字大一号"这个层级）——头像继续保留（方案demo
+                这里连头像都没有，只有"Alex → Remy"一行纯文字，但这趟行程是真实
+                多人协作场景，头像帮助一眼认人是真实价值，判断后保留，不是漏改）。 */}
+            <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
               {transfers.map((t) => {
                 const key = `${t.fromParticipantId}:${t.toParticipantId}`;
                 const isConfirmed = confirmedKeys.has(key);
                 const canToggle = t.toParticipantId === myParticipantId && !alreadySettled;
                 return (
-                  <li key={key} className="flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
-                    <label className={`flex flex-wrap items-center gap-2 ${canToggle ? 'cursor-pointer' : ''}`}>
+                  <li key={key} className="flex flex-wrap items-center gap-[5px] py-[2px]">
+                    <Avatar name={t.fromName} size={18} />
+                    <span className={`text-[10.5px] ${isConfirmed ? 'text-muted line-through' : ''}`}>
+                      {t.fromName}
+                    </span>
+                    <span className="text-muted" aria-hidden="true">
+                      →
+                    </span>
+                    <Avatar name={t.toName} size={18} />
+                    <span className={`text-[10.5px] ${isConfirmed ? 'text-muted line-through' : ''}`}>
+                      {t.toName}
+                    </span>
+                    {/* fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 每一行
+                        checkbox 旁边都有个可见的"已收款"文字标签（`<span class="hint">已收款</span>`），
+                        之前只写了 aria-label，屏幕上看不到任何文字说明这个勾选框是干嘛的。 */}
+                    <label className={`ml-auto flex items-center gap-[5px] ${canToggle ? 'cursor-pointer' : ''}`}>
                       <input
                         type="checkbox"
                         checked={isConfirmed}
@@ -188,19 +237,11 @@ export function SettlementBody({
                         onChange={() => toggleConfirm(t)}
                         aria-label={`${t.fromName} 转给 ${t.toName} 已收款`}
                       />
-                      {/* fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 每一行
-                          checkbox 旁边都有个可见的"已收款"文字标签（`<span class="hint">已收款</span>`），
-                          之前只写了 aria-label，屏幕上看不到任何文字说明这个勾选框是干嘛的。 */}
                       <span className="text-[9.5px] text-muted">已收款</span>
-                      <Avatar name={t.fromName} size={18} />
-                      <span className={isConfirmed ? 'text-muted line-through' : ''}>{t.fromName}</span>
-                      <span className="text-muted" aria-hidden="true">
-                        →
-                      </span>
-                      <Avatar name={t.toName} size={18} />
-                      <span className={isConfirmed ? 'text-muted line-through' : ''}>{t.toName}</span>
                     </label>
-                    <span className="font-serif tabular-nums">{formatMoney(t.amountBaseCurrency, baseCurrency)}</span>
+                    <span className="font-serif text-[9.5px] tabular-nums">
+                      {formatMoney(t.amountBaseCurrency, baseCurrency)}
+                    </span>
                   </li>
                 );
               })}

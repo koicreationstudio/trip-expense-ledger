@@ -215,42 +215,47 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
         ) : methods.length === 0 ? (
           <p className="text-xs text-muted">还没配置任何支付方式。</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          // fix(2026-09-17 第二十一轮，独立 ui-auditor 盲测坐实：这个列表跟结算屏
+          // 用的不是同一套 token)：Artifact 这里也是共用的 `.list` 容器（圆角14px/
+          // gap 2px，`#scr-payment .list{padding:3px 5px}`）包着多个 `.p-row`
+          // （`#scr-payment .p-row{padding:3px 0;gap:5px}`），不是"每一行各自一个
+          // 独立描边卡片"（之前用的 `tx-item` chokepoint 是圆角12px/自带padding/
+          // 行与行之间用 gap-2(8px) 分开，两套完全不同的视觉语言）。改成跟
+          // settlement-body.tsx 净值/转账清单同一套写法。
+          <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
             {methods.map((m) => (
-              <li key={m.id} className="tx-item justify-between">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-circle text-sm"
-                    aria-hidden="true"
-                  >
-                    {m.kind === 'card' ? '💳' : '💵'}
+              <li key={m.id} className="flex items-center gap-[5px] py-[3px]">
+                <span
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-circle text-sm"
+                  aria-hidden="true"
+                >
+                  {m.kind === 'card' ? '💳' : '💵'}
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  {/* Artifact `#scr-payment .nm{font-size:10px}` */}
+                  <span className="text-[10px] font-medium">
+                    {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
                   </span>
-                  <div className="flex min-w-0 flex-col">
-                    {/* fix(2026-09-15)：这行字号原本 12.5px，比页面其它次级文字（8.5-9.5px）
-                        明显突兀，对齐 Artifact `#scr-payment .nm{font-size:10px}` 改成 10px。 */}
-                    <span className="text-[10px] font-medium">
-                      {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
-                    </span>
-                    <span className="mt-0.5 border-t border-dashed border-sand pt-1 text-[10px] text-muted">
-                      汇率加点 {m.fxMarkupPercent}% · 境外手续费 {m.foreignTxnFeePercent}% · 返现 {m.cashbackPercent}%
-                      {m.fixedFee > 0 && (
-                        <>
-                          {' · 固定费 '}
-                          <span className="font-serif tabular-nums">
-                            {formatMoney(m.fixedFee, m.settlementCurrency)}
-                          </span>
-                        </>
-                      )}
-                    </span>
-                  </div>
+                  {/* Artifact `#scr-payment .tag-note{font-size:8.5px}`——之前是10px。 */}
+                  <span className="mt-0.5 border-t border-dashed border-sand pt-1 text-[8.5px] text-muted">
+                    汇率加点 {m.fxMarkupPercent}% · 境外手续费 {m.foreignTxnFeePercent}% · 返现 {m.cashbackPercent}%
+                    {m.fixedFee > 0 && (
+                      <>
+                        {' · 固定费 '}
+                        <span className="font-serif tabular-nums">
+                          {formatMoney(m.fixedFee, m.settlementCurrency)}
+                        </span>
+                      </>
+                    )}
+                  </span>
                 </div>
-                {/* fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact `.del-icon`
-                    是纯图标🗑（coral 色），不是"删除"文字按钮。 */}
+                {/* Artifact `#scr-payment .del-icon{font-size:10px;padding:2px}`——
+                    之前是 text-[11px]/p-[3px]。 */}
                 <button
                   type="button"
                   onClick={() => setConfirmingId(m.id)}
                   aria-label={`删除支付方式「${m.label}」`}
-                  className="shrink-0 p-[3px] text-[11px] text-coral"
+                  className="shrink-0 p-[2px] text-[10px] text-coral"
                 >
                   🗑
                 </button>
@@ -273,12 +278,11 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
         ) : methods.length === 0 ? (
           <p className="text-xs text-muted">还没配置任何支付方式，先在下面新增一个。</p>
         ) : (
-          <ul className="flex flex-col gap-1.5">
+          // fix(2026-09-17 第二十一轮)：同上——这里也改成共用 `.list` 容器包
+          // `.check-row`（`font-size:10.5px`），不再是每行各自一个独立描边胶囊。
+          <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
             {methods.map((m) => (
-              <li
-                key={m.id}
-                className="flex items-center gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px]"
-              >
+              <li key={m.id} className="flex items-center gap-[5px] py-[3px]">
                 <input
                   id={`pm-enabled-${m.id}`}
                   type="checkbox"
@@ -286,7 +290,7 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
                   disabled={togglingId === m.id}
                   onChange={() => handleToggleEnabled(m)}
                 />
-                <label htmlFor={`pm-enabled-${m.id}`} className="flex-1 text-[11px]">
+                <label htmlFor={`pm-enabled-${m.id}`} className="flex-1 text-[10.5px]">
                   {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
                 </label>
               </li>

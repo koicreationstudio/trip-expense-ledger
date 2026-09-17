@@ -115,7 +115,11 @@ export function SelectDropdown({
           role="listbox"
           className={
             panelClassName ??
-            'absolute left-0 top-full z-10 mt-1 max-h-[220px] w-full min-w-[140px] overflow-y-auto rounded-xl border border-sand bg-white p-1 shadow-card'
+            // fix(2026-09-17 第二十一轮，逐 token 核对)：Artifact `.fdrop-menu`/
+            // `.cat-dropdown-list` 这类下拉弹层统一是 border-radius:10px，这里
+            // 之前是 rounded-xl(12px)——这是全站共用的 SelectDropdown 组件，
+            // 改这一处会同步修正全站所有用到它的下拉弹层，不用逐处改。
+            'absolute left-0 top-full z-10 mt-1 max-h-[220px] w-full min-w-[140px] overflow-y-auto rounded-[10px] border border-sand bg-white p-1 shadow-card'
           }
         >
           {options.map((opt) => (

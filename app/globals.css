@@ -95,8 +95,12 @@ body {
   /* 输入内容字号对齐全站"主要内容"档，原 12.5px。第四轮紧凑化收到 --ctrl-font 10px，
      padding 同步收到 --ctrl-pad(5px 7px)——跟 select/segmented按钮/wallet-select-btn
      这几类控件统一同一套尺寸，不再各自零散定。 */
+  /* fix(2026-09-17 第二十轮，Remy 要求逐 CSS token 核对"记一笔消费"屏)：Artifact
+     `.field input{border-radius:10px}`——这里用的是 Tailwind `rounded-xl`=12px，
+     这是全站共用的 chokepoint class，改这一处会同步改到所有引用它的地方，不用
+     逐页面改，也不会漏改。 */
   .field-input {
-    @apply rounded-xl border border-sand px-[7px] py-[5px] text-[10px] focus:border-accent-700 focus:outline-none focus:ring-1 focus:ring-accent-700 disabled:bg-slate-100;
+    @apply rounded-[10px] border border-sand px-[7px] py-[5px] text-[10px] focus:border-accent-700 focus:outline-none focus:ring-1 focus:ring-accent-700 disabled:bg-slate-100;
   }
 
   /* .field-input 的深色卡变体：净额+钱包合并卡（bg-hero-gradient）里唯一会出现输入框

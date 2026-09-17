@@ -45,12 +45,20 @@ import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
  *    退回 MYR 当基准，选不到"我持有 HKD"——这次补上 HKD 作为第三个基准（用现成
  *    的 MYR→HKD=1.92 反推 1 HKD≈0.5208 MYR，再用 MYR 那行的其它汇率换算出来，
  *    数量级来源可追溯，不是瞎编），这样香港行程默认就能同时看到渠道比价 + 卡比价。
+ * 4. fix(2026-09-17 第二十一轮，功能性QA坐实的真bug)：这条真实行程 enabled_currencies
+ *    明确包含 CNY，但"我持有"候选池 `resolveHoldCandidates` 读的是 `Object.keys(FX_RATES)`
+ *    ——CNY 从来不是这张表的"基准"（只在 MYR/USD/HKD 三行里当"目标"出现过），导致
+ *    "我持有"永远选不到 CNY，即使这趟行程明明启用了它，跟"目标币种"那边能选 CNY
+ *    不对称。这次补上 CNY 作为第四个基准，用同一套方法（从 MYR 那行反推，数量级
+ *    可追溯）：1 CNY = 1/1.61 MYR ≈ 0.6211 MYR，再用 MYR 那行其它汇率换算出
+ *    THB/USD/SGD/HKD，不是凭空编的新数字。
  */
 
 const FX_RATES: Record<string, Record<string, number>> = {
   MYR: { THB: 8.12, USD: 0.245, SGD: 0.318, CNY: 1.61, HKD: 1.92 },
   USD: { THB: 33.03, MYR: 4.08, SGD: 1.3, CNY: 6.58, HKD: 7.82 },
   HKD: { THB: 4.229, USD: 0.1276, SGD: 0.1656, CNY: 0.8385, MYR: 0.5208 },
+  CNY: { THB: 5.044, USD: 0.1522, SGD: 0.1975, HKD: 1.1926, MYR: 0.6211 },
 };
 
 const FX_SYMBOLS: Record<string, string> = {
@@ -112,18 +120,22 @@ function resolveHoldCandidates(enabledCurrencies: string[] | null): string[] {
   return allHolds.filter((h) => enabledCurrencies.includes(h));
 }
 
-// fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 这一屏"🎯目标币种"
-// 下拉是固定 5 项（THB/USD/SGD/CNY/HKD）；之前这里按行程 enabledCurrencies 收窄，
-// 香港行程只勾了 MYR/HKD/USD/CNY，目标候选就只剩 USD/CNY 两个，THB/SGD 完全选不到。
-// 判断：按行程实际启用币种动态收窄这个方向本身没错（避免列一堆这趟行程用不上的
-// 币种），但不该收窄到"方案原本能选的候选都选不到"这个地步——FX_RATES 这张静态表
-// 本身能覆盖的候选（对 MYR/USD/HKD 三个基准分别是 THB/USD/SGD/CNY/HKD 这 5 个，
-// 刚好就是方案写死的那份清单）现在改成一律全部给选，不再按 enabledCurrencies 收窄：
-// 这张表能力有限，只服务这几个候选币种，收窄只会让方案要求的候选变得选不到，
-// 没有实际好处（不像 holdCandidates「我持有」那排 tab，收窄到行程真的持有的币种
-// 还是有意义的，那处没有改）。
+// fix(2026-09-17 第二十轮，Remy 真机截图坐实的回归)：目标币种候选必须是 Artifact
+// 写死的固定 5 项 THB/USD/SGD/CNY/HKD，跟"我持有"选了哪个币种无关——第十九轮那次
+// 改成 `Object.keys(FX_RATES[hold] ?? {})` 看起来解决了"候选选不到"的问题，但引入
+// 了一个新 bug：FX_RATES.HKD 这一行本身没有 HKD 自己的 key（自己换自己没有意义，
+// 数据表当然不会有），它的 key 集合是 {THB,USD,SGD,CNY,MYR}——MYR 只是因为这张表
+// 记录的是"从 HKD 出发能查到的其它币种汇率"这个副作用，不是方案要的候选。结果
+// "我持有 HKD" 时目标候选变成 THB/USD/SGD/CNY/MYR，方案要的 HKD 本身反而在"我持有
+// 不是 HKD"时才会出现——这正是 Remy 这轮反馈"目标币种下拉缺 HKD、多了个 MYR"的
+// 根因。改回固定字面量清单，只排除掉正好等于当前持有币种的那个（自己换自己没
+// 意义，这个排除逻辑无论方案还是 Remy 都没有反对），不再借用 FX_RATES 表的 key
+// 集合当候选来源——候选清单和汇率数据是两件事，候选清单是产品需求，汇率数据只是
+// 拿来算数字用的，不该让数据表凑巧长什么样反过来决定候选清单长什么样。
+const TARGET_CURRENCY_CANDIDATES = ['THB', 'USD', 'SGD', 'CNY', 'HKD'] as const;
+
 function resolveTargetCandidates(hold: string): string[] {
-  return Object.keys(FX_RATES[hold] ?? {}).filter((c) => c !== hold);
+  return TARGET_CURRENCY_CANDIDATES.filter((c) => c !== hold);
 }
 
 interface CompareRow {
@@ -147,6 +159,7 @@ export function FxCompareCard({
   enabledCurrencies: string[] | null;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [holdOpen, setHoldOpen] = useState(false);
   const [targetOpen, setTargetOpen] = useState(false);
   const [channelOpen, setChannelOpen] = useState(false);
 
@@ -279,12 +292,57 @@ export function FxCompareCard({
       {expanded && (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-[5px]">
+            {/* fix(2026-09-17 第二十轮，Remy 明确要求"conversion这里也要可选择从
+                什么币种convert到什么币种")：之前"我持有"是一排写死的胶囊 tab
+                （见下面被删掉的那段），只能在 holdCandidates 允许的范围里点选，
+                跟"🎯目标币种"那个能点开菜单挑的下拉比，视觉上像是"起点不能选，
+                终点才能选"——这不是方案要求的（方案本身"我持有"也是固定 tab，
+                这条是 Remy 这轮在方案基础上加的新要求，如实记这是新判断不是
+                方案原文）。改成跟目标币种同一套"点开小菜单选"的交互，可选范围
+                还是 holdCandidates（这趟行程真实持有、且 FX_RATES 这张静态表
+                支持当基准的币种——MYR/USD/HKD 三选，不是无限任意币种，这张表
+                目前只服务这三个基准，扩到更多基准是另一件事，需要另外建汇率
+                数据，这次没有做）。 */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setHoldOpen((v) => !v);
+                  setTargetOpen(false);
+                  setChannelOpen(false);
+                }}
+                className="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
+              >
+                💰 我持有 {effectiveHold || '…'} ▾
+              </button>
+              {holdOpen && (
+                <div className="absolute left-0 top-full z-10 mt-1 min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card">
+                  {holdCandidates
+                    .filter((h) => h !== effectiveTarget)
+                    .map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => {
+                          setHoldCurrency(h);
+                          setHoldOpen(false);
+                        }}
+                        className="block w-full whitespace-nowrap rounded-[7px] px-2 py-1.5 text-left text-[10.5px] text-ink hover:bg-gold-lt"
+                      >
+                        {h}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+
             {/* 🎯目标币种 下拉——Artifact `.fchip`/`.fdrop-menu` 规格 */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => {
                   setTargetOpen((v) => !v);
+                  setHoldOpen(false);
                   setChannelOpen(false);
                 }}
                 className="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
@@ -316,6 +374,7 @@ export function FxCompareCard({
                 type="button"
                 onClick={() => {
                   setChannelOpen((v) => !v);
+                  setHoldOpen(false);
                   setTargetOpen(false);
                 }}
                 className="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
@@ -370,34 +429,11 @@ export function FxCompareCard({
             })}
           </div>
 
-          {/* fix(2026-09-16 第十八轮，自己走查真实截图抓到的真 bug)：这排"我持有→目标"
-              tab 之前无条件把 holdCandidates 全部铺出来，没有排除"持有币种正好等于
-              目标币种"这种自己换自己的无意义组合——真机截图上出现过"USD → USD"这种
-              选项（这趟行程 enabledCurrencies 里 MYR/HKD/USD 都在，目标选到 USD 时
-              就会连"USD → USD"一起列出来）。上面的基准换算卡片那块已经有
-              `if (rate === undefined) return null` 兜底不会显示自己换自己（
-              FX_RATES 表里没有一个币种对自己的汇率），但这排 tab 是独立渲染的，没有
-              复用那层判断，漏了。 */}
-          {holdCandidates.filter((h) => h !== effectiveTarget).length > 1 && (
-            <div className="flex w-fit flex-wrap gap-1 rounded-full bg-gold-lt p-[3px] text-[10px]">
-              {holdCandidates
-                .filter((h) => h !== effectiveTarget)
-                .map((h) => (
-                <button
-                  key={h}
-                  type="button"
-                  onClick={() => setHoldCurrency(h)}
-                  className={
-                    effectiveHold === h
-                      ? 'inline-flex items-center rounded-full bg-ink px-[10px] py-[5px] font-medium text-white'
-                      : 'inline-flex items-center rounded-full px-[10px] py-[5px] font-medium text-gold-dk hover:text-ink'
-                  }
-                >
-                  {h} → {effectiveTarget || '…'}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* fix(2026-09-17 第二十轮)：原本这里还有一排"我持有→目标"的写死胶囊 tab，
+              现在换成了上面header那个"💰我持有"下拉，这排 tab 整个删掉不再重复
+              一次同样的选择——两套 UI 表达同一件事没有意义。当前选到哪个"我持有"
+              靠上面下拉按钮自己的文字（"💰我持有 HKD ▾"）显示，不需要额外的 tab
+              再显示一遍。 */}
 
           <div className="flex flex-col gap-1">
             <label className="field-label" htmlFor="fx-compare-amount">

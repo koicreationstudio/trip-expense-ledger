@@ -72,7 +72,17 @@ export function CategoryCombobox({
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxId = useId();
 
-  const query = value.trim().toLowerCase();
+  // fix(2026-09-17，Remy 截图坐实的真实回归 bug)：这个 filterQuery 是独立于 value
+  // 的一份"用户正在打字搜索"的状态，只在真的打字时才更新——不能直接拿 value 本身
+  // 当过滤词。之前直接用 value.trim() 当 query：选中"按摩"后 value === "按摩"，
+  // 再点开下拉时用这个值去 filter options，只有"按摩"自己完整匹配，其它选项全部
+  // 被过滤掉，列表里只剩已选中那一项，等于选完就换不了别的分类了。现在改成：打字
+  // 才更新 filterQuery（缩小候选），点开/聚焦（没有新输入）时 filterQuery 归零，
+  // 显示完整候选列表——"已经选好一个值后再点开重新挑"这个场景不该被上次输入的
+  // 内容锁死。
+  const [filterQuery, setFilterQuery] = useState('');
+
+  const query = filterQuery.trim().toLowerCase();
   const filtered = query ? options.filter((opt) => opt.toLowerCase().includes(query)) : options;
 
   // 点击组件外部关闭列表——跟 trip-switcher.tsx 的下拉面板同一套处理方式。
@@ -90,6 +100,7 @@ export function CategoryCombobox({
     onChange(opt);
     setOpen(false);
     setHighlightedIndex(-1);
+    setFilterQuery('');
     inputRef.current?.focus();
   }
 
@@ -141,14 +152,23 @@ export function CategoryCombobox({
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
+          setFilterQuery(e.target.value);
           setOpen(true);
           setHighlightedIndex(-1);
         }}
-        onFocus={() => setOpen(true)}
+        // 聚焦/点击重新打开时（不是打字触发的打开），把 filterQuery 归零，显示完整
+        // 候选列表——见上面 filterQuery 那段注释，这是这次 bug 的核心修复点。
+        onFocus={() => {
+          setOpen(true);
+          setFilterQuery('');
+        }}
         // onClick 也要开：选完一项后 input 还是 focus 状态（selectOption 里手动
         // focus 回去），这时候再点一下 input，浏览器不会重新触发 focus 事件
         // （没有焦点变化），只靠 onFocus 接不住"选完想再点开"这个操作。
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setOpen(true);
+          setFilterQuery('');
+        }}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className={`w-full ${inputClassName} ${showChevron ? 'pr-[22px]' : ''}`}
@@ -165,7 +185,9 @@ export function CategoryCombobox({
         <ul
           id={listboxId}
           role="listbox"
-          className="absolute left-0 top-full z-10 mt-1 max-h-56 w-full min-w-[160px] overflow-y-auto rounded-xl border border-sand bg-paper shadow-card"
+          // fix(2026-09-17 第二十一轮，逐 token 核对)：Artifact `.cat-dropdown-list
+          // {border-radius:10px}`，这里之前用的是 rounded-xl(12px)。
+          className="absolute left-0 top-full z-10 mt-1 max-h-56 w-full min-w-[160px] overflow-y-auto rounded-[10px] border border-sand bg-paper shadow-card"
         >
           {filtered.map((opt, idx) => (
             <li

@@ -28,6 +28,10 @@ export function InvitesManager({ tripId }: { tripId: string }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  // fix(2026-09-17 第二十一轮，功能性QA发现，跟 account-identity-link.tsx 同一处
+  // 静默失败问题)：剪贴板权限拿不到时按钮完全没反应，用户分不清"复制成功"还是
+  // "点击没反应"。
+  const [copyFailedCode, setCopyFailedCode] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<{ type: 'revoke' | 'reset'; id: string } | null>(null);
 
   // 屏⑥"直接添加参与者"（2026-09-13 落地第四轮拍板）：纯姓名，没有登录方式。
@@ -131,10 +135,11 @@ export function InvitesManager({ tripId }: { tripId: string }) {
   async function handleCopy(code: string) {
     try {
       await navigator.clipboard.writeText(inviteUrl(code));
+      setCopyFailedCode(null);
       setCopiedCode(code);
       setTimeout(() => setCopiedCode(null), 2000);
     } catch {
-      // 剪贴板权限拿不到就算了，链接本来就显示在页面上，用户可以自己选中复制
+      setCopyFailedCode(code);
     }
   }
 
@@ -199,6 +204,9 @@ export function InvitesManager({ tripId }: { tripId: string }) {
                       </button>
                     )}
                   </div>
+                  {copyFailedCode === invite.code && (
+                    <p className="text-[9px] text-coral">复制失败（浏览器不给剪贴板权限），可以手动选取上面的链接文字复制。</p>
+                  )}
                 </li>
               );
             })}

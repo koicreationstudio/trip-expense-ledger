@@ -4,14 +4,21 @@ import { useState } from 'react';
 
 export function AccountIdentityLink({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
+  // fix(2026-09-17 第二十一轮，功能性QA发现)：剪贴板权限拿不到时之前是完全静默——
+  // 按钮点了文字不变、也没有任何提示，用户没法判断"是复制成功了还是点击没反应"。
+  // 链接本来就显示在页面上（下面的 <code>），加一句失败提示，不是要新做什么复制
+  // 兜底逻辑，只是把"失败"这个已有分支也变得看得见，跟"成功"分支（copied状态）
+  // 对称。
+  const [copyFailed, setCopyFailed] = useState(false);
 
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(url);
+      setCopyFailed(false);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // 剪贴板权限拿不到就算了，链接本来就显示在页面上，用户可以自己选中复制
+      setCopyFailed(true);
     }
   }
 
@@ -34,6 +41,9 @@ export function AccountIdentityLink({ url }: { url: string }) {
       <button type="button" onClick={handleCopy} className="big-cta">
         {copied ? '已复制' : '复制链接'}
       </button>
+      {copyFailed && (
+        <p className="text-[10px] text-coral">复制失败（浏览器不给剪贴板权限），可以手动选取上面的链接文字复制。</p>
+      )}
     </section>
   );
 }

@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Pencil, Trash2 } from 'lucide-react';
 import { formatMoney } from '@/lib/money';
-import { Avatar } from '@/components/avatar';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { SelectDropdown } from '@/components/select-dropdown';
 
@@ -33,15 +32,45 @@ type SortMode = 'manual' | 'date' | 'amount';
 const ALL = '__all__';
 
 /**
+ * category 字段是自由文本，新记的账走下拉会带一个前缀 emoji（`COMMON_CATEGORIES`
+ * 就是"🍜 餐饮"这种格式），但历史旧记录/用户自己手打的分类可能没有——这个 helper
+ * 尽量拆出"图标 + 文字"两半，拆不出来（没有 emoji 前缀）就用一个通用图标兜底，
+ * 不会因为拆不出来就整行崩掉或者显示乱码。
+ */
+function splitCategoryIcon(category: string): { icon: string; label: string } {
+  const trimmed = category.trim();
+  const spaceIdx = trimmed.indexOf(' ');
+  if (spaceIdx > 0) {
+    const maybeIcon = trimmed.slice(0, spaceIdx);
+    const rest = trimmed.slice(spaceIdx + 1).trim();
+    if (/\p{Extended_Pictographic}/u.test(maybeIcon) && rest.length > 0) {
+      return { icon: maybeIcon, label: rest };
+    }
+  }
+  return { icon: '🧾', label: trimmed };
+}
+
+/**
  * 展示整个行程的活动流，但编辑/删除只对自己录入的那些生效——后端 PATCH/DELETE
  * 已经把 entered_by_participant_id 焊死在 WHERE 里、别人的一律 404，这里按
  * `mine` 隐藏掉那两个入口，不是靠隐藏骗用户，是避免点了才发现 404 的空转。
  *
  * 2026-09-15 补齐 Artifact Version 10 遗留缺口——排序下拉 + 4 个筛选 chip + 约算
- * 本位币小字，这三项是真的会动的功能（真重排/真隐藏行），不是纯装饰。**没做**的一项：
- * Artifact 要求"滑动才显示编辑/删除"（默认不常驻图标），这次评估后判断触屏滑动手势
- * 风险（跨设备行为、跟下面 ConfirmDialog/Link 的点击区域冲突）比收益大，没有动手做，
- * 编辑/删除继续保持常驻图标（跟之前一样贴在头像右边），原因记在 PENDING-DECISIONS。
+ * 本位币小字，这三项是真的会动的功能（真重排/真隐藏行），不是纯装饰。
+ *
+ * fix(2026-09-17 第二十轮，Remy 真机截图坐实"记录·HISTORY"区块整体没对齐，怀疑
+ * 从没被真的检查过——查证属实，round18 全页长截图里其实拍到过这个区块，但从没
+ * 有人真的拿它跟方案这一屏的 HTML/CSS 逐项核对过）：这次照方案原文重做整个行结构。
+ * - 每行拆成 图标 + 名称行 + (垫付人·日期·分类·支付方式) meta 行 + 约算金额行，
+ *   不再是"分类+商家挤一行、垫付人+日期挤另一行"这种跟方案对不上的排法；
+ *   名称优先显示商家名（没填商家名才退回显示分类文字），分类文字挪到 meta 行，
+ *   不会因为改了位置就丢信息。
+ * - 约算成本位币的小字（"≈RM128.40"这种）从右侧金额栏底下挪到左侧 meta 栏下面，
+ *   跟方案 `.hist-mid` 里 `.hist-approx` 紧跟在 `.hist-meta` 后面的堆叠顺序一致。
+ * - 编辑/删除从常驻图标改成点这一行才展开（方案要的是"滑动或点击才出现"，上一轮
+ *   评估过跨设备滑动手势风险后选点击这条路，不是偷懒不做）：点行内空白处展开右侧
+ *   操作区（金额那一刻让位滑走），再点一次或者点别的行会收起。金额本身不受影响
+ *   （依然一直看得到，只是宽度收窄挪个位置），不是"点开才显示金额"。
  */
 export function ExpenseList({
   tripId,
@@ -64,6 +93,10 @@ export function ExpenseList({
   const [payerFilter, setPayerFilter] = useState(ALL);
   const [dateFilter, setDateFilter] = useState(ALL);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState(ALL);
+  // 哪一行的编辑/删除操作区正展开——同一时间只让一行展开，点别的行/再点一次
+  // 当前行都会收起，不需要额外的"点击外部关闭"监听（列表本身就在页面主体里，
+  // 没有浮层遮挡问题）。
+  const [revealedId, setRevealedId] = useState<string | null>(null);
 
   // 筛选候选清单：从当前这份列表的真实数据里取 distinct 值，不是写死的枚举——
   // 这趟行程记过什么分类/谁垫过钱/哪几天记过账，候选就是什么，行程之间不会串。
@@ -129,6 +162,16 @@ export function ExpenseList({
   return (
     <div className="flex flex-col gap-2">
       {error && <p className="text-base text-coral">{error}</p>}
+
+      {/* fix(2026-09-17 第二十轮)：方案原文这个区块顶部有一行说明文字（`.hist-static-note`），
+          告诉用户排序里哪些是真的会动的。方案自己那份 demo 里"手动(长按拖拽)"是假的
+          静态展示，日期/金额排序才是真的——这句话是照方案 demo 自身情况写的，不能照抄
+          到这个真实 app 里（这里没有一项是假的，连"手动"都是真实服务器顺序，不是摆设，
+          只是不支持长按拖拽调整），所以文案改成如实描述这个真实 app 自己的情况，不是
+          抄方案的字面句子。 */}
+      <p className="text-[9.5px] leading-[1.5] text-muted">
+        💡 排序里「手动」是维持记账时的原始顺序（不能长按拖拽调整），「日期」/「金额」重排是真的会动；下面的分类/垫付人/日期/支付方式筛选也是真的会按条件隐藏不符合的记录，不是摆设。
+      </p>
 
       {/* 排序下拉 + 4 个筛选 chip：chip 用跟 fx-channel-compare-card.tsx 目标币种
           按钮同一套 pill 视觉语言（rounded-full、chip padding 3/9px），不是纯装饰——
@@ -197,21 +240,75 @@ export function ExpenseList({
       {visibleExpenses.length === 0 ? (
         <p className="text-xs text-muted">没有符合筛选条件的消费。</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col">
           {visibleExpenses.map((e) => {
             const mine = e.enteredByParticipantId === myParticipantId;
             const showConverted = e.currency !== baseCurrency;
+            const revealed = mine && revealedId === e.id;
+            const { icon, label: categoryLabel } = splitCategoryIcon(e.category);
+            // 名称优先显示商家名（方案原文那种"拜神"/"Bolt/Grab"式具体描述），没填
+            // 商家名才退回显示分类文字——两种情况都不会让分类信息凭空消失：填了
+            // 商家名时分类文字挪到下面 meta 行，没填商家名时分类文字本身就是名称。
+            const primaryName = e.merchant?.trim() || categoryLabel;
+            const metaParts = [e.payerName, e.expenseDate.slice(5, 10)];
+            if (e.merchant?.trim()) metaParts.push(categoryLabel);
+            if (e.paymentMethodLabel) metaParts.push(e.paymentMethodLabel);
+            if (e.hasReceipt) metaParts.push('有收据');
             return (
-              <li key={e.id} className="tx-item justify-between">
-                <Avatar name={e.payerName} size={24} />
-                {/* 编辑/删除放在头像右边（不是行尾）：常驻 FAB 固定贴在屏幕右下角，
-                    行尾贴边的图标只要行数够多、总高度接近一屏，就会被 FAB 盖住
-                    （压缩过上面区块间距也没用，总会有某一行凑巧落进 FAB 的固定区域）。
-                    挪来这里之后不管记了几笔账、FAB 多宽，编辑/删除都不会被挡。
-                    Artifact 要求这两个图标改成"滑动才出现"，这轮评估后没有做（见组件
-                    顶部注释），继续常驻显示。 */}
+              <li
+                key={e.id}
+                className="relative overflow-hidden border-t border-sand first:border-t-0"
+              >
+                {/* fix(2026-09-17 第二十轮)：整行可点（仅自己录入的行）切换编辑/删除
+                    展开态，对齐方案"操作按钮是点击/滑动后才出现的隐藏态，不是常驻
+                    显示"——上一轮评估过真滑动手势（跨设备行为不一致、跟 Link/按钮
+                    点击区域冲突）风险比收益大没有做，点击整行展开是方案自己也认可
+                    的替代方案（方案原文"滑动或点击触发"二选一）。金额区域点开后
+                    往左让位，编辑/删除图标从右边滑入，靠 transform+transition 做，
+                    不靠拆分组件。 */}
+                <button
+                  type="button"
+                  disabled={!mine}
+                  onClick={() => setRevealedId((prev) => (prev === e.id ? null : mine ? e.id : prev))}
+                  className="flex w-full items-center gap-[7px] py-[7px] pl-[2px] pr-[4px] text-left disabled:cursor-default"
+                  aria-expanded={mine ? revealed : undefined}
+                  aria-label={mine ? '展开这笔消费的编辑/删除操作' : undefined}
+                >
+                  <span aria-hidden="true" className="w-6 shrink-0 text-center text-[15px] leading-none">
+                    {icon}
+                  </span>
+                  {/* min-w-0 让 flex-1 子元素的 truncate 生效——没有它 flex item 默认不收缩，
+                      长垫付人名字会把这一栏撑宽挤爆金额，而不是自己省略号截断。 */}
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[12px] font-medium">
+                      {primaryName}
+                      {e.excludeFromSplit && (
+                        <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.2)] px-[6px] py-[1px] align-middle text-[8.5px] font-medium text-muted">
+                          不计分摊
+                        </span>
+                      )}
+                    </span>
+                    <span className="truncate text-[9.5px] text-muted">{metaParts.join(' · ')}</span>
+                    {showConverted && (
+                      <span className="font-serif text-[9.5px] tabular-nums text-muted">
+                        ≈{formatMoney(e.amountBaseCurrency, baseCurrency)}
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`shrink-0 font-serif text-[12.5px] font-semibold tabular-nums transition-transform duration-150 ${
+                      revealed ? '-translate-x-[62px]' : 'translate-x-0'
+                    }`}
+                  >
+                    {formatMoney(e.amount, e.currency)}
+                  </span>
+                </button>
                 {mine && (
-                  <div className="flex shrink-0 items-center gap-1">
+                  <div
+                    className={`absolute right-[4px] top-0 flex h-full items-center gap-1 bg-gradient-to-l from-paper from-[65%] to-transparent pl-[22px] transition-transform duration-150 ${
+                      revealed ? 'translate-x-0' : 'translate-x-[120%]'
+                    }`}
+                  >
                     <Link
                       href={`/trips/${tripId}/expenses/${e.id}/edit`}
                       aria-label="编辑这笔消费"
@@ -230,38 +327,6 @@ export function ExpenseList({
                     </button>
                   </div>
                 )}
-                {/* min-w-0 让 flex-1 子元素的 truncate 生效——没有它 flex item 默认不收缩，
-                    长垫付人名字会把这一栏撑宽挤爆金额，而不是自己省略号截断。
-                    统一单行（不换行）是为了不同卡片之间高度一致，避免有的卡片单行、
-                    有的因为名字长换成两行，看起来参差不齐（ui-auditor 走查点名过这个）。 */}
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-[12.5px] font-medium">
-                    {e.category}
-                    {e.merchant && <span className="font-normal text-muted"> · {e.merchant}</span>}
-                    {e.excludeFromSplit && (
-                      <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.2)] px-[6px] py-[1px] align-middle text-[8.5px] font-medium text-muted">
-                        不计分摊
-                      </span>
-                    )}
-                  </span>
-                  <span className="truncate text-[10px] text-muted">
-                    {e.payerName} · {e.expenseDate.slice(5, 10)}
-                    {e.hasReceipt && ' · 有收据'}
-                  </span>
-                </div>
-                {/* 金额继续钉死在行最右侧（DESIGN-BRIEF 第一版就定的规矩：金额一律放最右侧、
-                    等宽数字对齐），不因为这次挪了编辑/删除就跟着松动。约算本位币小字只在
-                    原始币种不是本位币时才出现，同币种再显示一遍"≈"是废话。 */}
-                <div className="flex shrink-0 flex-col items-end">
-                  <span className="font-serif text-[12.5px] font-medium tabular-nums">
-                    {formatMoney(e.amount, e.currency)}
-                  </span>
-                  {showConverted && (
-                    <span className="font-serif text-[9px] tabular-nums text-muted">
-                      ≈{formatMoney(e.amountBaseCurrency, baseCurrency)}
-                    </span>
-                  )}
-                </div>
               </li>
             );
           })}
