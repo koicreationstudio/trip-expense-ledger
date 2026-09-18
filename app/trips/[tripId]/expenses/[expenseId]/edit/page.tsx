@@ -53,7 +53,11 @@ export default async function EditExpensePage({
   return (
     // fix(2026-09-16 第十七轮)：gap-6(24px)→gap-3.5(14px)、标题 16px→15px，跟本站其它屏统一。
     <main className="flex flex-col gap-3.5">
-      <h1 className="text-[15px] font-semibold text-ink">编辑消费</h1>
+      {/* fix(2026-09-18，第二十六轮全量复核)：同 settlement/page.tsx 那条注释，跨屏字重
+          不一致，改成 font-bold 对齐 Artifact `.title-block h3{font-weight:700}`。"编辑
+          消费"这个标题本身不在 Artifact 9屏范围内(是真实功能页)，但沿用同一套全站
+          title-block 规则统一处理，不单独破例。 */}
+      <h1 className="text-[15px] font-bold text-ink">编辑消费</h1>
       <ExpenseForm
         tripId={trip.id}
         baseCurrency={trip.baseCurrency}

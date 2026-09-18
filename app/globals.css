@@ -66,8 +66,12 @@ body {
      支付方式两个"⚙设置当前余额"类按钮）误用了 .btn-primary，退化成小号胶囊+旁边贴
      "取消"文字链接，不再是 Artifact 要求的整行按钮——这个 class 是补回来的那个缺口，
      不是新发明一套按钮规格。 */
+  /* fix(2026-09-18，第二十六轮全量复核)：Artifact `.big-cta{padding:var(--btn-pad)}`，
+     `--btn-pad:7px` 是四边统一的 7px（reference/artifact-v10-source.html 第29/340行），
+     线上实测水平方向是 px-[10px]，多了 3px，是这颗全站7屏共用主按钮从没被逐值核对过
+     的真实漂移。改成 p-[7px] 四边一致。 */
   .big-cta {
-    @apply block w-full rounded-full bg-accent-700 px-[10px] py-[7px] text-center text-[11px] font-medium text-white transition-colors hover:bg-accent-800 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply block w-full rounded-full bg-accent-700 p-[7px] text-center text-[11px] font-medium text-white transition-colors hover:bg-accent-800 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   /* 次要操作按钮：比价/平均分摊/移除这类不需要抢主按钮风头的动作，触控高度跟主 CTA/FAB 拉开一级。

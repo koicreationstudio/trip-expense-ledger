@@ -33,7 +33,9 @@ export default async function NewExpensePage({ params }: { params: { tripId: str
   return (
     // fix(2026-09-16 第十七轮)：标题字号跟 gap 同一批漂移，理由跟 invites/page.tsx 那条一样。
     <main className="flex flex-col gap-3.5">
-      <h1 className="text-[15px] font-semibold text-ink">记一笔消费</h1>
+      {/* fix(2026-09-18，第二十六轮全量复核)：同 settlement/page.tsx 那条注释，跨屏字重
+          不一致，改成 font-bold 对齐 Artifact `.title-block h3{font-weight:700}`。 */}
+      <h1 className="text-[15px] font-bold text-ink">记一笔消费</h1>
       <ExpenseForm
         tripId={trip.id}
         baseCurrency={trip.baseCurrency}

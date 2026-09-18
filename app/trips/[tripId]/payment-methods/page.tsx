@@ -16,7 +16,9 @@ export default async function PaymentMethodsPage({ params }: { params: { tripId:
             标题一致），这里之前是"支付方式设置"，文案跟 Artifact 对不上；15px 跟本站
             其它屏标题（我的行程/我的账号也是 text-[15px]）实际是同一档，这里之前用
             text-base（16px）看着比旁边字号大一截，改成 text-[15px] 对齐。 */}
-        <h1 className="text-[15px] font-semibold text-ink">支付方式</h1>
+        {/* fix(2026-09-18，第二十六轮全量复核)：同 settlement/page.tsx 那条注释，跨屏字重
+            不一致，改成 font-bold 对齐 Artifact `.title-block h3{font-weight:700}`。 */}
+        <h1 className="text-[15px] font-bold text-ink">支付方式</h1>
         {/* fix(2026-09-16 第十八轮，Remy 拍板"跟着方案为准"，逐字抄 Artifact V10
             "05 支付方式"屏原文，不再意译)：`<p style="font-size:10.5px;
             color:var(--gold-dk)">支付方式挂在你自己身上，跟着你走，不跟着行程走——

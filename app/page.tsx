@@ -83,7 +83,11 @@ export default async function HomePage({ searchParams }: { searchParams?: { iden
         </p>
       )}
       <div>
-        <h1 className="text-[15px] font-semibold text-ink">消费记录</h1>
+        {/* fix(2026-09-18，第二十六轮全量复核)：同 account/page.tsx 那条注释，跨屏字重
+            不一致，改成 font-bold 对齐 Artifact `.title-block h3{font-weight:700}`。上面
+            "我的行程"那个 h1 不动——DESIGN-BRIEF-homepage-redesign.md 第86行明确记录
+            "继续 text-base font-semibold"是刻意保留的决定，不是漏改，这条不受这次改动影响。 */}
+        <h1 className="text-[15px] font-bold text-ink">消费记录</h1>
         <p className="mt-2 text-[10px] text-muted">
           出差记账 + 同行人代垫结清 + 汇率比对，帮你算清这笔该用哪张卡最划算。数据只存在你自己部署的服务器上。
         </p>

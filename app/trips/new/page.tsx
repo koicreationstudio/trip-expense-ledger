@@ -25,7 +25,10 @@ export default async function NewTripPage() {
       <Link href="/" className="tap-link self-start text-[10px] text-muted hover:text-ink">
         ← 返回首页
       </Link>
-      <h1 className="text-[15px] font-semibold text-ink">创建新行程</h1>
+      {/* fix(2026-09-18，第二十六轮全量复核)：同 account/page.tsx 那条注释，跨屏字重
+          不一致（600 vs 行程内四屏的 700），改成 font-bold 对齐 Artifact `.title-block
+          h3{font-weight:700}`。 */}
+      <h1 className="text-[15px] font-bold text-ink">创建新行程</h1>
       <NewTripForm />
     </main>
   );

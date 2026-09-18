@@ -18,7 +18,9 @@ export default async function InvitesPage({ params }: { params: { tripId: string
     // gap-8(32px) 同理，标题到正文之间没必要空这么开，收到 gap-3.5(14px) 跟 Artifact
     // `.title-block` margin-bottom:14px 对齐，也跟其它屏这次一起收紧的间距同一个量级。
     <main className="flex flex-col gap-3.5">
-      <h1 className="text-[15px] font-semibold text-ink">邀请管理</h1>
+      {/* fix(2026-09-18，第二十六轮全量复核)：同 settlement/page.tsx 那条注释，跨屏字重
+          不一致，改成 font-bold 对齐 Artifact `.title-block h3{font-weight:700}`。 */}
+      <h1 className="text-[15px] font-bold text-ink">邀请管理</h1>
       <InvitesManager tripId={params.tripId} />
     </main>
   );

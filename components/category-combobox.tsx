@@ -203,7 +203,11 @@ export function CategoryCombobox({
                 selectOption(opt);
               }}
               onMouseEnter={() => setHighlightedIndex(idx)}
-              className={`cursor-pointer px-[9px] py-[5px] text-[12.5px] text-ink ${
+              // fix(2026-09-18，第二十六轮全量复核)：round26 用真实 Playwright 脚本实测
+              // 出这一项候选项 padding/字号从没被核对过——Artifact `.cat-opt{padding:5px
+              // 6px;font-size:10.5px}`（reference/artifact-v10-source.html 第307行），线上
+              // 实测是 px-[9px]/text-[12.5px]，比方案宽 3px、大 2px，改回字面一致。
+              className={`cursor-pointer px-[6px] py-[5px] text-[10.5px] text-ink ${
                 idx === highlightedIndex ? 'bg-[rgba(164,163,160,.14)]' : ''
               } ${idx > 0 ? 'border-t border-sand' : ''}`}
             >

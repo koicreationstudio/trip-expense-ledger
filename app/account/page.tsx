@@ -73,7 +73,10 @@ export default async function AccountPage({ searchParams }: { searchParams?: { f
       <Link href={backHref} className="tap-link self-start text-[10px] text-muted hover:text-ink">
         ← {backLabel}
       </Link>
-      <h1 className="text-[15px] font-semibold text-ink">我的账号</h1>
+      {/* fix(2026-09-18，第二十六轮全量复核)：Artifact `.title-block h3{font-weight:700}`
+          全站统一，行程内四屏（TripHeaderNav）早就是 font-bold(700)，这个独立页面漏在
+          font-semibold(600)，round26 实测才抓到这个跨屏字重不一致，改成 font-bold。 */}
+      <h1 className="text-[15px] font-bold text-ink">我的账号</h1>
       <AccountIdentityLink url={identityUrl} />
       <HardRefreshButton />
       <p className="text-[8.5px] text-muted">

@@ -56,7 +56,12 @@ export default async function SettlementPage({ params }: { params: { tripId: str
     <main className="flex flex-col gap-3.5">
       {/* fix(2026-09-15)：16px(text-base) 改成 15px，对齐"我的行程"/"我的账号"/
           "支付方式"三处已经统一的标题规格。 */}
-      <h1 className="text-[15px] font-semibold text-ink">结算</h1>
+      {/* fix(2026-09-18，第二十六轮全量复核)：Artifact `.title-block h3{font-weight:700}`
+          全站每屏统一（结算/支付方式/邀请管理/创建新行程/我的账号/新建钱包/记一笔消费/
+          行程内标题全部同一条规则），这个独立页面标题漏在 font-semibold(600)，改成
+          font-bold 对齐；"我的行程"是唯一有文档明确记录的例外（DESIGN-BRIEF-homepage-
+          redesign.md 第86行"继续 text-base font-semibold"），这个页面没有类似豁免记录。 */}
+      <h1 className="text-[15px] font-bold text-ink">结算</h1>
 
       {trip.status === 'settled' && (
         <div className="flex w-fit items-center gap-2">
