@@ -1,5 +1,27 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-18，安全事故复盘 + 已处理：verify 脚本带真实身份 token 误写进 calculator/ 目录，新 session 开工前必看】
+
+背景：2026-09-18 当天发生两次同一类事故——一份 trip-expense-ledger 相关的验证脚本（带硬编码的 Remy 真实账号凭证）被写进了 `~/Desktop/Claude/calculator/`（remy-calc 采购计算器，完全不相关的另一个项目）。第一次 00:40，第二次 12:51，Remy 反馈"同一枚 token 连续暴露两次"。人工已经把误写文件移出，但由 lifeos-pm 派工、trip-expense-ledger-pm 这轮做了完整复盘 + 处置，记录如下，供以后任何 session/子任务读到引以为戒。
+
+**根因（00:40 这次，证据确凿）**：那个时间点活跃的是本 session（debfcf6f）派出的一个异步子任务（`trip-expense-ledger-pm` 类型，任务描述"结算明细补商家名+查支付方式字号回归"，对应round23，活动窗口 2026-09-17 16:25–16:47 UTC = 本地 00:25–00:47）。它在验证"复制链接"/结算分摊明细这些功能时，图省事直接 `cd /Users/linotan/Desktop/Claude/calculator && cat > verify_settlement_merchant.mjs << 'EOF' ...`——**借用 calculator 项目已经装好的 `node_modules`（里面有 Playwright，省得自己重新装）**，顺手就在那个目录里写脚本、跑脚本、存截图，完全没意识到这是别的项目的地盘。脚本里硬编码了 `TOKEN = 'c4NvmB9uBhBxOP2M1a5mIsrCAAj0wEQa_m01d_9omjc'`。还用同样手法 `cp .../verify_payment_font.mjs /Users/linotan/Desktop/Claude/calculator/verify_payment_font_tel.mjs` 又写了一份。
+
+**12:51 这次没查到确凿根因**：翻遍了本 session 当时窗口前后的所有异步子任务日志（最近的两个分别在 12:22–12:32 结束，下一个 13:01 才开始，中间 29 分钟没有子任务活动记录），没找到直接证据是哪个子任务干的。不排除是本 session 直接在主线程做的、或者是某个没留下日志痕迹的操作，**如实说没查到，不编结论**。但从行为模式看，大概率是同一套"偷懒借用 calculator 的 node_modules"的习惯重演。
+
+**这份凭证具体是什么，比最初以为的更严重**：查证后确认，硬编码的不是 Cloudflare API token 或 D1 密钥（这类账号级凭证全程没在 trip-expense-ledger 仓库任何地方发现硬编码痕迹，`SESSION_SECRET` 也只活在 gitignore 的 `.env` 和 wrangler secret 里，没被写进任何脚本）。**暴露的是 Remy 真实账号的 `identity_token`**——`lib/auth/identity.ts` 里那个"身份直连链接"（`/id/<token>`）用的永久凭证，邮箱密码登录砍掉后**这是她重新进自己账号唯一的入口**。这个 token 明文存 D1（代码注释里说得很清楚："Remy 明确要求明文存储，这条 token 本身就是权限凭证"），**从开号那一刻生成之后，代码里没有任何地方会再重新生成它**——没有"重置身份链接"这个功能，之前也从没被当成需要轮换的东西对待过。
+
+**这轮做了什么处置**：
+1. 全仓库 + 全 git 历史搜索确认：这个 token 从没被 commit 过（`audit-diffs/` 整个目录从头到尾都是 untracked，`git log --all -p -S` 搜具体 token 字面值和硬编码 pattern 都是零命中），没有 GitHub 侧暴露风险。
+2. 查 D1 发现一个之前没人捅破的窟窿：`session`/`user_session` 两张表里，Remy 真实账号名下累计了 **39 条 `session` + 42 条 `user_session`** 现存活跃记录（横跨"🇭🇰2026香港"真实行程和"2026曼谷"行程），远超每轮文档里"测完精确删除、`SELECT count(*)`归零"应该留下的数量——说明这套自称"每轮清理"的验证 session 清理纪律，实际执行并不可靠，长期攒下了一批本该早就删掉的活跃登录令牌。这轮全部 `DELETE`，两张表都归零重建。
+3. **`identity_token` 直接在 D1 里手动轮换**（代码没有其它入口）：旧值 `c4NvmB9uBhBxOP2M1a5mIsrCAAj0wEQa_m01d_9omjc` 已作废（实测访问 `/id/<旧token>` 现在 307 跳转到 `/?identity_invalid=1`，确认死透），新值 `aNhfVNPU7ZGosHWFmdLfp5WtUxB_QGBqjNldoMGqaWA`。**Remy 的新身份直连链接是 `https://trip-expense-ledger.remybali.workers.dev/id/aNhfVNPU7ZGosHWFmdLfp5WtUxB_QGBqjNldoMGqaWA`，这是她现在唯一能重新登回自己真实账号的入口，需要她收到并收藏/加书签**——旧的书签/链接已经失效。
+4. "2026曼谷"行程绑的是另一个 Layer2 账号（`33db67e4-...`），没有证据显示它的 `identity_token` 被暴露过，这轮**没有**轮换它，只撤销了它的活跃 session（低成本、她重新点一下旧链接就能回来，不影响这条判断）。
+5. 人工此前移出 calculator/ 目录时，两个 `.mjs` 脚本文件（含硬编码 token 那两份）确认已经不在了，但**漏了 3 张真实数据截图**（`payment-methods-live.png`/`settlement-detail-live.png`/`settlement-detail-htoo-live.png`，内容是 Remy 和 htoo 的真实结算分摊/支付方式画面）一直留在 `calculator/` 目录里没清，这轮补删了（`rm`，macOS 转存到废纸篓，未进 git 从未被追踪）。
+
+**没有做、需要注意的事**：
+- `identity_token` 这个凭证类型本身没有代码层面的"重置"功能，这次是我直接改数据库补的洞，**不是常规操作路径**。如果以后 Remy 想要一个"账号设置页面自己点一下重置身份链接"的功能，这是一个需要新开工单的产品需求，这轮没有顺手加（超出这次安全事故处置的范围，如实标注，不是忘了）。
+- 以后任何验证脚本（Playwright 之类）需要用到 trip-expense-ledger 之外项目的工具/依赖时，**不要 `cd` 进别的项目目录借用它的 `node_modules` 图省事**——这正是这次事故的根因。缺什么依赖，在 `trip-expense-ledger` 自己仓库或者本 session 的 scratchpad 里装（`npm i -D playwright` 之类），脚本文件和截图也一律留在这两个地方，不要写进任何别的项目根目录。
+- 硬编码真实 `tel_session`/`tel_user_session`/`identity_token` 到验证脚本这件事本身，是这个项目一直以来的既有做法（很多轮记录里都在用），这轮没有推翻这个做法本身——问题出在"脚本写去了哪里"，不是"脚本里该不该出现真实 token"。
+
 ## 【2026-09-18，Remy 最终拍板：iOS防放大二选一，选方案 A（维持viewport方案，不回退16px）】
 
 Remy 已知情"添加到主屏幕"模式下 `maximum-scale=1` 会真的关掉整页双指缩放（不是"代价很小"那种），在这个前提下明确选了**方案 A**：维持现在这版（`app/layout.tsx` 的 `maximumScale:1` + 方案原本 10px 紧凑字号），不回退 round22 的 16px 方案。这条到此为止，不用再问她，除非她自己以后反悔说"想要双指缩放了"再改回16px方案。
