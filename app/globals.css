@@ -111,41 +111,16 @@ body {
     @apply rounded-lg border border-white/[.14] bg-white/[.08] px-[7px] py-[5px] text-[10px] text-white placeholder:text-white/40 focus:border-white/40 focus:outline-none disabled:opacity-40;
   }
 
-  /* fix(2026-09-17 第二十二轮，Remy 真实体验反馈"点击输入框手机会自动放大")：
-     iOS Safari 有个不能关掉的行为——原生表单控件聚焦时，如果它实际渲染字号
-     <16px，浏览器会强制放大整页方便看清输入内容。方案的 --ctrl-font(10px) 这套
-     紧凑字号本来是给静态展示稿用的，`.field-input`/`.field-input-dark` 直接把它
-     用到了真实 <input> 上，手机上一点就会被系统强制缩放，缩放完还得自己手动
-     缩回去，体验很差。
-     只覆盖会接收文字光标的原生控件（text/number/email/tel/search/url/password/
-     date + textarea + 没写 type 的默认文本框），不碰 checkbox/radio/file——这些
-     不会触发缩放，放大也没意义。用属性选择器而不是单纯 `input{...}`，是为了让
-     specificity 天然高过 `.field-input`(0,1,0) 这个 class 选择器本身，不用加
-     !important 也能稳定覆盖，且只动字号这一个属性，圆角/内边距/颜色这些视觉
-     紧凑度全部不动——不是把整体设计放大，只是把这一个会触发浏览器强制缩放的
-     技术底线补到 16px。
-     fix(同一轮，用真实 Playwright 脚本量出来的真 bug)：`textarea` 单独一个标签
-     选择器 specificity 只有 (0,0,1)，比 `.field-input` 的 (0,1,0) 还低，根本盖不
-     过去——"记一笔消费"的备注 `<textarea id="note" className="field-input">`
-     实测聚焦后 `getComputedStyle().fontSize` 量出来还是 10px，这条规则对它完全
-     没生效，是这轮最先写的版本里一个真实的specificity 计算错误，不是理论上有效
-     实际测出来才发现。补 `textarea.field-input`/`textarea.field-input-dark`
-     两条更具体的选择器专门压过这两个 chokepoint class，`textarea` 那条裸选择器
-     留着给以后万一有没走这两个 chokepoint 的新 textarea 兜底。 */
-  input[type='text'],
-  input[type='number'],
-  input[type='email'],
-  input[type='tel'],
-  input[type='search'],
-  input[type='url'],
-  input[type='password'],
-  input[type='date'],
-  input:not([type]),
-  textarea,
-  textarea.field-input,
-  textarea.field-input-dark {
-    font-size: 16px;
-  }
+  /* fix(2026-09-18，第二十五轮，Remy 要求"两个都要"——方案紧凑字号 + 不要 iOS 自动放大)：
+     round22 曾经在这里加过一条规则，把真实 <input>/<textarea> 的字号强制覆盖到 16px，
+     用来解除 iOS Safari"聚焦时字号<16px 就强制放大整页"这条限制，代价是牺牲了 `.field-input`/
+     `.field-input-dark` 本来该有的 10px 紧凑视觉（方案要的是紧凑，不是 16px 这么大）。
+     这轮换成 `app/layout.tsx` 的 `viewport.maximumScale: 1` 来解这个问题（声明页面最大
+     缩放倍数=1，iOS 没有更大倍数可放，聚焦缩放这个动作本身就没有意义了），不用再牺牲字号，
+     所以这条 16px 覆盖规则整段删掉，`.field-input`/`.field-input-dark` 恢复方案原本的 10px。
+     如果之后实测/Remy 真机上发现某些 iOS 版本 viewport 方案不生效、还是会跳，需要把这段
+     规则原样加回来（两套方案二选一，不能同时要"紧凑字号"又要"16px 防放大"，见 layout.tsx
+     viewport 声明旁边的详细说明）。 */
 
   /* 标准卡片容器：钱包卡/交易行/汇率卡通用同一档圆角+sand边，
      层级靠内容（icon/颜色/字号反差）不靠盒子形状——remy-thailand 证明容器统一没问题。

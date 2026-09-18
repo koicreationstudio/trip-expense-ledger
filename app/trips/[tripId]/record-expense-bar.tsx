@@ -62,8 +62,20 @@ export function RecordExpenseBar({ tripId }: { tripId: string }) {
         {/* 2026-09-13：Remy 反馈按钮在满宽操作条里看着像"浮起来的胶囊"，圆角从全
             pill 收成 rounded-xl + 加阴影，让它读起来像嵌在操作条里的实心按钮，
             不是贴在空白处的气泡。只覆盖这一个位置（!important 局部覆盖），
-            不动 .btn-primary 这个全站共用 chokepoint，其它按钮维持原样。 */}
-        <Link href={`/trips/${tripId}/expenses/new`} className="btn-primary gap-2 !rounded-xl shadow-card">
+            不动 .btn-primary 这个全站共用 chokepoint，其它按钮维持原样。
+            这条圆角决定是 Remy 明确反馈过的，这轮没有动。
+            fix(2026-09-18，第二十五轮，逐 token 核对 Artifact `.actionbar button`)：
+            读了 Artifact V10 源码第286行确认字面规格是
+            `padding:9px 14px; font-size:12px; gap:6px`——`.btn-primary` 这个全站
+            chokepoint 因为"第四轮全局紧凑化"已经收到 11px/10px 全站统一值（给"添加
+            支付方式"这类旁白按钮用没问题），但这颗全站最高频的主 CTA 沿用同一个值
+            是没人专门核对过的漂移，不是这轮才发现"要故意缩得比方案还小"。这里跟
+            圆角一样局部覆盖三个值到字面一致，触控高度 min-h-[44px]（Apple HIG
+            最小热区）继续保留不收——热区是安全底线，不跟着视觉密度一起收。 */}
+        <Link
+          href={`/trips/${tripId}/expenses/new`}
+          className="btn-primary gap-[6px] !rounded-xl !px-[14px] !py-[9px] !text-[12px] shadow-card"
+        >
           <Plus className="h-4 w-4" aria-hidden="true" />
           记一笔消费
         </Link>

@@ -1,0 +1,1432 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>记账本改版提案</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  color-scheme: light;
+  --ink:#373736; --paper:#F7F7F6; --sand:#DBDAD6;
+  --gold:#A4A3A0; --gold-lt:#EDECE9; --gold-dk:#6E6E6C;
+  --accent:#373736; --accent-hover:#242423;
+  --coral:#991B14; --positive:#3D6141; --negative:#A63926;
+  --positive-dk:#B7D1A8; --negative-dk:#E6B1A8;
+  --ok:#4C7A50; --ok-bg:#E3ECE0;
+  --live:#3E7787; --live-bg:#DFEAEC;
+  --cream:#F3E9D2;
+  --hero-label: color-mix(in srgb, var(--sand) 70%, white);
+  --shadow-card: 0 1px 2px rgba(55,55,54,.06), 0 1px 1px rgba(55,55,54,.04);
+  --shadow-hero: 0 10px 24px -6px rgba(55,55,54,.35), 0 4px 10px rgba(55,55,54,.18);
+  --font-sans: 'Inter', -apple-system, 'PingFang SC', sans-serif;
+  --font-serif: 'IBM Plex Serif', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* ---- 紧凑化共享 token（第四轮反馈第二批：归并后统一下调一档，覆盖全篇，不是逐屏手改） ---- */
+  --card-pad: 9px;      /* 原 11px，Hero/我的钱包/快速记账这类顶层卡片 */
+  --card-pad-sm: 8px;   /* 原 10px，行程卡/加钱包表单/生成邀请等次级卡片 */
+  --list-pad: 4px 6px;  /* 原 5px 8px，参与者/支付方式/邀请管理这类 list 容器 */
+  --row-pad: 4px 0;     /* 原 5px 0，list 里每一行 */
+  --ctrl-pad: 5px 7px;  /* 第四轮反馈第三批：input/下拉(dd-fake)/segmented按钮(seg3、split-panel按钮)/chip选择器(fchip、wallet-select-btn) 这四类控件本来各写各的规格(6px7px~11px、5px9-10px~10px不等)，这次全部归并成一套，不再分屏幕各写各的 */
+  --ctrl-font: 10px;    /* 同上，四类控件字号统一到 10px */
+  --btn-pad: 7px;       /* 原 9px，big-cta 主按钮 */
+  --btn-font: 11px;     /* 原 12px */
+  --label-font: 9px;    /* 原 9.5px，field label */
+  --hint-font: 8.5px;   /* 原 9px，field hint */
+  --meta-font: 9px;     /* 原 9.5px，tag-note / 次级说明文字 */
+  --row-name-font: 11.5px; /* 原 12.5px，.p-row .nm 主名字 */
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--font-sans); font-size:13px; line-height:1.5;
+  padding-block:20px;
+}
+.wrap{max-width:1280px; margin:0 auto; padding-inline:20px; display:flex; flex-direction:column; gap:18px;}
+
+/* ---------- 顶部说明条 ---------- */
+.brief{
+  background:#fff; border:1px solid var(--sand); border-radius:14px; padding:16px 18px;
+  box-shadow:var(--shadow-card);
+}
+.brief h1{margin:0 0 4px; font-size:19px; font-weight:700; text-wrap:balance;}
+.brief p{margin:0; color:var(--gold-dk); font-size:12.5px;}
+.brief .rule{
+  margin-top:10px; padding:9px 12px; background:var(--ok-bg); color:var(--ok);
+  border-radius:10px; font-size:12px; font-weight:500;
+}
+.brief .rule.warn{
+  margin-top:8px; background:var(--negative-dk); color:var(--negative);
+  line-height:1.7;
+}
+
+/* ---------- 主布局：左侧屏幕清单 + 右侧画布 ---------- */
+.layout{display:flex; gap:18px; align-items:flex-start;}
+.nav{
+  flex:0 0 190px; position:sticky; top:20px; display:flex; flex-direction:column; gap:3px;
+  background:#fff; border:1px solid var(--sand); border-radius:14px; padding:8px; box-shadow:var(--shadow-card);
+}
+.nav button{
+  all:unset; cursor:pointer; padding:8px 10px; border-radius:9px; font-size:12.5px; font-weight:500;
+  color:var(--gold-dk); display:flex; align-items:center; gap:7px;
+}
+.nav button .n{
+  font-family:var(--font-mono); font-size:9.5px; color:var(--gold); width:16px;
+}
+.nav button:hover{background:var(--gold-lt);}
+.nav button.active{background:var(--ink); color:#fff;}
+.nav button.active .n{color:var(--hero-label);}
+
+.stage{flex:1; min-width:0; display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;}
+.phone-col{flex:0 0 auto;}
+.notes-col{flex:1; min-width:260px;}
+
+.phone{
+  width:390px; max-width:100%; background:var(--paper); border:10px solid #1c1c1c; border-radius:38px;
+  box-shadow:0 20px 40px -12px rgba(0,0,0,.35); overflow:hidden; position:relative;
+}
+.phone::before{
+  content:''; position:absolute; top:0; left:50%; transform:translateX(-50%); width:120px; height:22px;
+  background:#1c1c1c; border-radius:0 0 14px 14px; z-index:5;
+}
+.screen{padding:34px 14px 18px; min-height:640px;}
+.screen[hidden]{display:none;}
+
+/* ---------- 改动说明面板 ---------- */
+.notes{
+  background:#fff; border:1px solid var(--sand); border-radius:14px; padding:16px 18px; box-shadow:var(--shadow-card);
+}
+.notes h2{margin:0 0 10px; font-size:14px; font-weight:600;}
+.notes ul{margin:0; padding-left:18px; display:flex; flex-direction:column; gap:7px;}
+.notes li{font-size:12px; color:var(--ink);}
+.notes li b{font-weight:600;}
+.notes .before{color:var(--coral); text-decoration:line-through; font-size:11px;}
+.notes .after{color:var(--ok); font-weight:600; font-size:11px;}
+.notes .unsure{color:var(--negative); font-size:11px; font-weight:600;}
+.legend{margin-top:14px; padding-top:12px; border-top:1px dashed var(--sand);}
+.legend p{margin:0 0 6px; font-size:11px; color:var(--gold-dk); font-weight:600;}
+.legend .row{display:flex; align-items:center; gap:6px; font-size:11px; margin-bottom:4px;}
+.dot{width:10px; height:10px; border-radius:50%; flex-shrink:0;}
+
+/* =========================================================
+   下面是 app 内组件样式（照 tailwind.config.ts / globals.css 的真实 token 还原）
+   ========================================================= */
+.topbar-row{display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px;}
+.title-block h3{margin:0; font-size:15px; font-weight:700; text-wrap:balance;}
+.title-block p{margin:2px 0 0; font-size:10.5px; color:var(--gold-dk);}
+.trip-pill{
+  display:inline-flex; align-items:center; gap:4px; background:var(--ink); color:#fff;
+  border-radius:999px; padding:4px 9px; font-size:11px; font-weight:500; cursor:pointer; border:none;
+  box-shadow:var(--shadow-card);
+}
+.topbar-actions{display:flex; flex-direction:column; align-items:flex-end; gap:6px;}
+.account-links{display:flex; gap:10px; font-size:10.5px; color:var(--gold-dk);}
+.account-links a{color:var(--gold-dk); text-decoration:underline; text-underline-offset:2px;}
+
+.navtabs{display:flex; gap:4px; background:var(--gold-lt); border-radius:999px; padding:3px; margin-bottom:14px; width:fit-content;}
+.navtabs button{all:unset; cursor:pointer; padding:6px 12px; border-radius:999px; font-size:11px; font-weight:500; color:var(--gold-dk);}
+.navtabs button.on{background:var(--ink); color:#fff;}
+
+/* ---- 切换行程下拉：浅灰克制风格（第四轮反馈第三批：这轮先用 Playwright 把 HTML 存本地实际截图看过，
+   照参考图逐项核对再改的，不是只调 CSS 数值——历史上这里已经被打回两次了） ---- */
+.subhead{font-size:10px; letter-spacing:.08em; color:var(--gold-dk); font-weight:500;}
+.dropdown-panel{
+  background:#F7F7F6; border:1px solid var(--sand); border-radius:14px; box-shadow:var(--shadow-card);
+  padding:4px; margin-bottom:12px;
+}
+.dropdown-panel .dd-head{display:flex; justify-content:space-between; align-items:center; padding:2px 6px 3px;}
+.dropdown-panel .cap{font-size:9.5px; letter-spacing:.02em; color:var(--gold); font-weight:400;}
+.dd-new-corner{font-size:9.5px; color:var(--gold-dk); text-decoration:underline; text-underline-offset:2px; cursor:pointer;}
+.dd-row{display:flex; align-items:center; gap:6px; padding:4px 6px; background:transparent; border-top:1px solid rgba(55,55,54,.07);}
+.dd-row:first-of-type{border-top:none;}
+.dd-dot{width:9px; flex-shrink:0; font-size:7px; line-height:1; color:var(--ink); text-align:center;}
+.dd-row:not(.sel) .dd-dot{color:#B5B4B1;}
+.dd-row .name{flex:1; font-size:11px; font-weight:400; color:var(--ink);}
+.dd-row.sel{background:#EBEAE8; border-radius:8px; border-top-color:transparent;}
+.dd-row.sel .name{font-weight:700;}
+.dd-row .check{color:var(--ink); font-size:10px; flex-shrink:0;}
+
+.hero{
+  background:radial-gradient(130px 100px at 90% 6%, rgba(219,218,214,.30), transparent 70%),
+             linear-gradient(165deg, #6E6E6C 0%, #2c2c2b 30%, #2c2c2b 100%);
+  border-radius:14px; padding:var(--card-pad); color:#fff; box-shadow:var(--shadow-hero); margin-bottom:10px;
+}
+.hero-top-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;}
+.hero .lbl{font-size:10.5px; color:var(--hero-label);}
+.hero .net{font-family:var(--font-serif); font-size:26px; font-weight:600; margin:2px 0 3px; font-variant-numeric:tabular-nums;}
+.hero .net.neg{color:var(--negative-dk);} .hero .net.pos{color:var(--positive-dk);}
+.hero .sub{font-size:10.5px; color:var(--hero-label);}
+.link-btn{display:inline-block; background:rgba(255,255,255,.16); color:#fff; font-size:10px; font-weight:500; padding:4px 9px; border-radius:999px; text-decoration:none; white-space:nowrap; flex-shrink:0;}
+.hero hr{border:none; border-top:1px solid rgba(255,255,255,.12); margin:12px 0;}
+
+/* 我承担 · 合并块 */
+.mine-block .net-mine{font-family:var(--font-serif); font-size:22px; font-weight:600; color:#fff; margin:3px 0 3px; font-variant-numeric:tabular-nums;}
+.cat-table{display:flex; flex-direction:column; margin-top:9px;}
+.cat-row{display:flex; justify-content:space-between; gap:8px; font-size:10px; color:rgba(255,255,255,.7); padding:5px 0; border-top:1px solid rgba(255,255,255,.1);}
+.cat-row span:last-child{color:#fff; font-family:var(--font-mono); font-size:9.5px; white-space:nowrap;}
+
+/* 我的钱包：独立卡片（第四轮反馈第三批：纯黑 #000 改浅成深灰，带 3 档色阶可以直接点着看） */
+.wallet-block{background:#242422; border-radius:14px; padding:var(--card-pad); margin-bottom:10px; box-shadow:var(--shadow-card);}
+.wallet-block .wtitle{display:flex; justify-content:space-between; align-items:center; font-size:10.5px; color:var(--hero-label); margin-bottom:8px;}
+.wallet-shade-picker{display:flex; gap:5px;}
+.shade-dot{width:13px; height:13px; border-radius:50%; border:1.5px solid rgba(255,255,255,.35); cursor:pointer; padding:0; box-sizing:border-box;}
+.shade-dot.on{border-color:#fff;}
+.wallets{display:flex; gap:8px; margin-bottom:10px;}
+.wallet-chip{
+  background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.16); border-radius:11px;
+  padding:6px 9px; flex:1; min-width:0;
+}
+.wallet-chip .e{font-size:9.5px; color:rgba(255,255,255,.78);} .wallet-chip .amt{font-family:var(--font-serif); font-size:12.5px; font-variant-numeric:tabular-nums; color:#fff; font-weight:600;}
+.wallet-add{
+  width:34px; height:34px; border-radius:11px; background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.16);
+  color:#fff; font-size:14px; display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.exchange-link{font-size:10px; color:#fff; text-decoration:underline; text-underline-offset:2px; display:inline-block;}
+
+/* 快速记账：独立卡片 */
+.quickadd{background:var(--ink); border-radius:14px; padding:var(--card-pad); margin-bottom:10px; box-shadow:var(--shadow-card);}
+.quickadd .cap{font-size:10px; color:var(--hero-label); margin-bottom:5px; display:flex; align-items:center; gap:5px;}
+.qa-row{display:flex; gap:5px; margin-bottom:6px;}
+.qa-input{
+  flex:1; min-width:0; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); border-radius:9px;
+  padding:5px 7px; color:#fff; font-size:11px;
+}
+.qa-input::placeholder{color:rgba(255,255,255,.4);}
+.qa-cur{width:52px;}
+.qa-go{width:24px; height:24px; border-radius:50%; background:#fff; color:var(--ink); font-size:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-weight:600;}
+/* 快速记账"分类/币种"改下拉（保持 .qa-input 原本紧凑规格，只加 flex 布局摆下箭头，不改尺寸/字号/内边距） */
+.qa-dd-trigger{display:flex; align-items:center; justify-content:space-between; gap:4px; cursor:pointer; font-family:inherit; text-align:left; appearance:none; -webkit-appearance:none;}
+.qa-dd-trigger .chev{font-size:8px; color:rgba(255,255,255,.5); flex-shrink:0;}
+
+/* 米黄+深黑三档/两组分摊配色（全站统一） */
+.seg3-wrap{display:flex; align-items:center; gap:8px;}
+.seg3-wrap>.lbl{font-size:9.5px; color:var(--hero-label); flex-shrink:0;}
+.seg3{display:flex; gap:4px; background:var(--cream); border-radius:999px; padding:3px; flex:1;}
+.seg3 button{all:unset; cursor:pointer; flex:1; text-align:center; padding:var(--ctrl-pad); border-radius:999px; font-size:var(--ctrl-font); font-weight:500; color:var(--ink);}
+.seg3 button.on{background:var(--ink); color:#fff;}
+.custom-split{margin-top:6px; display:flex; flex-direction:column; gap:5px; background:rgba(255,255,255,.06); border-radius:10px; padding:7px;}
+.custom-split-row{display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:10px; color:#fff;}
+.custom-split-row input{width:58px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18); border-radius:8px; padding:var(--ctrl-pad); color:#fff; font-size:var(--ctrl-font); text-align:right;}
+/* 米黄底 split-panel 里用的浅色版自定义分摊（记一笔消费） */
+.custom-split-light{margin-top:2px; display:flex; flex-direction:column; gap:5px; background:rgba(55,55,54,.06); border-radius:10px; padding:7px;}
+.custom-split-light .custom-split-row{color:var(--ink);}
+.custom-split-light .custom-split-row input{background:#fff; border:1px solid var(--sand); color:var(--ink);}
+
+/* 汇率比价（完整重做） */
+.fx-section{margin-bottom:14px;}
+.fx-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+.fx-refresh{all:unset; cursor:pointer; font-size:10px; color:var(--gold-dk); background:var(--gold-lt); padding:4px 9px; border-radius:999px;}
+.fx-base-row{display:flex; gap:6px; margin-bottom:8px;}
+.fx-base-card{flex:1; background:#fff; border:1px solid var(--sand); border-radius:14px; padding:7px 8px; text-align:center; box-shadow:var(--shadow-card);}
+.fbc-lbl{font-size:9px; color:var(--gold-dk);}
+.fbc-val{font-family:var(--font-serif); font-size:12.5px; font-weight:600; margin-top:1px;}
+.fx-channels{display:flex; flex-direction:column; gap:7px; margin-top:10px;}
+.fx-row{border:1px solid var(--sand); border-radius:14px; padding:8px 10px; font-size:11px; background:#fff;}
+.fx-row.ref{opacity:.8; border-style:dashed; background:transparent;}
+.fx-row-top{display:flex; justify-content:space-between; align-items:center; font-weight:600; gap:6px;}
+.fx-row-amt{font-family:var(--font-serif); font-variant-numeric:tabular-nums;}
+.fx-row-note{color:var(--gold-dk); font-size:9.5px; margin-top:3px;}
+.fx-src{font-size:9px; color:var(--gold-dk); margin-top:8px; text-align:center;}
+.fx-badge-best{background:var(--ok); color:#fff; font-size:9px; font-weight:700; padding:2px 7px; border-radius:999px; margin-left:6px; display:inline-flex; align-items:center; white-space:nowrap;}
+
+section.blk{margin-bottom:10px;}
+section.blk h4{margin:0 0 6px; font-size:10px; font-weight:500; color:var(--gold-dk); letter-spacing:.08em;}
+.list{background:rgba(164,163,160,.14); border:1px solid var(--sand); border-radius:14px; padding:var(--list-pad); box-shadow:var(--shadow-card); display:flex; flex-direction:column; gap:2px;}
+.p-row{display:flex; align-items:center; gap:7px; padding:var(--row-pad);}
+.avatar{width:22px; height:22px; border-radius:50%; background:var(--sand); color:var(--gold-dk); font-size:10.5px; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.p-row .nm{font-size:var(--row-name-font); font-weight:500;}
+.p-row .tag{display:inline-block; margin-left:6px; font-size:9px; color:var(--gold-dk);}
+.p-row .badge{display:inline-flex; margin-top:2px; padding:2px 7px; border-radius:999px; font-size:8.5px; font-weight:500;}
+.p-row .badge.ok{background:var(--ok-bg); color:var(--ok);}
+.p-row .badge.wait{background:var(--gold-lt); color:var(--gold-dk);}
+.p-row .badge.lg{font-size:11px; padding:3px 10px; font-weight:600;}
+.p-row .amt{margin-left:auto; font-size:11px; font-weight:500;}
+.p-row .amt .n{font-family:var(--font-serif); font-variant-numeric:tabular-nums;}
+.p-row .me{margin-left:auto; font-size:11px; color:var(--gold-dk);}
+.detail-toggle{all:unset; cursor:pointer; font-size:9px; color:var(--gold-dk); text-decoration:underline; text-underline-offset:2px; margin:0 0 5px 30px; display:inline-block;}
+.settle-detail{background:rgba(164,163,160,.14); border:1px solid var(--sand); border-radius:14px; padding:2px 7px; margin:0 0 7px; display:flex; flex-direction:column;}
+.settle-detail .a-row{display:flex; align-items:center; gap:7px; padding:4px 0; font-size:10px;}
+.settle-detail .a-row+.a-row{border-top:1px solid var(--sand);}
+.settle-detail .a-row .cat{flex:1; min-width:0; font-weight:500;}
+.settle-detail .a-row .meta{color:var(--gold-dk); font-size:9px; flex-shrink:0;}
+.settle-detail .a-row .amt{font-family:var(--font-serif); font-size:10px; font-weight:600; flex-shrink:0; margin-left:auto;}
+
+/* 活动流 / 记录·HISTORY —— 整块包成跟参与者/结算/支付方式一致的卡片规格 */
+.hist-card{background:rgba(164,163,160,.14); border:1px solid var(--sand); border-radius:14px; padding:8px 7px; box-shadow:var(--shadow-card);}
+.hist-static-note{font-size:9.5px; color:var(--gold-dk); margin:-2px 0 8px; line-height:1.5;}
+.hist-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+.hist-sort{position:relative;}
+.hist-sort-btn{all:unset; cursor:pointer; font-size:9.5px; color:var(--gold-dk); background:var(--gold-lt); padding:5px 9px; border-radius:999px;}
+.hist-sort-menu{position:absolute; top:110%; right:0; z-index:10; background:#fff; border:1px solid var(--sand); border-radius:10px; padding:4px; box-shadow:var(--shadow-card); min-width:160px;}
+.hist-sort-opt{padding:6px 8px; border-radius:7px; font-size:10.5px; cursor:pointer;}
+.hist-sort-opt.on{background:var(--gold-lt); font-weight:600;}
+.hist-filters{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;}
+.fchip{all:unset; cursor:pointer; padding:var(--ctrl-pad); border-radius:999px; font-size:var(--ctrl-font); font-weight:500; color:var(--gold-dk); background:var(--gold-lt);}
+.fchip.on{background:var(--ink); color:#fff;}
+.fdrop{position:relative;}
+.fdrop-menu{position:absolute; top:110%; left:0; z-index:10; background:#fff; border:1px solid var(--sand); border-radius:10px; padding:4px; box-shadow:var(--shadow-card); min-width:110px;}
+.fdrop-opt{padding:6px 8px; border-radius:7px; font-size:10.5px; color:var(--ink); cursor:pointer; white-space:nowrap;}
+.fdrop-opt:hover{background:var(--gold-lt);}
+.hist-list{display:flex; flex-direction:column;}
+.hist-row{position:relative; display:flex; align-items:center; gap:8px; padding:7px 4px; cursor:pointer; overflow:hidden;}
+.hist-row+.hist-row{border-top:1px solid var(--sand);}
+.hist-row[hidden]{display:none;}
+.hist-icon{font-size:15px; width:24px; text-align:center; flex-shrink:0;}
+.hist-mid{flex:1; min-width:0;}
+.hist-name{font-size:12px; font-weight:500;}
+.hist-meta{font-size:9.5px; color:var(--gold-dk); margin-top:1px;}
+.hist-approx{font-size:9.5px; color:var(--gold-dk); margin-top:1px;}
+.hist-amt{font-family:var(--font-serif); font-size:12.5px; font-weight:600; flex-shrink:0; transition:transform .18s ease;}
+.hist-actions{position:absolute; right:4px; top:0; bottom:0; display:flex; align-items:center; gap:5px; transform:translateX(120%); transition:transform .18s ease; background:linear-gradient(to left, var(--paper) 65%, transparent); padding-left:22px;}
+.hist-row.show-actions .hist-actions{transform:translateX(0);}
+.hist-row.show-actions .hist-amt{transform:translateX(-58px);}
+.hist-actions button{all:unset; cursor:pointer; width:23px; height:23px; border-radius:50%; background:#fff; border:1px solid var(--sand); display:flex; align-items:center; justify-content:center; font-size:10.5px; color:var(--gold-dk);}
+.hist-actions button.del{color:var(--coral); border-color:var(--negative-dk);}
+
+.empty{font-size:11.5px; color:var(--gold-dk); padding:6px 2px;}
+
+.actionbar{position:sticky; bottom:-18px; margin:16px -14px -18px; background:var(--paper); border-top:1px solid var(--sand); padding:10px 14px; display:flex; justify-content:flex-end;}
+.actionbar button{all:unset; cursor:pointer; display:flex; align-items:center; gap:6px; background:var(--ink); color:#fff; padding:9px 14px; border-radius:999px; font-size:12px; font-weight:500; box-shadow:var(--shadow-card);}
+
+/* 表单通用（第四轮反馈第二批：紧凑 token 统一收紧一档） */
+.field{display:flex; flex-direction:column; gap:2px; margin-bottom:6px;}
+.field label{font-size:var(--label-font); font-weight:500; color:var(--ink);}
+.field label.sub{color:var(--gold-dk); font-weight:400;}
+.field .hint{font-size:var(--hint-font); color:var(--gold-dk); font-weight:400;}
+.field input, .field textarea{
+  border:1px solid var(--sand); border-radius:10px; padding:var(--ctrl-pad); font-size:var(--ctrl-font); font-family:var(--font-sans);
+  color:var(--ink); background:#fff; width:100%;
+}
+.field input::placeholder{color:var(--gold);}
+.row2{display:flex; gap:7px;}
+.row2 .field{flex:1;}
+.dd-fake{border:1px solid var(--sand); border-radius:10px; padding:var(--ctrl-pad); font-size:var(--ctrl-font); display:flex; justify-content:space-between; align-items:center; background:#fff; cursor:pointer;}
+.dd-fake .chev{color:var(--gold-dk); font-size:9.5px;}
+.amt-input-row{display:flex; align-items:center; gap:5px;}
+.amt-input-row input{flex:1;}
+.cur-badge{font-size:9px; font-weight:600; color:var(--gold-dk); background:var(--gold-lt); padding:5px 7px; border-radius:8px; flex-shrink:0;}
+
+.cat-dropdown-list{border:1px solid var(--sand); border-radius:10px; padding:4px; margin-top:2px; background:#fff; display:flex; flex-direction:column; max-height:170px; overflow-y:auto;}
+.cat-opt{padding:5px 6px; border-radius:7px; font-size:10.5px; cursor:pointer;}
+.cat-opt:hover{background:var(--gold-lt);}
+
+/* 米黄开关式分摊（记一笔消费，图8：跟其他人split这笔展开卡片，第四轮反馈第二批再收紧） */
+.split-toggle-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:11px;}
+.switch{all:unset; cursor:pointer; width:32px; height:18px; border-radius:999px; background:var(--sand); position:relative; display:inline-block; transition:background .15s; flex-shrink:0;}
+.switch .knob{position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#fff; transition:left .15s; box-shadow:0 1px 2px rgba(0,0,0,.25);}
+.switch.on{background:var(--ink);}
+.switch.on .knob{left:16px;}
+.split-panel{background:var(--cream); border-radius:12px; padding:8px; display:flex; flex-direction:column; gap:7px;}
+.split-panel .grp{display:flex; flex-direction:column; gap:4px;}
+.split-panel .glabel{font-size:9px; color:var(--gold-dk); font-weight:600;}
+.split-panel .btns{display:flex; gap:5px;}
+.split-panel .btns button{all:unset; cursor:pointer; flex:1; text-align:center; padding:var(--ctrl-pad); border-radius:999px; font-size:var(--ctrl-font); font-weight:500; background:#fff; color:var(--ink);}
+.split-panel .btns button.on{background:var(--ink); color:#fff;}
+
+.acct-types{display:flex; gap:5px; flex-wrap:wrap;}
+.acct-type{width:31px; height:31px; border-radius:50%; border:1.5px solid var(--sand); background:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer;}
+.acct-type.on{border-color:var(--ok); background:var(--ok-bg); box-shadow:0 0 0 2px var(--ok-bg);}
+
+.trip-card{border:1px solid var(--sand); border-radius:14px; padding:var(--card-pad-sm); margin-bottom:6px; box-shadow:var(--shadow-card); background:var(--gold-lt);}
+.trip-card .top{display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; gap:6px;}
+.trip-card .name{font-size:13px; font-weight:700;}
+.icon-btn{all:unset; cursor:pointer; font-size:10.5px; color:var(--gold-dk); padding:2px 5px;}
+.trip-card .chips{display:flex; gap:5px; margin-bottom:4px;}
+.chip{font-size:8.5px; padding:2px 7px; border-radius:999px; background:#fff; color:var(--gold-dk); font-weight:500;}
+.trip-card .amt{font-family:var(--font-serif); font-size:13px; font-weight:700; font-variant-numeric:tabular-nums;}
+.trip-card .meta{font-size:9.5px; color:var(--gold-dk); margin-top:2px;}
+.trip-card .date-range{font-size:9px; color:var(--gold-dk); margin:0 0 3px;}
+.rename-pop{display:flex; gap:5px; margin:5px 0; align-items:center;}
+.rename-pop input{flex:1; border:1px solid var(--sand); border-radius:8px; padding:4px 6px; font-size:10.5px;}
+.mini-btn{all:unset; cursor:pointer; background:var(--ink); color:#fff; font-size:9.5px; padding:4px 9px; border-radius:999px; white-space:nowrap;}
+
+.big-cta{all:unset; cursor:pointer; display:block; text-align:center; background:var(--ink); color:#fff; padding:var(--btn-pad); border-radius:999px; font-size:var(--btn-font); font-weight:500; box-shadow:var(--shadow-card); width:100%; box-sizing:border-box;}
+.big-cta[disabled]{opacity:.5; cursor:not-allowed;}
+
+.acct-link{display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--sand); font-size:11.5px;}
+.acct-link:last-child{border-bottom:none;}
+
+.linkbox{background:var(--gold-lt); border-radius:11px; padding:8px 9px; font-family:var(--font-mono); font-size:9.5px; word-break:break-all; color:var(--gold-dk); margin-top:6px;}
+
+.tag-note{font-size:var(--meta-font); color:var(--gold-dk); margin-top:2px;}
+
+.wallet-select-row{display:flex; gap:5px; flex-wrap:wrap;}
+.wallet-select-btn{all:unset; cursor:pointer; padding:var(--ctrl-pad); border-radius:999px; font-size:var(--ctrl-font); font-weight:500; border:1px solid var(--sand); color:var(--gold-dk); background:#fff;}
+.wallet-select-btn.on{background:var(--ink); color:#fff; border-color:var(--ink);}
+
+.info-banner{background:var(--gold-lt); color:var(--gold-dk); font-size:9.5px; padding:7px 9px; border-radius:10px; margin-bottom:7px; line-height:1.5;}
+
+/* 支付方式屏新增块 */
+.del-icon{all:unset; cursor:pointer; color:var(--coral); font-size:11px; padding:3px; flex-shrink:0;}
+.addpay-form, .balance-panel, .gen-invite-pop, .add-source-pop{border:1px solid var(--sand); border-radius:14px; padding:var(--card-pad-sm); margin-top:6px;}
+.balance-row{display:flex; justify-content:space-between; align-items:center; gap:7px; padding:4px 0; font-size:10.5px; border-bottom:1px solid var(--sand);}
+.balance-row:last-of-type{border-bottom:none;}
+.balance-row input{width:58px; border:1px solid var(--sand); border-radius:8px; padding:var(--ctrl-pad); font-size:var(--ctrl-font); text-align:right;}
+.check-row{display:flex; align-items:center; gap:7px; padding:4px 0; font-size:11px;}
+.check-row input{flex-shrink:0;}
+
+/* 我的钱包内嵌"取款/换汇"白色小面板（第四轮：跟取款/换汇整页合并） */
+.exchange-inline-panel{background:#fff; border-radius:12px; padding:8px; margin-top:6px;}
+
+/* ---- 支付方式屏整页再收紧一档（scoped，不影响其它屏）—— 第四轮反馈第二批：在共享 token 已下调的基础上，
+   这一屏是被点名两次的重灾区，再叠加一层专属收紧；同时把"已添加"列表 HSBC/支付宝那两行的名字字号
+   从上一轮的 11.5px 再降到 10px，跟同页面其它文字（8.5-9.5px 区间）对齐，不再单独冒出一个大字号 ---- */
+#scr-payment .nm{font-size:10px;}
+#scr-payment .tag-note{font-size:8.5px;}
+#scr-payment .p-row{padding:3px 0; gap:5px;}
+#scr-payment .big-cta{padding:6px; font-size:10.5px;}
+#scr-payment .addpay-form, #scr-payment .balance-panel{padding:7px; margin-top:5px;}
+#scr-payment .balance-row{padding:2px 0; font-size:9.5px;}
+/* 第四轮反馈第三批：balance-row input 的 width/font-size scoped override 删掉了，基础规则已经改成 width:58px + 统一 token */
+#scr-payment section.blk h4{font-size:9px;}
+#scr-payment .field label{font-size:8.5px;}
+/* 第四轮反馈第三批：field input 的 padding/font-size scoped override 删掉了，现在全篇 input 统一走 --ctrl-pad/--ctrl-font，不用再单独写一份 */
+#scr-payment .mini-btn{font-size:9px; padding:3px 8px;}
+#scr-payment .info-banner{font-size:8.5px; padding:5px 7px;}
+#scr-payment .hint{font-size:8px;}
+#scr-payment .list{padding:3px 5px;}
+#scr-payment .check-row{padding:3px 0; font-size:10.5px;}
+#scr-payment .del-icon{font-size:10px; padding:2px;}
+
+/* ---- 结算屏净值卡片再收紧一档（scoped）—— 第四轮反馈第二批：净值卡片在上一轮基础上再缩一号，
+   "分摊明细"展开条目字体单独在 .settle-detail .a-row 里调小（不是这个 scoped 块管的，见上面那条全局规则） ---- */
+#scr-settlement .list{padding:3px 5px;}
+#scr-settlement .p-row{padding:2px 0; gap:5px;}
+#scr-settlement .avatar{width:18px; height:18px; font-size:9px;}
+#scr-settlement .nm{font-size:10.5px;}
+#scr-settlement .amt{font-size:9.5px;}
+#scr-settlement .detail-toggle{font-size:8.5px; margin:0 0 4px 25px;}
+
+/* ---- 邀请管理整页收紧（scoped）—— 第四轮反馈第二批新增点名 ---- */
+#scr-invites .list{padding:3px 5px;}
+#scr-invites .p-row{padding:3px 0; gap:6px;}
+#scr-invites .nm{font-size:11px;}
+#scr-invites .badge.lg{font-size:9.5px; padding:2px 8px;}
+#scr-invites .gen-invite-pop, #scr-invites .add-source-pop{padding:7px; margin-top:5px;}
+#scr-invites .linkbox{font-size:9px; padding:7px 8px; margin-top:5px;}
+#scr-invites .mini-btn{padding:5px 9px; font-size:9.5px;}
+#scr-invites .dd-new-corner{font-size:9.5px;}
+#scr-invites .hint{font-size:8px;}
+</style>
+
+<div class="wrap">
+
+  <div class="brief">
+    <h1>记账本改版提案 — 逐屏对照（第四轮修订）</h1>
+    <p>这是静态排版稿，不是真正上线的网站，点左边可以切换看每个界面。这一版是照第四轮反馈改的：支付方式屏、结算屏两处再收紧一档；上一轮列的 7 条开放问题这轮全部拍板落实了，包括钱包跟取款/换汇真正合并、分摊名单接通邀请管理、汇率比价目标币种真的能重新算这几块。字体/间距/配色延续同一套设计系统，没有另起一套。</p>
+    <div class="rule">你看完，把还要再调的地方直接说出来（可以按屏幕说），确认没问题以后我才会动真代码部署上线。</div>
+    <div class="rule">✅ 第四轮：上一轮列的 7 条开放问题这轮已经全部按你的反馈拍板落实，具体改了什么各屏右侧说明卡片里都写了，不用再重复确认这几条。</div>
+    <div class="rule">✅ 这轮（第四轮反馈第二批）：汇率比价支付宝渠道开关矛盾修好了；切换行程下拉配色换成你截图 PIL 采样出来的精确 hex 值；紧凑化这次先把卡片 padding/表单控件/按钮/次级文字这几类归并成共享 CSS token 再统一下调一档，覆盖全篇（不是只改点名的 7 处），你点名的图2/7/8/9/10/11/12 这几处在这套 token 之上又各自再叠了一层专属收紧，具体数字各屏右侧说明卡片里都写了。</div>
+    <div class="rule">✅ 这轮（第四轮反馈第三批）：钱包黑卡颜色改浅，加了 3 档色阶可以直接点着看，不用等我猜；行程主页"参与者"卡片删掉了（邀请管理/结算页的参与者名单没动，功能都还在）；全篇 input/下拉/segmented按钮/chip 选择器这四类控件这次真的合并成一套 token 了，不再东一个西一个；切换行程下拉这次先把这份 HTML 存本地，用 Playwright 实际截图看过再改，改完又截了一遍图核对，不是只调 CSS 数值就交差——这是第三次改这个下拉了。</div>
+    <div class="rule">✅ 这轮（第四轮反馈第四批）：钱包卡默认选中态改成最浅一档 #2E2E2C；汇率比价基准卡片再收紧一档；查清楚了"基准卡片是否跟着行程启用币种联动"这个问题——现状是没有真的联动，两边是各写各的固定清单，已经把这段大白话说明直接写进汇率比价卡片里了，联动本身改动面积不小这轮先不动手，列进了待确认清单；全篇新增 HKD 港币（启用币种 chip / 目标币种下拉 / 模拟汇率表都加了）。</div>
+  </div>
+
+  <div class="layout">
+    <div class="nav" id="nav"></div>
+    <div class="stage">
+      <div class="phone-col">
+        <div class="phone" id="phone"></div>
+      </div>
+      <div class="notes-col">
+        <div class="notes" id="notes"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SCREENS = [
+  {
+    id: 'home', label: '首页 · 我的行程',
+    notes: [
+      { b:'"我的行程"标题字号收小', before:'18px，比其它屏幕的标题明显大一号', after:'统一收到 15px，跟其它屏幕标题字号一致' },
+      { b:'行程标题可改名', after:'每张行程卡的名字旁边加了 ✎ 编辑图标，点开会弹出一个小输入框 + "保存"，可以直接改这个行程的名字（demo 里点保存只是收起弹层，不真的存档）' },
+      { b:'卡片规格统一 + 更紧凑', before:'padding 9px / 圆角 14px', after:'跟全站其它卡片统一成 padding 10px / 圆角 14px 这套规格' },
+      { b:'新增日期范围', after:'卡片里补了一行 "📅 09/11 - 09/15"，紧跟在标签下面、金额上面' },
+    ],
+    html: `
+      <div class="topbar-row">
+        <div class="title-block"><h3>我的行程</h3><p>2 个行程记账中 · 净该收 RM 468.50</p></div>
+        <button class="trip-pill">＋ 创建新行程</button>
+      </div>
+      <div class="trip-card">
+        <div class="top"><span class="name">2026曼谷</span><button class="icon-btn" onclick="toggleRename(this)">✎</button></div>
+        <div class="rename-pop" hidden><input value="2026曼谷"><button class="mini-btn" onclick="this.closest('.rename-pop').hidden=true">保存</button></div>
+        <div class="chips"><span class="chip">MYR</span><span class="chip">创建者</span><span class="chip">记账中</span></div>
+        <div class="date-range">📅 09/02 - 09/06</div>
+        <div class="amt" style="color:var(--positive)">该收 RM 500.00</div>
+        <div class="meta">总消费 RM 1,000.00 · 1 笔</div>
+      </div>
+      <div class="trip-card">
+        <div class="top"><span class="name">2026 曼谷出差</span><button class="icon-btn" onclick="toggleRename(this)">✎</button></div>
+        <div class="rename-pop" hidden><input value="2026 曼谷出差"><button class="mini-btn" onclick="this.closest('.rename-pop').hidden=true">保存</button></div>
+        <div class="chips"><span class="chip">MYR</span><span class="chip">创建者</span><span class="chip">记账中</span></div>
+        <div class="date-range">📅 09/11 - 09/15</div>
+        <div class="amt" style="color:var(--negative)">该付 RM 31.50</div>
+        <div class="meta">总消费 RM 1,507.00 · 5 笔</div>
+      </div>
+    `
+  },
+  {
+    id: 'trip', label: '行程主页', bignote: true,
+    notes: [
+      { b:'"2026 曼谷出差"标题字号收小', before:'18px，比其它屏幕的标题明显大一号', after:'统一收到 15px' },
+      { b:'切换行程下拉——第三次修订，这次先截图验证再改（第四轮反馈第三批）', before:'实际截图量过：面板背景 #F7F7F6，但未选中行、选中行各自套了一层实底色块（未选中 #EAEAE9、选中 #CACAC9），两个色块紧挨着像两张小卡片贴在面板里，层次偏"跳"；标题"切换行程"量出来是 #6E6E6C，但配上底色视觉上仍偏重；没有圆点标记；行与行之间没有分隔线，靠色块自己的边界区分', after:'未选中行改成透明、直接融进面板背景，只留一条 1px 极淡分隔线区分行与行；选中行只加一层很浅的灰 #EBEAE8（不再是 #CACAC9 那种明显更深的色块）；选中行左边加了实心圆点(●)+文字加粗，右边保留 ✓；标题文字改成"展开：切到其它行程"，颜色换浅一档（--gold token，#A4A3A0）；这轮改完把这份 HTML 存本地用 Playwright 实际截图看过、跟参考图描述逐条核对过，不是只调 CSS 数值就交差' },
+      { b:'✅ 核实：钱包/取款换汇是否重复', after:'第四轮已经拍板合并，见下面这条具体说明' },
+      { b:'我的钱包 vs 取款/换汇：真正合并（第四轮拍板）', before:'现状：点"💱 取款/换汇"会跳到一个完全独立的屏幕/导航项', after:'点击后改成在"我的钱包"卡片内部原地展开一个白色小面板（黑卡片里嵌一张白面板，方便看清表单字段），不再跳独立屏幕；左侧导航也不再单列"取款/换汇"这一项' },
+      { b:'我的钱包卡对比度修正', before:'黑底上文字没有单独设置颜色，继承了深灰色 body 文字，对比度不够看不清', after:'chip 里的"泰锤现金/信用卡"标签和金额都改成白色（金额加粗），chip 底色和描边也略微调亮，黑底上清楚看得见了' },
+      { b:'我的钱包黑卡颜色改浅（第四轮反馈第三批）', before:'背景纯黑 #000', after:'改成深灰（比纯黑明显浅一档），标题右边加了三个小圆点色阶（深 #1A1A19 / 中 #242422 / 浅 #2E2E2C），点一下就能实时切换看效果，直接在这份提案里挑，不用光看文字描述' },
+      { b:'钱包卡默认选中态改成最浅一档（第四轮反馈第四批）', before:'上一版默认选中的是中间那档 #242422', after:'确认要维持"最浅"这档效果，默认选中态和初始渲染背景都改成 #2E2E2C（色阶选择器还在，照样能点其它档切换）' },
+      { b:'快速记账字段顺序调整', before:'金额 → 分类 → 币种', after:'改成 分类 → 币种 → 金额，"记"按钮仍在最右边' },
+      { b:'快速记账"分类"“币种”改成下拉可选（本轮反馈）', before:'"分类"和"币种"都是纯文字输入框，可以随便打字，选项不受控', after:'两个都改成点了展开的下拉：分类直接照抄屏 3「记一笔消费」那套 🍜餐饮/☕咖啡/💆按摩/🛍️购物/💎宝石/🏛️景点/🚗交通/🏨住宿/✈️机票/📦杂项 候选清单和 toggleCatPicker/pickCat 交互；币种照抄"创建新行程"屏"同时启用哪些币种" chip 清单内容 MYR/THB/USD/CNY/SGD/HKD。触发按钮维持原本 .qa-input 深色紧凑规格（尺寸/字号/内边距都没变，只多了个箭头），展开的菜单沿用 .cat-dropdown-list 白底样式，没有另外发明一套深色下拉；"金额"这个框没有动，还是纯文字输入' },
+      { b:'✅ 核实：快速记账"自定义分摊"', unsure:'现状核实过，点"自定义分摊"本来就会展开 Remy/Alex 的可编辑金额框，是有反应的——这条这轮没有改动。真正"点了没反应"的自定义分摊 bug 出在屏 3「记一笔消费」，那边已经修了' },
+      { b:'快速记账人员名单设计意图', unsure:'这里的 Remy/Alex 分摊输入框是不是该跟着行程参与者/邀请管理名单实时同步，是个逻辑设计问题，列进了最终报告待你确认的清单里' },
+      { b:'卡片规格统一 + 更紧凑', before:'Hero 圆角 22px/padding 16px，钱包卡/快速记账卡圆角 18px/padding 12px，各卡片区块间距 12-14px 不等', after:'三张卡统一收成圆角 14px / padding 11px，区块间距统一收到 12px，跟全站参与者/结算/支付方式的卡片规格对齐' },
+      { b:'分摊三档配色改米黄+深黑', before:'现状：选中态是青色（--live）底', after:'改成米黄底（--cream）+ 选中态深黑实底白字，不再用蓝/青色；这套配色也同步用到了屏 3 记账表单的分摊控件（见对应说明）' },
+      { b:'汇率比价"最划算"改小徽章', before:'整个 Wise 那一行卡片背景变浅绿 + 描绿边，范围偏大', after:'改成"✓ 最划算"一个绿底白字的小圆角徽章，贴在渠道名字后面，卡片本身不再整块变色' },
+      { b:'汇率比价"目标币种可选"（第四轮拍板：真的会重新算）', before:'只能换算到 THB，写死；上一轮选非 THB 只换文字标签，不会真的重新算汇率', after:'加了一个"🎯 目标币种 ▾"下拉，可以选 THB/USD/SGD/CNY；这轮选了别的币种，下面渠道列表和两张基准汇率卡片的数字会真的按模拟汇率重新算，不再是只换文字标签' },
+      { b:'汇率比价新增"渠道自选"', after:'加了"⚙ 自选渠道"下拉，勾选框对应 Wise/TNG跨境/ATM取款/换钱店，这个原本就是真的会增减下面对比列表的行数，这轮没有再改动这部分' },
+      { b:'支付宝渠道开关矛盾修复（第四轮反馈第二批）', before:'"自选渠道"下拉原本只有 4 项可勾（Wise/TNG跨境/ATM取款/换钱店），但下面无条件显示一张"支付宝（经 CNY 中转）"说明卡片，勾不勾都关不掉，行为跟其它渠道不一致', after:'"自选渠道"里加了第 5 项"🅰️ 支付宝"（默认勾选），下面这张说明卡片的显示/隐藏现在真的绑定这个勾选框了，取消勾选就隐藏，跟其它 4 个渠道同一套开关行为；卡片本身"经 CNY 中转/仅供参考不列入最划算排行"这段说明文字没删，只是加了一层显示开关' },
+      { b:'新增 HKD 港币（第四轮反馈第四批）', after:'汇率比价"🎯 目标币种"下拉加了 HKD 港币选项；FX_RATES 模拟汇率表给 HKD 配了 MYR→HKD ≈1.92、USD→HKD ≈7.82（港币是联系汇率制，长年钉在 7.75-7.8 附近，这两个数按这个量级估的，不是瞎编）；切到 HKD 目标时基准卡片和渠道列表数字会跟着换算，符号显示 HK$。' },
+      { b:'"当前汇率"基准换算卡片再收紧一档（第四轮反馈第四批）', before:'.fx-base-card padding 9px 10px、数字字号(.fbc-val) 14px、说明字(.fbc-lbl) 9.5px、两张卡片间距(.fx-base-row gap) 8px/margin-bottom 10px', after:'降到 padding 7px 8px、数字字号 12.5px、说明字 9px、间距 6px/margin-bottom 8px，幅度跟结算屏净值卡片那次"再缩一档"（padding 4→3px、字号降 0.5-1.5px 这个量级）保持一致，不是单独另起一套' },
+      { b:'✅ 核实：当前汇率基准卡片是不是跟着行程启用币种自动换（第四轮反馈第四批）', unsure:'查了 FX_RATES/FX_STATE 的代码和"创建新行程"页"同时启用哪些币种"chip 的实现，结论：现在没有真的联动。基准卡片(1 MYR=/1 USD=)和目标币种下拉(THB/USD/SGD/CNY/HKD)的候选清单都是写死在 FX_RATES 这个常量里的固定清单；"同时启用哪些币种"那排 chip 点一下只是本地切换按钮自己的选中态(toggleChip 函数)，没有写进任何共享变量，跟汇率比价这边是两套完全独立的数据，没有接线。评估过要不要顺手接通：这不是像分摊名单/支付方式命名池那种"加一个共享数组就能穿起来"的小改动——要做对得把 FX_RATES 从现在"MYR/USD 两个基准 × 4-5 个目标"的表，扩成给候选的每种币种互相之间都配一份模拟汇率，还要把写死的 2 张基准卡片、写死的"MYR→/USD→"切换按钮全部改成照行程启用了哪些币种动态生成，边界情况(比如启用的币种刚好等于当前目标币种)也要处理，改动面积不小。这轮先如实说明现状，不动手做联动，已经把这段大白话说明写进了这一屏的汇率比价卡片里（不是只在报告里说），是否要排下一轮做，列进了最终报告的待确认清单。' },
+      { b:'参与者卡片从行程主页删除（第四轮反馈第三批）', before:'行程主页有一个独立的"参与者"卡片区块（Remy/Alex 头像+分摊金额列表）', after:'这个区块整个从行程主页删掉了；参与者信息保留在"邀请管理"页（管理名单+生成邀请+直接添加参与者）和"结算"页（每人净值+分摊明细）这两个各自独立的地方，功能没丢，只是不再在主页重复展示一份' },
+      { b:'活动流包成卡片 + 标注静态展示', before:'排序/筛选/记录列表是裸的没有卡片边界；"手动(长按拖拽)"看起来像是能真的拖', after:'整块包进跟参与者/结算一致的卡片容器（圆角 14px、浅底、描边）；另外加了一行小字说明"手动(长按拖拽)是静态展示，日期/金额排序和筛选是真的会动"，不装作已经能拖' },
+      { b:'控件尺寸统一（第四轮反馈第三批，全局改动，这屏用到的部分一起跟着变）', before:'这屏的取款换汇 JPY 下拉、充值钱包/来源钱包 chip、汇率比价 chip、分摊三档按钮，各自的 padding/字号都不一样', after:'全部改走同一套共享 token（padding 5px 7px / 字号 10px），不再各写各的' },
+    ],
+    html: `
+      <div class="topbar-row">
+        <div class="title-block"><h3>2026 曼谷出差</h3><p>本位币 MYR · 记账中</p></div>
+        <div class="topbar-actions">
+          <div class="account-links"><a href="#">我的账号</a><a href="#">退出登录</a></div>
+          <button class="trip-pill">曼谷出差 ▾</button>
+        </div>
+      </div>
+      <div class="dropdown-panel">
+        <div class="dd-head"><span class="cap">展开：切到其它行程</span><a class="dd-new-corner">＋ 新建行程</a></div>
+        <div class="dd-row sel"><span class="dd-dot">●</span><span class="name">2026 曼谷出差</span><span class="check">✓</span></div>
+        <div class="dd-row"><span class="dd-dot">●</span><span class="name">2026曼谷</span></div>
+      </div>
+      <div class="navtabs">
+        <button class="on">行程主页</button><button>结算</button><button>支付方式</button><button>邀请管理</button>
+      </div>
+      <div class="hero">
+        <div class="hero-top-row"><span class="lbl">消费总金额</span><a class="link-btn">查看结算明细 →</a></div>
+        <div class="net neg">-RM 31.50</div>
+        <div class="sub">该付出 · 5 笔消费</div>
+        <hr>
+        <div class="mine-block">
+          <div class="lbl">我承担 · THB 等值 · 不含机票/宝石 · 已扣 SPLIT</div>
+          <div class="net-mine">฿10,411</div>
+          <div class="sub">84 笔消费 · THB 8,503 + MYR 1,908</div>
+          <div class="cat-table">
+            <div class="cat-row"><span>不含机票/宝石</span><span>净 ฿10,411 · 毛 ฿12,598</span></div>
+            <div class="cat-row"><span>机票 (3)</span><span>净 ฿2,150 · 毛 ฿2,150</span></div>
+            <div class="cat-row"><span>宝石 (12)</span><span>净 ฿4,820 · 毛 ฿6,900</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="wallet-block" id="wallet-block-el" style="background:#2E2E2C">
+        <div class="wtitle">
+          <span>我的钱包</span>
+          <div style="display:flex; align-items:center; gap:8px">
+            <div class="wallet-shade-picker">
+              <button class="shade-dot" style="background:#1A1A19" onclick="setWalletShade(this,'#1A1A19')" title="深"></button>
+              <button class="shade-dot" style="background:#242422" onclick="setWalletShade(this,'#242422')" title="中"></button>
+              <button class="shade-dot on" style="background:#2E2E2C" onclick="setWalletShade(this,'#2E2E2C')" title="浅（默认）"></button>
+            </div>
+            <span>仅自己可见</span>
+          </div>
+        </div>
+        <div class="wallets">
+          <div class="wallet-chip"><div class="e">💵 泰锤现金</div><div class="amt">฿8,200.00</div></div>
+          <div class="wallet-chip"><div class="e">💳 信用卡</div><div class="amt">RM 890.00</div></div>
+          <div class="wallet-add">＋</div>
+        </div>
+        <a class="exchange-link" onclick="toggleExchangePanel(this)">💱 取款 / 换汇 <span class="chev">▾</span></a>
+        <div class="exchange-inline-panel" id="exchange-inline-panel" hidden>
+          <div class="field">
+            <div class="row2" style="align-items:center; margin-bottom:2px">
+              <label style="margin:0">来源钱包</label>
+              <a class="dd-new-corner" onclick="toggleAddSource(this)">＋ 添加来源钱包</a>
+            </div>
+            <div class="add-source-pop" id="add-source-pop" hidden>
+              <div class="row2">
+                <div class="field"><label>钱包名</label><input id="exchange-source-name-input" placeholder="比如：日圆现金"><span class="hint" id="exchange-source-suggest"></span></div>
+                <div class="field"><label>币种</label><div class="dd-fake">JPY <span class="chev">▾</span></div></div>
+              </div>
+              <button class="mini-btn" style="width:100%; text-align:center; padding:7px; margin-top:6px">添加</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>充值哪个钱包?</label>
+            <div class="wallet-select-row">
+              <button class="wallet-select-btn" onclick="setGroupBtn(this)">泰铢现金</button>
+              <button class="wallet-select-btn on" onclick="setGroupBtn(this)">美金换泰铢</button>
+              <button class="wallet-select-btn" onclick="setGroupBtn(this)">美金现金</button>
+            </div>
+          </div>
+          <div class="info-banner">换汇 — 美金换泰铢（Superrich / 换钱店）· 可部分留现金 + 部分存 BKK</div>
+          <div class="field"><label>拿出 USD</label><div class="amt-input-row"><input value="500"><span class="cur-badge">USD</span></div></div>
+          <div class="field">
+            <label>本次汇率 <span class="hint">填这一笔实际用到的汇率，不是固定死的</span></label>
+            <div class="amt-input-row"><span class="cur-badge" style="flex-shrink:0">1 USD =</span><input value="21.03"><span class="cur-badge">THB</span></div>
+          </div>
+          <div class="field">
+            <label>换到 THB · 怎么分</label>
+            <div class="row2">
+              <div class="field"><label class="sub">现金留</label><div class="amt-input-row"><input value="10,000"><span class="cur-badge">THB</span></div></div>
+              <div class="field"><label class="sub">存 BKK BANK</label><div class="amt-input-row"><input value="6,515"><span class="cur-badge">THB</span></div></div>
+            </div>
+          </div>
+          <div class="field">
+            <label>BKK 存款手续费 <span class="hint">可留空</span></label>
+            <input placeholder="0.00">
+            <span class="tag-note">从 BKK 入账扣 · 不算进「我承担」总消费</span>
+          </div>
+          <div class="row2">
+            <div class="field"><label>日期</label><input value="2026-09-13"></div>
+            <div class="field"><label>地点 / 备注 <span class="hint">可选</span></label><input placeholder="例如：Siam Superrich"></div>
+          </div>
+          <button class="big-cta">保存充值记录</button>
+        </div>
+      </div>
+      <div class="quickadd">
+        <div class="cap">⚡ 快速记账</div>
+        <div class="qa-row">
+          <button type="button" class="qa-input qa-dd-trigger" onclick="toggleQaCatPicker(this)"><span id="qa-cat-label" style="color:rgba(255,255,255,.4)">分类</span><span class="chev">▾</span></button>
+          <button type="button" class="qa-input qa-cur qa-dd-trigger" onclick="toggleQaCurPicker(this)"><span id="qa-cur-label">MYR</span><span class="chev">▾</span></button>
+          <input class="qa-input" placeholder="金额" style="max-width:64px">
+          <div class="qa-go">记</div>
+        </div>
+        <div class="cat-dropdown-list" id="qa-cat-list" hidden>
+          <div class="cat-opt" onclick="pickQaCat(this,'🍜 餐饮')">🍜 餐饮</div>
+          <div class="cat-opt" onclick="pickQaCat(this,'☕ 咖啡')">☕ 咖啡</div>
+          <div class="cat-opt" onclick="pickQaCat(this,'💆 按摩')">💆 按摩</div>
+          <div class="cat-opt" onclick="pickQaCat(this,'🛍️ 购物')">🛍️ 购物</div>
+          <div class="cat-opt" onclick="pickQaCat(this,'💎 宝石')">💎 宝石</div>
+          <div class="cat-opt" onclick="pickQaCat(this,'🏛️ 景点')">🏛️ 景点</div>
+          <div class="cat-opt" onclick="pickQaCat(this,'🚗 交通')">🚗 交通</div>
+          <div class="cat-opt" onclick="pickQaCat(this,'🏨 住宿')">🏨 住宿</div>
+          <div class="cat-opt" onclick="pickQaCat(this,'✈️ 机票')">✈️ 机票</div>
+          <div class="cat-opt" onclick="pickQaCat(this,'📦 杂项')">📦 杂项</div>
+        </div>
+        <div class="cat-dropdown-list" id="qa-cur-list" hidden>
+          <div class="cat-opt" onclick="pickQaCur(this,'MYR')">MYR</div>
+          <div class="cat-opt" onclick="pickQaCur(this,'THB')">THB</div>
+          <div class="cat-opt" onclick="pickQaCur(this,'USD')">USD</div>
+          <div class="cat-opt" onclick="pickQaCur(this,'CNY')">CNY</div>
+          <div class="cat-opt" onclick="pickQaCur(this,'SGD')">SGD</div>
+          <div class="cat-opt" onclick="pickQaCur(this,'HKD')">HKD</div>
+        </div>
+        <div class="qa-row">
+          <input class="qa-input" placeholder="商家名称（可选）">
+        </div>
+        <div class="seg3-wrap">
+          <span class="lbl">分摊</span>
+          <div class="seg3">
+            <button onclick="setQaSplit(this,'me')">仅我自己</button>
+            <button class="on" onclick="setQaSplit(this,'even')">平分</button>
+            <button onclick="setQaSplit(this,'custom')">自定义分摊</button>
+          </div>
+        </div>
+        <div class="custom-split" id="qa-custom-split" hidden>
+          <div class="custom-split-row"><span>Remy</span><input value="42.50"></div>
+          <div class="custom-split-row"><span>Alex</span><input value="42.50"></div>
+        </div>
+      </div>
+      <section class="fx-section">
+        <div class="fx-head">
+          <span class="subhead">💱 当前汇率 → <span id="fx-target-label">THB</span></span>
+          <div style="display:flex; gap:5px">
+            <div class="fdrop">
+              <button class="fchip" onclick="toggleFilterDrop(this)">🎯 目标币种 ▾</button>
+              <div class="fdrop-menu" hidden>
+                <div class="fdrop-opt" onclick="fxSetTarget(this,'THB')">THB 泰铢</div>
+                <div class="fdrop-opt" onclick="fxSetTarget(this,'USD')">USD 美金</div>
+                <div class="fdrop-opt" onclick="fxSetTarget(this,'SGD')">SGD 新币</div>
+                <div class="fdrop-opt" onclick="fxSetTarget(this,'CNY')">CNY 人民币</div>
+                <div class="fdrop-opt" onclick="fxSetTarget(this,'HKD')">HKD 港币</div>
+              </div>
+            </div>
+            <div class="fdrop">
+              <button class="fchip" onclick="toggleFilterDrop(this)">⚙ 自选渠道</button>
+              <div class="fdrop-menu" hidden style="min-width:150px">
+                <label class="check-row" style="padding:4px 6px"><input type="checkbox" checked onchange="fxToggleChannel('Wise',this)">🌐 Wise</label>
+                <label class="check-row" style="padding:4px 6px"><input type="checkbox" checked onchange="fxToggleChannel('TNG 跨境',this)">📱 TNG 跨境</label>
+                <label class="check-row" style="padding:4px 6px"><input type="checkbox" checked onchange="fxToggleChannel('ATM 取款',this)">🏧 ATM 取款</label>
+                <label class="check-row" style="padding:4px 6px"><input type="checkbox" checked onchange="fxToggleChannel('换钱店',this)">💵 换钱店</label>
+                <label class="check-row" style="padding:4px 6px"><input type="checkbox" checked onchange="fxToggleAlipay(this)">🅰️ 支付宝</label>
+              </div>
+            </div>
+            <button class="fx-refresh" onclick="fxRecalc()">↻ 刷新</button>
+          </div>
+        </div>
+        <div class="hist-static-note">💡 「目标币种」和「自选渠道」这两个这版都是真的会动：切换目标币种下面数字会跟着换算成新币种（用的是模拟汇率，不是接实时行情），渠道勾选会真的增减下面列表。</div>
+        <div class="hist-static-note" style="margin-top:-4px">⚠️ 如实说明：下面这两张基准卡片、上面目标币种下拉的候选清单，都是写死的固定清单，不会跟着"创建新行程"页"同时启用哪些币种"的勾选自动变——这两边现在是两套独立数据，没有真的联动（这轮先查清楚现状写在这里，联动要不要做等你确认，见最终报告的待确认清单）。</div>
+        <div class="fx-base-row">
+          <div class="fx-base-card"><div class="fbc-lbl">1 MYR</div><div class="fbc-val" data-base="MYR">= 8.12 ฿</div></div>
+          <div class="fx-base-card"><div class="fbc-lbl">1 USD</div><div class="fbc-val" data-base="USD">= 33.03 ฿</div></div>
+        </div>
+        <div class="navtabs" style="margin-bottom:9px">
+          <button class="on" onclick="fxSetBase(this,'MYR')">MYR → THB</button>
+          <button onclick="fxSetBase(this,'USD')">USD → THB</button>
+        </div>
+        <div class="field"><label>兑换金额 (<span id="fx-cur-label">MYR</span>)</label><input id="fx-amount" type="number" value="100" oninput="fxRecalc()"></div>
+        <div class="fx-channels" id="fx-channels"></div>
+        <div class="fx-src">数据来源 open.er-api.com · 更新于 2026-09-13 14:02</div>
+      </section>
+      <section class="blk">
+        <div class="hist-head">
+          <span class="subhead">记录 · HISTORY</span>
+          <div class="hist-sort">
+            <button class="hist-sort-btn" onclick="toggleHistSort()">📌 手动 (长按拖拽) ▾</button>
+            <div class="hist-sort-menu" id="hist-sort-menu" hidden>
+              <div class="hist-sort-opt on" onclick="setHistSort(this,'manual')">📌 手动 (长按拖拽)</div>
+              <div class="hist-sort-opt" onclick="setHistSort(this,'date-desc')">🕐 日期从新到旧</div>
+              <div class="hist-sort-opt" onclick="setHistSort(this,'amount-desc')">💰 金额从高到低</div>
+            </div>
+          </div>
+        </div>
+        <div class="hist-static-note">💡 排序里"📌 手动 (长按拖拽)"是静态展示，真实的长按拖拽手势要等接上真代码才能验证；"日期从新到旧""金额从高到低"这两个点了会真的重新排列，下面筛选 chip 也是真的会按条件隐藏不符合的记录。</div>
+        <div class="hist-card">
+        <div class="hist-filters">
+          <button class="fchip on" onclick="resetHistFilters()">全部</button>
+          <div class="fdrop"><button class="fchip" onclick="toggleFilterDrop(this)">分类 ▾</button>
+            <div class="fdrop-menu" hidden>
+              <div class="fdrop-opt" onclick="pickFilter('cat','misc',this)">📦 杂项</div>
+              <div class="fdrop-opt" onclick="pickFilter('cat','gem',this)">💎 宝石</div>
+              <div class="fdrop-opt" onclick="pickFilter('cat','transport',this)">🚗 交通</div>
+              <div class="fdrop-opt" onclick="pickFilter('cat','food',this)">🍜 餐饮</div>
+              <div class="fdrop-opt" onclick="pickFilter('cat','flight',this)">✈️ 机票</div>
+            </div>
+          </div>
+          <div class="fdrop"><button class="fchip" onclick="toggleFilterDrop(this)">垫付人 ▾</button>
+            <div class="fdrop-menu" hidden>
+              <div class="fdrop-opt" onclick="pickFilter('payer','Remy',this)">Remy</div>
+              <div class="fdrop-opt" onclick="pickFilter('payer','Alex',this)">Alex</div>
+            </div>
+          </div>
+          <div class="fdrop"><button class="fchip" onclick="toggleFilterDrop(this)">日期 ▾</button>
+            <div class="fdrop-menu" hidden>
+              <div class="fdrop-opt" onclick="pickFilter('date','09-10',this)">09-10</div>
+              <div class="fdrop-opt" onclick="pickFilter('date','09-11',this)">09-11</div>
+              <div class="fdrop-opt" onclick="pickFilter('date','09-12',this)">09-12</div>
+              <div class="fdrop-opt" onclick="pickFilter('date','09-13',this)">09-13</div>
+            </div>
+          </div>
+          <div class="fdrop"><button class="fchip" onclick="toggleFilterDrop(this)">支付方式 ▾</button>
+            <div class="fdrop-menu" hidden>
+              <div class="fdrop-opt" onclick="pickFilter('pay','hsbc',this)">💳 HSBC</div>
+              <div class="fdrop-opt" onclick="pickFilter('pay','alipay',this)">🅰️ 支付宝</div>
+              <div class="fdrop-opt" onclick="pickFilter('pay','cash',this)">💵 现金</div>
+            </div>
+          </div>
+        </div>
+        <div class="hist-list">
+          <div class="hist-row" data-manual="1" data-date="09-11" data-amt="400" data-cat="misc" data-payer="Remy" data-pay="hsbc" onclick="toggleHistActions(this)">
+            <div class="hist-icon">📦</div>
+            <div class="hist-mid"><div class="hist-name">拜神</div><div class="hist-meta">09-11 · 杂项 · 💳 HSBC</div><div class="hist-approx">≈ RM 128.40</div></div>
+            <div class="hist-amt">฿400.00</div>
+            <div class="hist-actions"><button onclick="event.stopPropagation()">✎</button><button class="del" onclick="event.stopPropagation()">🗑</button></div>
+          </div>
+          <div class="hist-row" data-manual="2" data-date="09-12" data-amt="6900" data-cat="gem" data-payer="Remy" data-pay="alipay" onclick="toggleHistActions(this)">
+            <div class="hist-icon">💎</div>
+            <div class="hist-mid"><div class="hist-name">宝石 · Fancy Sapphire</div><div class="hist-meta">09-12 · 宝石 · 🅰️ 支付宝</div><div class="hist-approx">≈ RM 2,206.00</div></div>
+            <div class="hist-amt">฿6,900.00</div>
+            <div class="hist-actions"><button onclick="event.stopPropagation()">✎</button><button class="del" onclick="event.stopPropagation()">🗑</button></div>
+          </div>
+          <div class="hist-row" data-manual="3" data-date="09-12" data-amt="180" data-cat="transport" data-payer="Alex" data-pay="hsbc" onclick="toggleHistActions(this)">
+            <div class="hist-icon">🚗</div>
+            <div class="hist-mid"><div class="hist-name">Bolt / Grab</div><div class="hist-meta">09-12 · 交通 · 💳 HSBC</div><div class="hist-approx">≈ RM 57.50</div></div>
+            <div class="hist-amt">฿180.00</div>
+            <div class="hist-actions"><button onclick="event.stopPropagation()">✎</button><button class="del" onclick="event.stopPropagation()">🗑</button></div>
+          </div>
+          <div class="hist-row" data-manual="4" data-date="09-13" data-amt="320" data-cat="food" data-payer="Remy" data-pay="cash" onclick="toggleHistActions(this)">
+            <div class="hist-icon">🍜</div>
+            <div class="hist-mid"><div class="hist-name">冬阴功午餐</div><div class="hist-meta">09-13 · 餐饮 · 💵 现金</div><div class="hist-approx">≈ RM 102.30</div></div>
+            <div class="hist-amt">฿320.00</div>
+            <div class="hist-actions"><button onclick="event.stopPropagation()">✎</button><button class="del" onclick="event.stopPropagation()">🗑</button></div>
+          </div>
+          <div class="hist-row" data-manual="5" data-date="09-10" data-amt="2150" data-cat="flight" data-payer="Remy" data-pay="hsbc" onclick="toggleHistActions(this)">
+            <div class="hist-icon">✈️</div>
+            <div class="hist-mid"><div class="hist-name">曼谷 → 清迈机票</div><div class="hist-meta">09-10 · 机票 · 💳 HSBC</div><div class="hist-approx">≈ RM 687.30</div></div>
+            <div class="hist-amt">฿2,150.00</div>
+            <div class="hist-actions"><button onclick="event.stopPropagation()">✎</button><button class="del" onclick="event.stopPropagation()">🗑</button></div>
+          </div>
+        </div>
+        </div>
+      </section>
+      <div class="actionbar"><button>＋ 记一笔消费</button></div>
+    `
+  },
+  {
+    id: 'expense', label: '记一笔消费', bignote:true,
+    notes: [
+      { b:'✅ 核实："记这笔账"按钮对齐', unsure:'现状核实过，这个按钮本来就是走全站"表单主按钮"统一规则（跟表单等宽、居中），不是偏右——这轮没有改动，如果你截图看到的是偏右的，可能不是这版' },
+      { b:'去掉"谁代垫的"独立字段', before:'现状：有一个单独的"谁代垫的"下拉(Remy)，跟下面分摊开关打开后的"谁垫的钱?(我垫/他垫)"问的是同一件事，功能重复', after:'删掉这个独立字段：分摊开关关闭 = 默认这笔是自己付的，不用问；打开了才用"谁垫的钱?"统一处理' },
+      { b:'支付方式下拉联动提示', after:'下拉旁边加了一行小字，说明这里只列这个行程"支付方式"页面里勾选启用的那几项，不是全部支付方式' },
+      { b:'分摊支持 2 人以上 + 修复"自定义分摊"死点击', before:'现状：开关文案写死"跟 Alex split 这笔"，只能两人分；点"自定义"没反应，不会弹出输入框', after:'开关文案改成"跟其他人 split 这笔" + 一排可勾选的参与者 chip（Alex / Ben，示范多人）；点"自定义"真的会弹出输入框：勾了 1 个人（共 2 人分）时显示"这笔怎么分？(填一个，另一个自动算)"+ 两个联动输入框；勾了 2 个人以上（共 3 人以上分）时列出每个人各自的份额输入框' },
+      { b:'分摊人员名单跟邀请管理实时同步（第四轮拍板落实）', before:'分摊可选人员是写死的 Alex/Ben，跟邀请管理参与者名单是两套独立数据', after:'改成读同一份 TRIP_PARTICIPANTS 名单：邀请管理里"直接添加参与者"新增一个人，这里的分摊勾选按钮下次打开会自动多一个选项，不用两边分别维护' },
+      { b:'表单整体再收紧一档（第四轮反馈第二批，图7点名）', before:'field 间距 8px、输入框 padding 7px 8px/字号 11.5px、主按钮 padding 9px/字号 12px', after:'全部走共享 token：field 间距 6px、输入框 padding 6px 7px/字号 11px、主按钮 padding 7px/字号 11px，这套 token 全篇表单（记账/取款换汇/新建行程/新建钱包）共用，不是单独改这一屏' },
+      { b:'跟其他人 split 这笔展开卡片再收紧一档（第四轮反馈第二批，图8点名）', before:'split-panel padding 10px/gap 9px，按钮 padding 6px 8px/字号 10.5px，自定义分摊输入框宽 64px/字号 10.5px', after:'收到 padding 8px/gap 7px，按钮 padding 5px 7px/字号 10px，自定义分摊输入框宽 58px/字号 10px' },
+      { b:'控件尺寸统一（第四轮反馈第三批，全局改动，这屏用到的部分一起跟着变）', before:'金额/商家/日期/备注这些输入框、分类/支付方式下拉、跟谁分/谁垫的钱/怎么分这几组按钮，尺寸各写各的', after:'全部改走同一套共享 token（padding 5px 7px / 字号 10px）' },
+    ],
+    html: `
+      <div class="title-block" style="margin-bottom:11px"><h3 style="font-size:15px">记一笔消费</h3></div>
+      <div class="row2">
+        <div class="field"><label>金额</label><input id="expense-amount-input" value="85.00" oninput="renderExpCustomSplit()"></div>
+        <div class="field"><label>币种</label><div class="dd-fake">MYR <span class="chev">▾</span></div></div>
+      </div>
+      <div class="field"><label>商家名称 <span class="hint">可选</span></label><input placeholder="例如：星巴克"></div>
+      <div class="field"><label>日期</label><input value="2026-09-13"></div>
+      <div class="field">
+        <label>分类</label>
+        <div class="dd-fake" onclick="toggleCatPicker(this)"><span id="exp-cat-label">🍜 餐饮</span><span class="chev">▾</span></div>
+        <div class="cat-dropdown-list" id="exp-cat-list" hidden>
+          <div class="cat-opt" onclick="pickCat(this,'🍜 餐饮')">🍜 餐饮</div>
+          <div class="cat-opt" onclick="pickCat(this,'☕ 咖啡')">☕ 咖啡</div>
+          <div class="cat-opt" onclick="pickCat(this,'💆 按摩')">💆 按摩</div>
+          <div class="cat-opt" onclick="pickCat(this,'🛍️ 购物')">🛍️ 购物</div>
+          <div class="cat-opt" onclick="pickCat(this,'💎 宝石')">💎 宝石</div>
+          <div class="cat-opt" onclick="pickCat(this,'🏛️ 景点')">🏛️ 景点</div>
+          <div class="cat-opt" onclick="pickCat(this,'🚗 交通')">🚗 交通</div>
+          <div class="cat-opt" onclick="pickCat(this,'🏨 住宿')">🏨 住宿</div>
+          <div class="cat-opt" onclick="pickCat(this,'✈️ 机票')">✈️ 机票</div>
+          <div class="cat-opt" onclick="pickCat(this,'📦 杂项')">📦 杂项</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>支付方式</label>
+        <div class="dd-fake">💳 HSBC 大马 Visa Signature <span class="chev">▾</span></div>
+        <span class="hint">只列出这个行程「支付方式」页面里勾选启用的那几张卡/钱包，不是全部支付方式</span>
+      </div>
+      <div class="field"><label>备注 <span class="hint">可选</span></label><textarea rows="2"></textarea></div>
+      <div class="field">
+        <label>这笔怎么分摊</label>
+        <div class="split-toggle-row">
+          <span>跟其他人 split 这笔</span>
+          <button class="switch" id="exp-split-switch" onclick="toggleExpSplit(this)"><span class="knob"></span></button>
+        </div>
+        <div class="split-panel" id="exp-split-panel" hidden>
+          <div class="grp">
+            <div class="glabel">跟谁分?</div>
+            <div class="wallet-select-row" id="exp-split-people"></div>
+          </div>
+          <div class="grp">
+            <div class="glabel">谁垫的钱?</div>
+            <div class="btns"><button class="on" onclick="setGroupBtn(this)">我垫</button><button onclick="setGroupBtn(this)">他垫</button></div>
+          </div>
+          <div class="grp">
+            <div class="glabel">怎么分?</div>
+            <div class="btns"><button class="on" onclick="setExpSplitMode(this,'even')">平分</button><button onclick="setExpSplitMode(this,'custom')">自定义</button></div>
+          </div>
+          <div class="custom-split-light" id="exp-custom-split" hidden></div>
+        </div>
+        <span class="hint">关掉开关 = 这笔就是自己的消费，不问是谁垫的；打开才需要决定跟谁分、谁先垫钱。跟谁分的名单现在会跟着"邀请管理"页面的参与者实时同步（这版已经接起来了）：邀请管理那边加了新参与者，这里下次进来会读到最新名单。</span>
+      </div>
+      <button class="big-cta">记这笔账</button>
+    `
+  },
+  {
+    id: 'settlement', label: '结算', bignote:true,
+    notes: [
+      { b:'"查看分摊明细"排版重做，更紧凑', before:'展开后每一笔是"分类/日期/金额"三个 div 各占一行，字体没有单独设置大小，看起来又大又占地方', after:'改成跟活动流一样"左边分类+日期、右边金额"单行紧凑列表，字号缩小、行与行之间只用一条细线分隔，不再一笔占三行' },
+      { b:'加入第三位同行者 Ben，示范多人场景', before:'demo 只有 Remy/Alex 两人', after:'加了 Ben（该付 RM 18.00），"每人净值"和"转账清单"都相应多了一行，Remy 净额也重新算成该收 RM 49.50（31.50+18.00）' },
+      { b:'"标记本行程已结算"改成按人分别确认（设计草案）', before:'现状：一个不分人的全局绿色按钮，点了就算这趟行程结算完毕', after:'画了一版草案：转账清单里每一笔转账各自有一个"已收款"勾选框，下面有"转账进度：X/Y 笔已确认收款"的即时统计；底部按钮在没收齐前是灰色不可点的提示文字，全部勾完才会变绿变成可点的"标记本行程已结算"', unsure:'（第四轮拍板：这套按笔勾选已收款的交互方案确认保留，不用再改。）' },
+      { b:'净值卡片再缩小一档（第四轮反馈第二批，图9点名）', before:'上一轮已经缩过一次：list padding 4px 6px、头像 20×20px、姓名 11px、金额 10px', after:'这轮在原基础上再缩：list padding 3px 5px、头像 18×18px、姓名 10.5px、金额 9.5px' },
+      { b:'"分摊明细"展开条目字体单独调小（第四轮反馈第二批，图9单独点名，不只是紧凑，是字号本身要更小）', before:'冬阴功午餐/Bolt Grab 这些明细行字号 11px，金额也是 11px', after:'改成 10px，跟净值卡片本身缩小的节奏保持一致' },
+    ],
+    html: `
+      <div class="title-block" style="margin-bottom:14px"><h3 style="font-size:15px">结算</h3></div>
+      <section class="blk">
+        <h4>每人净值</h4>
+        <div class="list">
+          <div class="p-row"><div class="avatar">R</div><span class="nm">Remy</span><span class="amt" style="color:var(--positive)"><span class="n">该收 RM 49.50</span></span></div>
+        </div>
+        <button class="detail-toggle" onclick="toggleSettleDetail('remy')">查看我的分摊明细 ▾</button>
+        <div class="settle-detail" id="settle-detail-remy" hidden>
+          <div class="a-row"><div class="cat">🍜 冬阴功午餐</div><div class="meta">09-13</div><span class="amt">RM 22.50</span></div>
+          <div class="a-row"><div class="cat">🚗 Bolt/Grab</div><div class="meta">09-12</div><span class="amt">RM 9.00</span></div>
+        </div>
+        <div class="list">
+          <div class="p-row"><div class="avatar">A</div><span class="nm">Alex</span><span class="amt" style="color:var(--negative)"><span class="n">该付 RM 31.50</span></span></div>
+        </div>
+        <button class="detail-toggle" onclick="toggleSettleDetail('alex')">查看 Alex 的分摊明细 ▾</button>
+        <div class="settle-detail" id="settle-detail-alex" hidden>
+          <div class="a-row"><div class="cat">🍜 冬阴功午餐</div><div class="meta">09-13</div><span class="amt">RM 22.50</span></div>
+          <div class="a-row"><div class="cat">🚗 Bolt/Grab</div><div class="meta">09-12</div><span class="amt">RM 9.00</span></div>
+        </div>
+        <div class="list">
+          <div class="p-row"><div class="avatar">B</div><span class="nm">Ben</span><span class="amt" style="color:var(--negative)"><span class="n">该付 RM 18.00</span></span></div>
+        </div>
+        <button class="detail-toggle" onclick="toggleSettleDetail('ben')">查看 Ben 的分摊明细 ▾</button>
+        <div class="settle-detail" id="settle-detail-ben" hidden>
+          <div class="a-row"><div class="cat">🚗 Bolt/Grab</div><div class="meta">09-12</div><span class="amt">RM 18.00</span></div>
+        </div>
+        <div class="tag-note" style="margin-top:2px">绿色 = 该收 · 红色 = 该付 —— 这两个颜色是固定标记，不会因为切换深色模式或主题而改变。这版加了 Ben 凑成 3 人，示范同行者不止一位时的样子。</div>
+      </section>
+      <section class="blk">
+        <h4>转账清单</h4>
+        <div class="list" id="settlement-transfer-list">
+          <div class="p-row">
+            <span class="nm">Alex → Remy</span>
+            <label class="check-row" style="padding:0; gap:5px; margin-left:auto"><input type="checkbox" onchange="updateSettleProgress()"><span class="hint">已收款</span></label>
+            <span class="amt" style="margin-left:10px"><span class="n">RM 31.50</span></span>
+          </div>
+          <div class="p-row">
+            <span class="nm">Ben → Remy</span>
+            <label class="check-row" style="padding:0; gap:5px; margin-left:auto"><input type="checkbox" onchange="updateSettleProgress()"><span class="hint">已收款</span></label>
+            <span class="amt" style="margin-left:10px"><span class="n">RM 18.00</span></span>
+          </div>
+        </div>
+        <div class="tag-note" id="settle-progress" style="margin-top:6px">转账进度：0 / 2 笔已确认收款</div>
+      </section>
+      <div class="rule warn" style="margin:0 0 10px; padding:9px 12px; font-size:10.5px; line-height:1.65">✅ 第四轮拍板保留：你之前提到"结清不代表所有人都结清了"，所以"标记本行程已结算"从一个不分人的总开关，改成这种"每一笔转账各自勾选已收款"，凑齐了才整体算结算——这套交互这轮已经确认保留，不用再改。</div>
+      <button class="big-cta" id="settle-final-btn" style="background:var(--gold-dk)" disabled>等所有转账确认收款后 · 整个行程才会标记已结算</button>
+    `
+  },
+  {
+    id: 'payment', label: '支付方式', bignote:true,
+    notes: [
+      { b:'"设置当前余额"新增可编辑日期', before:'现状：保存后只会自动打当下的时间戳，没法补录/改成之前的日期', after:'面板里加了一个"记录日期"输入框，可以自己填想补录的日期，保存后"上次设置"会显示这个日期 + 当下时间' },
+      { b:'余额设置列表跟"本行程启用的支付方式"同步', before:'现状：余额面板列出全部 7 个钱包/账户，但上面"本行程启用"只勾了 HSBC/支付宝 2 项，两边没有关联', after:'这版先假设两者是同一套"本行程启用"开关，把余额面板收窄成只显示已勾选的这 2 项，并在面板顶部加了一条橙色说明条', unsure:'（第四轮拍板：延续这个假设不回退，两者共用同一套"本行程启用"开关。）' },
+      { b:'支付方式整页再收紧一档（第四轮反馈第二批，图10点名，这是第二次被点名收紧）', before:'上一轮已经 scoped 收过一次（比如 nm 11.5px、field 输入框 10.5px、按钮 padding 7px）', after:'这轮在上一轮基础上继续降：nm 降到 10px、field 输入框 padding 5px 6px/字号 10px、主按钮 padding 6px/字号 10.5px，其它 balance-row/check-row/mini-btn/info-banner 也同步再收一档' },
+      { b:'"已添加"列表 HSBC/支付宝字体单独调小对齐（第四轮反馈第二批，图11单独点名）', before:'上一轮 scoped 到 11.5px，比同页面 tag-note(9px)/hint(8.5px) 这些次级文字明显大一截，看着像单独冒出来的大字号', after:'降到 10px，跟页面其它区域的文字比例更接近，不再像单独一档' },
+      { b:'输入框跟下拉大小不一致的根因，这轮找到了（第四轮反馈第三批）', before:'"结算币种"下拉(dd-fake)还停在全局 11px/6-7px 的老规格，但同一行"名称"输入框被单独 scoped 成 10px/5-6px——两个紧挨着的控件一个偏大一个偏小，这就是"字段大小不一致/看着没对齐"的根因', after:'input 和 dd-fake 下拉现在改用同一套共享 token（padding 5px 7px / 字号 10px），这页所有输入框和下拉高度、字号完全对齐了；顺带把 balance-row 里那几个金额小输入框也接上同一套字号' },
+    ],
+    html: `
+      <div class="title-block" style="margin-bottom:8px"><h3 style="font-size:15px">支付方式</h3></div>
+      <p style="font-size:10.5px;color:var(--gold-dk);margin:0 0 10px">支付方式挂在你自己身上，跟着你走，不跟着行程走——这趟旅行结束了，卡的设定还留着，下一趟行程一样能直接用。</p>
+      <section class="blk">
+        <h4>已添加</h4>
+        <div class="list" style="margin-bottom:8px">
+          <div class="p-row"><span style="font-size:16px">💳</span><div style="flex:1"><div class="nm">HSBC 大马 Visa Signature</div><div class="tag-note">境外交易加点 1%</div></div><button class="del-icon">🗑</button></div>
+          <div class="p-row"><span style="font-size:16px">🅰️</span><div style="flex:1"><div class="nm">支付宝</div><div class="tag-note">结算币种 CNY</div></div><button class="del-icon">🗑</button></div>
+        </div>
+        <button class="big-cta" onclick="toggleAddPay(this)">＋ 添加支付方式</button>
+        <div class="addpay-form" id="addpay-form" hidden>
+          <div class="row2">
+            <div class="field"><label>名称</label><input placeholder="比如：MBB 信用卡"></div>
+            <div class="field"><label>结算币种</label><div class="dd-fake">MYR <span class="chev">▾</span></div></div>
+          </div>
+          <div class="field"><label>备注 <span class="hint">可选</span></label><input placeholder="比如：境外交易加点 1%"></div>
+          <button class="mini-btn" style="width:100%; text-align:center; padding:7px">保存</button>
+        </div>
+      </section>
+      <section class="blk">
+        <h4>本行程启用的支付方式</h4>
+        <div class="list">
+          <label class="check-row"><input type="checkbox" checked><span class="nm">HSBC 大马 Visa Signature</span></label>
+          <label class="check-row"><input type="checkbox" checked><span class="nm">支付宝</span></label>
+        </div>
+        <span class="hint">这行程要用到哪几张卡/钱包，不用的可以取消勾选，记账时下拉选单会更短。</span>
+      </section>
+      <section class="blk">
+        <button class="big-cta" style="background:var(--gold-dk)" onclick="toggleBalancePanel(this)">⚙ 设置当前余额</button>
+        <div class="balance-panel" id="balance-panel" hidden>
+          <div class="info-banner" style="margin-bottom:9px">✅ 第四轮拍板：延续"钱包余额"跟上面"本行程启用的支付方式"共用同一套勾选这个假设，所以只列出已勾选的这 2 项，不用再改。</div>
+          <p class="hint" style="display:block; margin:0 0 8px">输入每个账户里现在有多少钱 · 留空或 0 表示不用 · 保存后从此刻起每笔消费自动减</p>
+          <div class="field" style="margin-bottom:8px"><label>记录日期 <span class="hint">可以补录/改成之前的日期</span></label><input id="balance-date-input" value="2026-09-13"></div>
+          <div class="balance-row"><span>💳 HSBC 大马 Visa Signature (MYR)</span><input placeholder="0.00"></div>
+          <div class="balance-row"><span>🅰️ 支付宝 (CNY)</span><input placeholder="0.00"></div>
+          <button class="mini-btn" style="width:100%; text-align:center; padding:7px; margin-top:6px" onclick="saveBalance()">保存余额</button>
+          <div class="tag-note" id="balance-ts" style="margin-top:6px">上次设置：2026-09-01 09:14</div>
+        </div>
+      </section>
+    `
+  },
+  {
+    id: 'invites', label: '邀请管理',
+    notes: [
+      { b:'生成邀请时可以设置对方名字 + 指定行程', before:'现状：只生成一条匿名链接，不知道是给谁的、给哪个行程用的', after:'生成邀请前先弹出"对方名字"输入框（比如 Alex）和"用于哪个行程"下拉，生成的链接就带着这两个信息' },
+      { b:'新增"直接添加参与者"入口', before:'现状：加人只有一种方式，必须走邀请链接', after:'链接生成按钮下面加了一行"或者：＋ 直接添加参与者（暂不需要邀请链接）"，点开是一个姓名输入框 + 添加按钮，用于线下直接把人加进参与者名单，不走邀请流程', unsure:'（第四轮拍板：这个方案确认保留，这轮进一步把它跟分摊名单接通了，见另一条说明。）' },
+      { b:'邀请管理整页收紧（第四轮反馈第二批，图12点名，这一屏之前没被单独 scoped 过）', after:'加了 #scr-invites 专属收紧：list padding 3px 5px、姓名字号 11px、生成邀请/添加参与者弹层 padding 7px、链接框字号 9px、复制链接按钮 padding 5px 9px，跟支付方式/结算走的是同一套"先共享 token 打底、点名的重灾区再叠一层专属收紧"做法' },
+      { b:'控件尺寸统一（第四轮反馈第三批，全局改动，这屏用到的部分一起跟着变）', before:'对方名字输入框、行程下拉本来就走全局规格，没有 scoped 冲突', after:'全局规格本身这轮改成 padding 5px 7px / 字号 10px，这屏跟着变得更紧凑一点' },
+    ],
+    html: `
+      <div class="title-block" style="margin-bottom:14px"><h3 style="font-size:15px">邀请管理</h3></div>
+      <div class="list" style="margin-bottom:10px" id="invites-participant-list">
+        <div class="p-row"><div class="avatar">A</div><div style="flex:1"><div class="nm">Alex</div><span class="badge wait lg">邀请待认领</span></div><a class="hint" style="text-decoration:underline">复制链接</a></div>
+      </div>
+      <button class="big-cta" onclick="toggleGenInvite(this)">＋ 生成新邀请</button>
+      <div class="gen-invite-pop" id="gen-invite-pop" hidden>
+        <div class="row2">
+          <div class="field"><label>对方名字</label><input placeholder="例如：Ben"></div>
+          <div class="field"><label>用于哪个行程</label><div class="dd-fake">2026 曼谷出差 <span class="chev">▾</span></div></div>
+        </div>
+        <div class="linkbox">https://trip-expense-ledger.workers.dev/invite/8f3ndKq2...</div>
+        <button class="mini-btn" style="width:100%; text-align:center; padding:7px; margin-top:8px">复制链接</button>
+      </div>
+      <a class="dd-new-corner" onclick="toggleAddParticipant(this)" style="display:block; text-align:center; margin-top:12px">或者：＋ 直接添加参与者（暂不需要邀请链接）</a>
+      <div class="add-source-pop" id="add-participant-pop" hidden>
+        <div class="field"><label>姓名</label><input id="add-participant-input" placeholder="比如：Ben（线下加人，走不了邀请链接的场合先这样加）"></div>
+        <button class="mini-btn" style="width:100%; text-align:center; padding:7px" onclick="addParticipant()">添加</button>
+        <span class="hint" style="display:block; margin-top:6px">⚠️ 这个人没有自己的登录方式，记账/结算大概率得你代为操作。加进来以后，「记一笔消费」页面的分摊名单会自动多这个人。</span>
+      </div>
+    `
+  },
+  {
+    id: 'newtrip', label: '新建行程',
+    notes: [
+      { b:'支持多币种行程', before:'现状：只有单一"本位币"下拉', after:'改成"主要币种"单选(用于统计汇总/净额) + "同时启用哪些币种"多选(记账时可以直接选，会自动换算成主要币种)，这次示例默认勾了 MYR/THB', unsure:'这块怎么设计是我自己判断的，如果你原本想法不一样（比如想让每个行程有一个更明确的"多币种记账"总开关）要再告诉我' },
+      { b:'补日期字段', after:'新增"行程日期"起止两个输入框，对应屏 1 首页新增的日期范围显示' },
+      { b:'控件尺寸统一（第四轮反馈第三批，全局改动，这屏用到的部分一起跟着变）', before:'行程名称输入框、主要币种下拉走全局规格，币种多选 chip 走 wallet-select-btn 规格，两套 padding/字号不完全一样（6-7px/11px vs 5-9px/10px）', after:'两套合并成一套共享 token（padding 5px 7px / 字号 10px），输入框、下拉、chip 大小完全一致' },
+      { b:'新增 HKD 港币（第四轮反馈第四批）', after:'"同时启用哪些币种"chip 列表加了一颗 HKD，一排 6 个 chip 在手机宽度下还是一行摆得下，没有挤到换行' },
+    ],
+    html: `
+      <div class="title-block" style="margin-bottom:14px"><h3 style="font-size:15px">创建新行程</h3></div>
+      <div class="field"><label>行程名称</label><input placeholder="例如：2026 清迈毕业旅行"></div>
+      <div class="field"><label>主要币种 <span class="hint">用于统计汇总/净额</span></label><div class="dd-fake">MYR <span class="chev">▾</span></div></div>
+      <div class="field">
+        <label>同时启用哪些币种 <span class="hint">记账时可以直接选，会自动换算成主要币种</span></label>
+        <div class="wallet-select-row">
+          <button class="wallet-select-btn on" onclick="toggleChip(this)">MYR</button>
+          <button class="wallet-select-btn on" onclick="toggleChip(this)">THB</button>
+          <button class="wallet-select-btn" onclick="toggleChip(this)">USD</button>
+          <button class="wallet-select-btn" onclick="toggleChip(this)">CNY</button>
+          <button class="wallet-select-btn" onclick="toggleChip(this)">SGD</button>
+          <button class="wallet-select-btn" onclick="toggleChip(this)">HKD</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>行程日期</label>
+        <div class="row2"><input value="2026-09-11"><input value="2026-09-15"></div>
+      </div>
+      <button class="big-cta">创建行程</button>
+    `
+  },
+  {
+    id: 'account', label: '我的账号',
+    notes: [
+      { b:'（这轮没有新反馈，只跟着全局标题字号一起微调）', after:'h3 标题从 17px 收到 15px' },
+    ],
+    html: `
+      <a class="hint" style="text-decoration:underline;display:inline-block;margin-bottom:12px">← 返回</a>
+      <div class="title-block" style="margin-bottom:10px"><h3 style="font-size:15px">我的账号</h3></div>
+      <p style="font-size:11.5px;color:var(--gold-dk);margin:0 0 8px">这条链接是你重新登录这个账号唯一的方式，没有邮箱密码。换设备、清了浏览器数据时，打开这条链接就能回来。</p>
+      <div class="linkbox">https://trip-expense-ledger.workers.dev/id/g6EDgnEi...</div>
+      <button class="big-cta" style="margin-top:10px">复制链接</button>
+    `
+  },
+  {
+    id: 'wallet', label: '新建钱包（弹层）', bignote:true,
+    notes: [
+      { b:'去掉"起始余额"字段', before:'现状：有一个"起始余额(可选)"输入框', after:'先隐藏/去掉，余额录入统一改走"支付方式"页面的"设置当前余额"功能，避免两个地方都能改余额造成不一致' },
+      { b:'账户类型图标精简', before:'现状：7 个（银行/现金/globe/手机/橙色圆点/信用卡/钱袋）', after:'精简到 4 个：🏦银行 / 💵现金 / 💳信用卡 / 📱手机支付', unsure:'精简理由：🌐(globe) 含义太模糊,不知道具体代表哪类账户；🟠橙色圆点看着像是专门给 TNG/SPayLater 这种特定品牌用的颜色标记，不该占用一个通用图标位；💰钱袋跟"现金"语义重复。这个取舍是我自己判断的，麻烦确认要不要保留其中某个' },
+      { b:'新建钱包"钱包名"跟支付方式命名同步（第四轮拍板落实）', after:'输入框下面加了一行"已有支付方式：HSBC 大马 Visa Signature / 支付宝，点击可直接用同名"，点了就直接把名字填进输入框；取款/换汇里"新增来源钱包"的钱包名输入也接的同一份数据，三处逻辑上是同一套命名池（PAYMENT_METHODS 数组）' },
+      { b:'控件尺寸统一（第四轮反馈第三批，全局改动，这屏用到的部分一起跟着变）', before:'钱包名/币种/绑定支付方式走全局输入规格', after:'全局规格本身这轮改成 padding 5px 7px / 字号 10px' },
+    ],
+    html: `
+      <div class="title-block" style="margin-bottom:11px"><h3 style="font-size:15px">新建钱包</h3></div>
+      <div class="row2">
+        <div class="field"><label>钱包名</label><input id="wallet-name-input" placeholder="比如：泰铢现金"><span class="hint" id="wallet-name-suggest"></span></div>
+        <div class="field"><label>币种</label><div class="dd-fake">MYR <span class="chev">▾</span></div></div>
+      </div>
+      <div class="field"><label>绑定支付方式</label><div class="dd-fake">不绑定支付方式（可以之后再绑）<span class="chev">▾</span></div></div>
+      <div class="field">
+        <label>账户类型</label>
+        <div class="acct-types">
+          <div class="acct-type on" data-label="银行" onclick="setGroupBtn(this); document.getElementById('acct-hint').textContent='已选：'+this.dataset.label;">🏦</div>
+          <div class="acct-type" data-label="现金" onclick="setGroupBtn(this); document.getElementById('acct-hint').textContent='已选：'+this.dataset.label;">💵</div>
+          <div class="acct-type" data-label="信用卡" onclick="setGroupBtn(this); document.getElementById('acct-hint').textContent='已选：'+this.dataset.label;">💳</div>
+          <div class="acct-type" data-label="手机支付" onclick="setGroupBtn(this); document.getElementById('acct-hint').textContent='已选：'+this.dataset.label;">📱</div>
+        </div>
+        <span class="hint" id="acct-hint">已选：银行</span>
+      </div>
+      <button class="big-cta">建立钱包</button>
+    `
+  },
+];
+
+const nav = document.getElementById('nav');
+const phone = document.getElementById('phone');
+const notesEl = document.getElementById('notes');
+
+/* ---------- 第四轮：行程参与者名单（分摊 / 邀请管理共用同一份） ---------- */
+let TRIP_PARTICIPANTS = ['Alex'];
+function renderExpSplitPeople(){
+  const box = document.getElementById('exp-split-people');
+  if(!box) return;
+  box.innerHTML = TRIP_PARTICIPANTS.map(function(p, i){
+    return '<button class="wallet-select-btn' + (i===0?' on':'') + '" onclick="toggleExpSplitPerson(this)">' + p + '</button>';
+  }).join('');
+}
+function addParticipant(){
+  const input = document.getElementById('add-participant-input');
+  const name = (input && input.value || '').trim();
+  if(!name) return;
+  TRIP_PARTICIPANTS.push(name);
+  const list = document.getElementById('invites-participant-list');
+  if(list){
+    const row = document.createElement('div');
+    row.className = 'p-row';
+    row.innerHTML = '<div class="avatar">' + name.charAt(0).toUpperCase() + '</div><div style="flex:1"><div class="nm">' + name + '</div><span class="badge wait lg">线下添加</span></div>';
+    list.appendChild(row);
+  }
+  if(input) input.value = '';
+  document.getElementById('add-participant-pop').hidden = true;
+  renderExpSplitPeople();
+}
+
+/* ---------- 第四轮：支付方式命名池（新建钱包 / 取款换汇来源钱包共用） ---------- */
+let PAYMENT_METHODS = ['HSBC 大马 Visa Signature', '支付宝'];
+function paymentMethodSuggestHTML(targetInputId){
+  return '已有支付方式：' + PAYMENT_METHODS.map(function(name, i){
+    return '<span class="dd-new-corner" onclick="fillPaymentName(\'' + targetInputId + '\',' + i + ')">' + name + '</span>';
+  }).join(' / ') + '，点击可直接用同名';
+}
+function fillPaymentName(targetInputId, idx){
+  const input = document.getElementById(targetInputId);
+  if(input) input.value = PAYMENT_METHODS[idx];
+}
+
+/* ---------- 第四轮反馈第三批：我的钱包黑卡色阶切换 ---------- */
+function setWalletShade(btn, color){
+  const block = document.getElementById('wallet-block-el');
+  if(block) block.style.background = color;
+  btn.parentElement.querySelectorAll('.shade-dot').forEach(function(d){ d.classList.remove('on'); });
+  btn.classList.add('on');
+}
+
+/* ---------- 第四轮：我的钱包内嵌"取款/换汇"面板展开收起 ---------- */
+function toggleExchangePanel(el){
+  const panel = document.getElementById('exchange-inline-panel');
+  if(!panel) return;
+  panel.hidden = !panel.hidden;
+  const chev = el.querySelector('.chev');
+  if(chev) chev.textContent = panel.hidden ? '▾' : '▴';
+}
+
+/* ---------- 屏 2：分摊三档 + 汇率比价 ---------- */
+function setQaSplit(btn, mode){
+  btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  const custom = document.getElementById('qa-custom-split');
+  if(custom) custom.hidden = (mode!=='custom');
+}
+/* ---------- 快速记账"分类/币种"下拉：复用屏 3「记一笔消费」toggleCatPicker/pickCat 同一套交互
+   分类候选清单原样照抄 #exp-cat-list；币种候选清单原样照抄"创建新行程"屏"同时启用哪些币种" chip 列表 ---------- */
+function toggleQaCatPicker(el){
+  const list = document.getElementById('qa-cat-list');
+  const curList = document.getElementById('qa-cur-list');
+  if(curList) curList.hidden = true;
+  if(list) list.hidden = !list.hidden;
+}
+function pickQaCat(el, label){
+  const lbl = document.getElementById('qa-cat-label');
+  if(lbl){ lbl.textContent = label; lbl.style.color = '#fff'; }
+  document.getElementById('qa-cat-list').hidden = true;
+}
+function toggleQaCurPicker(el){
+  const list = document.getElementById('qa-cur-list');
+  const catList = document.getElementById('qa-cat-list');
+  if(catList) catList.hidden = true;
+  if(list) list.hidden = !list.hidden;
+}
+function pickQaCur(el, code){
+  const lbl = document.getElementById('qa-cur-label');
+  if(lbl) lbl.textContent = code;
+  document.getElementById('qa-cur-list').hidden = true;
+}
+const FX_RATES = {
+  MYR: { THB:8.12, USD:0.245, SGD:0.318, CNY:1.61, HKD:1.92 },
+  USD: { THB:33.03, MYR:4.08, SGD:1.30, CNY:6.58, USD:1, HKD:7.82 }
+};
+const FX_SYMBOLS = { THB:'฿', USD:'$', SGD:'S$', CNY:'¥', HKD:'HK$' };
+const FX_CHANNELS = [
+  { name:'Wise', icon:'🌐', spread:-0.00714, note:'接近中间价 · 约 0.7% 手续费', best:true },
+  { name:'TNG 跨境', icon:'📱', spread:-0.01515, note:'DuitNow 跨境 · 约 -1.5%' },
+  { name:'ATM 取款', icon:'🏧', spread:-0.02217, note:'银行外汇费约 2% + ฿220 固定手续费（大额提款才明显，小额示例暂未扣）' },
+  { name:'换钱店', icon:'💵', spread:-0.02512, note:'市区 Superrich · 约 -2.5%，机场更差' },
+];
+let FX_STATE = { base:'MYR', target:'THB' };
+let FX_ENABLED_CHANNELS = new Set(FX_CHANNELS.map(c=>c.name));
+let FX_ALIPAY_ENABLED = true; /* 第四轮反馈第二批：支付宝也接进"自选渠道"开关，默认勾选 */
+function fxToggleAlipay(cb){
+  FX_ALIPAY_ENABLED = cb.checked;
+  fxRecalc();
+}
+function fxSetBase(btn, base){
+  [...btn.parentElement.children].forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  FX_STATE.base = base;
+  const lbl = document.getElementById('fx-cur-label');
+  if(lbl) lbl.textContent = base;
+  fxRecalc();
+}
+function fxSetTarget(optEl, cur){
+  FX_STATE.target = cur;
+  const lbl = document.getElementById('fx-target-label');
+  if(lbl) lbl.textContent = cur;
+  optEl.closest('.fdrop-menu').hidden = true;
+  optEl.closest('.fdrop').querySelector('.fchip').textContent = '🎯 ' + cur + ' ▾';
+  fxRecalc();
+}
+function fxToggleChannel(name, cb){
+  if(cb.checked) FX_ENABLED_CHANNELS.add(name); else FX_ENABLED_CHANNELS.delete(name);
+  fxRecalc();
+}
+function fxRecalc(){
+  const amountEl = document.getElementById('fx-amount');
+  const list = document.getElementById('fx-channels');
+  if(!amountEl || !list) return;
+  const base = FX_STATE.base;
+  const target = FX_STATE.target;
+  const sym = FX_SYMBOLS[target] || (target + ' ');
+  const rate = (FX_RATES[base] && FX_RATES[base][target]) || 0;
+  const amt = parseFloat(amountEl.value) || 0;
+  let html = FX_CHANNELS.filter(c=>FX_ENABLED_CHANNELS.has(c.name)).map(c=>{
+    const eff = rate * (1 + c.spread);
+    const total = amt * eff;
+    const totalStr = (target === 'THB') ? total.toFixed(0) : total.toFixed(2);
+    return '<div class="fx-row">' +
+      '<div class="fx-row-top"><span>' + c.icon + ' ' + c.name + (c.best?'<span class="fx-badge-best">✓ 最划算</span>':'') + '</span><span class="fx-row-amt">' + sym + totalStr + '</span></div>' +
+      '<div class="fx-row-note">1 ' + base + ' = ' + eff.toFixed(3) + ' ' + sym + ' · ' + c.note + '</div>' +
+    '</div>';
+  }).join('');
+  if(!html && !FX_ALIPAY_ENABLED) html = '<div class="empty">自选渠道全部取消了，下面没东西可比 — 至少留一个吧</div>';
+  if(FX_ALIPAY_ENABLED){
+    html += '<div class="fx-row ref"><div class="fx-row-top"><span>🅰️ 支付宝（经 CNY 中转）</span></div>' +
+      '<div class="fx-row-note">支付宝走 CNY 结算，不是直接 ' + base + '→' + target + '；要经过 ' + base + '→CNY→' + target + ' 两段隐含换算，通常比直接换汇更差，仅供参考，不列入"最划算"排行</div></div>';
+  }
+  list.innerHTML = html;
+  document.querySelectorAll('.fbc-val').forEach(el => {
+    const b = el.dataset.base;
+    if(!b) return;
+    const r = (FX_RATES[b] && FX_RATES[b][target]) || 0;
+    el.textContent = '= ' + r.toFixed(3) + ' ' + sym;
+  });
+}
+function toggleFilterDrop(btn){
+  const menu = btn.nextElementSibling;
+  document.querySelectorAll('.fdrop-menu').forEach(m=>{ if(m!==menu) m.hidden = true; });
+  menu.hidden = !menu.hidden;
+}
+let HIST_FILTERS = { cat:null, payer:null, date:null, pay:null };
+function pickFilter(key, val, optEl){
+  HIST_FILTERS[key] = (HIST_FILTERS[key]===val) ? null : val;
+  optEl.closest('.fdrop-menu').hidden = true;
+  optEl.closest('.fdrop').querySelector('.fchip').classList.toggle('on', !!HIST_FILTERS[key]);
+  const allChip = document.querySelector('.hist-filters > .fchip');
+  if(allChip) allChip.classList.remove('on');
+  applyHistFilters();
+}
+function resetHistFilters(){
+  HIST_FILTERS = { cat:null, payer:null, date:null, pay:null };
+  document.querySelectorAll('.hist-filters .fchip').forEach(b=>b.classList.remove('on'));
+  const allChip = document.querySelector('.hist-filters > .fchip');
+  if(allChip) allChip.classList.add('on');
+  applyHistFilters();
+}
+function applyHistFilters(){
+  document.querySelectorAll('.hist-row').forEach(row=>{
+    let show = true;
+    if(HIST_FILTERS.cat && row.dataset.cat !== HIST_FILTERS.cat) show = false;
+    if(HIST_FILTERS.payer && row.dataset.payer !== HIST_FILTERS.payer) show = false;
+    if(HIST_FILTERS.date && row.dataset.date !== HIST_FILTERS.date) show = false;
+    if(HIST_FILTERS.pay && row.dataset.pay !== HIST_FILTERS.pay) show = false;
+    row.hidden = !show;
+  });
+}
+function toggleHistSort(){
+  const menu = document.getElementById('hist-sort-menu');
+  if(menu) menu.hidden = !menu.hidden;
+}
+function setHistSort(el, mode){
+  document.querySelectorAll('.hist-sort-opt').forEach(o=>o.classList.remove('on'));
+  el.classList.add('on');
+  document.querySelector('.hist-sort-btn').textContent = el.textContent.trim() + ' ▾';
+  document.getElementById('hist-sort-menu').hidden = true;
+  const list = document.querySelector('.hist-list');
+  if(!list) return;
+  const rows = [...list.children];
+  if(mode==='date-desc') rows.sort((a,b)=> b.dataset.date.localeCompare(a.dataset.date));
+  else if(mode==='amount-desc') rows.sort((a,b)=> parseFloat(b.dataset.amt) - parseFloat(a.dataset.amt));
+  else rows.sort((a,b)=> (+a.dataset.manual) - (+b.dataset.manual));
+  rows.forEach(r=>list.appendChild(r));
+}
+function toggleHistActions(row){
+  const already = row.classList.contains('show-actions');
+  document.querySelectorAll('.hist-row.show-actions').forEach(r=>r.classList.remove('show-actions'));
+  if(!already) row.classList.add('show-actions');
+}
+
+/* ---------- 屏 1：首页改名 ---------- */
+function toggleRename(btn){
+  const pop = btn.closest('.trip-card').querySelector('.rename-pop');
+  pop.hidden = !pop.hidden;
+}
+
+/* ---------- 通用：单选组 / 多选 chip ---------- */
+function setGroupBtn(btn){
+  [...btn.parentElement.children].forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+}
+function toggleChip(el){
+  el.classList.toggle('on');
+}
+
+/* ---------- 屏 3：记一笔消费 ---------- */
+function toggleCatPicker(el){
+  document.getElementById('exp-cat-list').hidden = !document.getElementById('exp-cat-list').hidden;
+}
+function pickCat(el, label){
+  document.getElementById('exp-cat-label').textContent = label;
+  document.getElementById('exp-cat-list').hidden = true;
+}
+function toggleExpSplit(btn){
+  btn.classList.toggle('on');
+  document.getElementById('exp-split-panel').hidden = !btn.classList.contains('on');
+}
+function toggleExpSplitPerson(btn){
+  btn.classList.toggle('on');
+  const box = document.getElementById('exp-custom-split');
+  if(box && !box.hidden) renderExpCustomSplit();
+}
+function setExpSplitMode(btn, mode){
+  setGroupBtn(btn);
+  const box = document.getElementById('exp-custom-split');
+  if(!box) return;
+  if(mode === 'custom'){ renderExpCustomSplit(); box.hidden = false; }
+  else box.hidden = true;
+}
+function expGetSplitPeople(){
+  const others = [...document.querySelectorAll('#exp-split-people .wallet-select-btn.on')].map(b=>b.textContent.trim());
+  return ['我', ...others];
+}
+function renderExpCustomSplit(){
+  const box = document.getElementById('exp-custom-split');
+  if(!box) return;
+  const people = expGetSplitPeople();
+  const amountEl = document.getElementById('expense-amount-input');
+  const total = parseFloat(amountEl ? amountEl.value : 0) || 0;
+  if(people.length <= 2){
+    const other = people[1] || '对方';
+    const half = (total/2).toFixed(2);
+    box.innerHTML =
+      '<div class="glabel">这笔怎么分？(填一个，另一个自动算)</div>' +
+      '<div class="custom-split-row"><span>我的份</span><input id="exp-split-a" value="' + half + '" oninput="expSplitSync(\'a\')"></div>' +
+      '<div class="custom-split-row"><span>' + other + '的份</span><input id="exp-split-b" value="' + half + '" oninput="expSplitSync(\'b\')"></div>';
+  } else {
+    const each = (total/people.length).toFixed(2);
+    box.innerHTML = '<div class="glabel">每人各自的份额</div>' + people.map(function(p){
+      return '<div class="custom-split-row"><span>' + (p==='我' ? '我的份' : p+'的份') + '</span><input value="' + each + '"></div>';
+    }).join('');
+  }
+}
+function expSplitSync(which){
+  const amountEl = document.getElementById('expense-amount-input');
+  const total = parseFloat(amountEl ? amountEl.value : 0) || 0;
+  const a = document.getElementById('exp-split-a');
+  const b = document.getElementById('exp-split-b');
+  if(!a || !b) return;
+  if(which === 'a') b.value = (total - (parseFloat(a.value)||0)).toFixed(2);
+  else a.value = (total - (parseFloat(b.value)||0)).toFixed(2);
+}
+
+/* ---------- 屏 4：取款/换汇 ---------- */
+function toggleAddSource(el){
+  document.getElementById('add-source-pop').hidden = !document.getElementById('add-source-pop').hidden;
+}
+
+/* ---------- 屏 5：结算 ---------- */
+function toggleSettleDetail(who){
+  const el = document.getElementById('settle-detail-'+who);
+  if(el) el.hidden = !el.hidden;
+}
+function updateSettleProgress(){
+  const list = document.getElementById('settlement-transfer-list');
+  if(!list) return;
+  const boxes = [...list.querySelectorAll('input[type=checkbox]')];
+  const done = boxes.filter(function(b){ return b.checked; }).length;
+  const total = boxes.length;
+  const p = document.getElementById('settle-progress');
+  if(p) p.textContent = '转账进度：' + done + ' / ' + total + ' 笔已确认收款';
+  const btn = document.getElementById('settle-final-btn');
+  if(btn){
+    if(done === total){
+      btn.disabled = false; btn.style.background = 'var(--ok)';
+      btn.textContent = '✓ 全部已收款 · 标记本行程已结算';
+    } else {
+      btn.disabled = true; btn.style.background = 'var(--gold-dk)';
+      btn.textContent = '等所有转账确认收款后 · 整个行程才会标记已结算';
+    }
+  }
+}
+
+/* ---------- 屏 6：支付方式 ---------- */
+function toggleAddPay(btn){
+  document.getElementById('addpay-form').hidden = !document.getElementById('addpay-form').hidden;
+}
+function toggleBalancePanel(btn){
+  document.getElementById('balance-panel').hidden = !document.getElementById('balance-panel').hidden;
+}
+function saveBalance(){
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const dateInput = document.getElementById('balance-date-input');
+  const todayStr = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());
+  const dateLabel = (dateInput && dateInput.value) ? dateInput.value : todayStr;
+  const timeLabel = pad(now.getHours())+':'+pad(now.getMinutes());
+  const ts = document.getElementById('balance-ts');
+  if(ts) ts.textContent = '刚刚保存 · ' + dateLabel + ' ' + timeLabel;
+}
+
+/* ---------- 屏 7：邀请管理 ---------- */
+function toggleGenInvite(btn){
+  document.getElementById('gen-invite-pop').hidden = !document.getElementById('gen-invite-pop').hidden;
+}
+function toggleAddParticipant(el){
+  const pop = document.getElementById('add-participant-pop');
+  if(pop) pop.hidden = !pop.hidden;
+}
+
+function renderNotes(scr){
+  let html = `<h2>${scr.label} · 改了什么</h2><ul>`;
+  scr.notes.forEach(n=>{
+    if (typeof n === 'string'){ html += `<li>${n}</li>`; return; }
+    html += `<li><b>${n.b}</b><br>`;
+    if (n.before) html += `<span class="before">改前：${n.before}</span><br>`;
+    if (n.after) html += `<span class="after">改后：${n.after}</span>`;
+    if (n.unsure) html += `<br><span class="unsure">⚠️ ${n.unsure}</span>`;
+    html += `</li>`;
+  });
+  html += `</ul>`;
+  if (scr.id === 'trip'){
+    html += `<div class="legend"><p>选中态颜色分工</p>
+      <div class="row"><span class="dot" style="background:var(--ink)"></span>顶部导航 tab（行程主页/结算/支付方式/邀请管理）· 切换行程下拉的选中态浅灰底</div>
+      <div class="row"><span class="dot" style="background:var(--cream); border:1px solid var(--sand)"></span>分摊相关（仅我自己/平分/自定义分摊、谁垫的钱/怎么分）统一米黄底 + 选中深黑</div>
+      <div class="row"><span class="dot" style="background:var(--ok)"></span>钱包账户类型（银行/现金/信用卡/手机支付）</div>
+    </div>`;
+  }
+  notesEl.innerHTML = html;
+}
+
+function show(id){
+  const scr = SCREENS.find(s=>s.id===id);
+  phone.innerHTML = `<div class="screen" id="scr-${id}">${scr.html}</div>`;
+  renderNotes(scr);
+  [...nav.children].forEach(b=>b.classList.toggle('active', b.dataset.id===id));
+  if (id === 'trip'){
+    FX_STATE = { base:'MYR', target:'THB' };
+    fxRecalc();
+    const exS = document.getElementById('exchange-source-suggest');
+    if(exS) exS.innerHTML = paymentMethodSuggestHTML('exchange-source-name-input');
+  }
+  if (id === 'expense') renderExpSplitPeople();
+  if (id === 'wallet'){
+    const s = document.getElementById('wallet-name-suggest');
+    if(s) s.innerHTML = paymentMethodSuggestHTML('wallet-name-input');
+  }
+}
+
+SCREENS.forEach((s,i)=>{
+  const b = document.createElement('button');
+  b.dataset.id = s.id;
+  b.innerHTML = `<span class="n">${String(i+1).padStart(2,'0')}</span>${s.label}`;
+  b.onclick = ()=>show(s.id);
+  nav.appendChild(b);
+});
+show(SCREENS[0].id);
+</script>
+
+</body></html>

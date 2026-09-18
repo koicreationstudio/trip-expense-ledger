@@ -12,8 +12,39 @@ Remy 在第二十一轮问了一句关键的话："你为何没有一一的跟�
 - 按方案 01-09 的屏幕顺序，每屏下面列出所有独立子区块/子组件——不能写"屏02 ✅"就算审完，要拆到"Hero卡"/"我的钱包卡"/"汇率比价"/"记录·HISTORY"这个粒度分别打勾。
 - 每一项标记：✅完全对齐 / ⚠️部分对齐（附差异说明）/ ❌不对齐（附差异说明）/ 🔲本轮未检查。
 - 截图方式：每一屏都要截"完整长图"（full-page screenshot 或滚动拼接），不能只截首屏可见区域。
-- 方案来源：Artifact V10（`https://claude.ai/code/artifact/86772aaa-6ddc-4fd6-bff1-798788f15d1b`），本地曾保存过一份完整源码快照供比对用（1432 行 HTML+CSS，含全部 9 屏 + notes 变更记录）。
+- 方案来源：Artifact V10（`https://claude.ai/code/artifact/86772aaa-6ddc-4fd6-bff1-798788f15d1b`）。**本地权威快照现在真的存在项目仓库里**：`reference/artifact-v10-source.html`（1431行，2026-09-18第二十五轮找到并搬进来的，之前几轮文字记录说"本地曾保存过快照"，但那份快照其实只存在 Claude Code 自己的会话缓存目录里，不在这个项目仓库、不受 git 追踪，换一个 session/清了缓存就找不到——以后要核对 CSS 字面值直接读这个文件，不用再靠 WebFetch 或凭记忆）。
 - 真实数据来源：Remy 真实在用的行程"🇭🇰2026香港"（tripId `f78a6b5e-8612-4097-8bfd-88a5db664045`）——这是本项目专属铁律，任何一轮验收都不能只测 demo 行程。
+
+---
+
+## 第二十五轮验证结论摘要（2026-09-18）
+
+背景：Remy 提两件事——①要"两个都要"（方案紧凑字号 + 不要iOS自动放大跳动），不接受round22"字号提到16px解决放大"这种牺牲视觉的方案；②结算页+"记一笔消费"悬浮按钮的排版/紧凑度，是round23"来回确认到很累了"时被搁置、只处理了商家名称和字体两条，这部分被漏掉了。
+
+**改动**：
+1. `app/layout.tsx` 新增 `export const viewport`，显式声明 `maximumScale: 1`（保留 `width=device-width`/`initialScale:1`）。删掉了 round22 加在 `app/globals.css` 里那条把真实 `<input>`/`<textarea>` 字号强推到16px的规则，`.field-input`/`.field-input-dark` 恢复方案原本的10px。
+2. 读了 `reference/artifact-v10-source.html` 第286行确认 `.actionbar button`（"记一笔消费"按钮）字面规格是 `padding:9px 14px; font-size:12px; gap:6px`——`.btn-primary` 这个全站chokepoint经过"第四轮全局紧凑化"已经收到11px/10px/8px的统一值，这颗全站最高频按钮跟着chokepoint一起被收窄，没人专门核对过跟方案的差距。这次局部覆盖（沿用round18已有的`!rounded-xl`局部覆盖同一模式）把这三个值改回字面一致，圆角保留`rounded-xl`不变（这是Remy 2026-09-13明确反馈过"看着像浮起来的胶囊"要收窄的，不是这轮的问题，不能因为对齐方案就悄悄改回pill）。
+3. 读同一份源码第378行发现 `#scr-payment section.blk h4{font-size:9px}`——支付方式屏的小标题有专属scoped override，比通用的10px再收一档，round18当时只套用了通用10px版本没查到这条页面专属覆盖。三个小标题（已配置的支付方式/本行程启用的支付方式/新增支付方式）改成9px。
+4. **结算页本身核对下来是对的**——逐token核对 `#scr-settlement .list{padding:3px 5px}`/`.p-row{padding:2px 0;gap:5px}`/`.avatar{width:18px;font-size:9px}`/`.nm{font-size:10.5px}`/`.amt{font-size:9.5px}`，`settlement-body.tsx` 源码里这几个值字面全部一致（round20/21就已经改对了），**不是清单打勾但代码没改**这种情况——这次不是纯粹"信清单"，是真的用 Playwright 脚本在线上真实行程里读 `getComputedStyle` 实测出这几个值精确对上，不是只读源码。
+
+**为什么"记一笔消费"按钮偏偏漏了但结算页本身是对的**：round20/21的CSS token核对工作范围写的是"结算屏 + 记一笔消费屏"（指"记一笔消费"这个*表单页面*的输入框/分摊面板），没有覆盖"记一笔消费"这个*悬浮操作条按钮*本身——这颗按钮物理上贴在几乎每个页面底部（`record-expense-bar.tsx`），概念上属于"全局导航元素"不属于任何一屏，之前几轮的逐屏核对天然会跳过它，这是一个真实的检查范围盲区，不是敷衍。
+
+**真实computed style实测**（Playwright脚本 + webkit引擎，登录真实账号"🇭🇰2026香港"，`tel_session` cookie注入 + `wrangler d1 execute --remote` 插验证session，测完精确删除 `SELECT count(*)` 归零）：
+- viewport meta 线上确认 `width=device-width, initial-scale=1, maximum-scale=1`。
+- "记一笔消费"按钮实测：`font-size:12px / padding:9px 14px / gap:6px / border-radius:12px(rounded-xl，符合预期保留) / background:rgb(55,55,54)(=--ink) / min-height:44px` —— 全部跟目标值精确一致。
+- 结算页净值列表实测：`border-radius:14px / gap:2px / padding:3px 5px`；行内`gap:5px / padding-top:2px / padding-bottom:2px`；头像`18×18px/font-size:9px`；姓名`10.5px`；金额`9.5px`——全部精确一致。
+- 支付方式页三个小标题实测：均为 `9px`，改动生效。
+- "记一笔消费"表单里金额/商家名称/日期/分类/备注5个真实输入框实测：全部回到 `10px`（不再是16px），确认视觉紧凑度真的恢复了。
+
+**iOS防放大这条的验证局限（如实说明，不包装成"已解决"）**：Playwright 的 WebKit 引擎能精确还原页面渲染和 CSS 计算，但**测不出真实 Safari App 那层"聚焦时是否触发整页缩放动画"的系统级行为**——那是 WKWebView 容器自己的原生手势逻辑，不是 DOM/CSS 层面的东西，无头浏览器再怎么精确也复现不了。这条局限 round22 也提到过（当时测的是16px方案，同样测不出真实跳动），这轮换了方案，局限还在，没有解决。
+上网查证到两个重要、之前没查清楚的事实（会写进 Remy 汇报里）：①iOS 10 起，**常规 Safari 浏览器标签页**已经不遵守 `maximum-scale` 对双指缩放整页的限制（苹果2016年官方无障碍修正），所以 Remy 平时从 Safari 网址/书签打开这个网站，双指缩放页面不会因为这条改动被关掉；②但如果她是"添加到主屏幕"后从桌面图标打开（PWA独立模式，这个项目确实有`manifest.webmanifest`），那种模式走系统级WKWebView容器，会真的遵守`maximum-scale=1`，双指缩放会被关掉。这次没有查到/问到 Remy 平时是从哪种方式打开这个app，如实记录这个信息缺口。
+`maximum-scale=1`能不能真的解除"聚焦小字号输入框自动放大"这个问题，是业界广泛使用的常见做法（多个独立技术资料确认"iOS>10仍然认这条来控制聚焦缩放，即使不再控制双指缩放"），但没有查到官方文档保证覆盖所有iOS版本/所有场景，**这轮没有办法拿到"Remy自己真机点一下"这种最终证据**，如果她之后自己测还是会跳，需要回退到round22的16px方案（二选一，不能共存）。
+
+**独立ui-auditor复核**：见下方"round25独立复核结果"（走查完成后回填）。
+
+**代码验证**：`./deploy.sh` 五关（lint/typecheck/单测78个/opennextjs-cloudflare build/wrangler deploy）两次全过（一次落地4项代码改动，一次改layout.tsx里的说明注释更正"双指缩放会不会被关掉"这条技术判断，不影响任何运行时行为）。最终线上 Version ID：`097d210b-5475-45fc-bbc2-9ace82b90ed7`。
+
+**本轮新增基建**：`reference/artifact-v10-source.html`——把之前只存在Claude Code会话缓存目录、不受git追踪、随时可能因为清缓存而消失的Artifact V10完整源码快照，真正搬进项目仓库并纳入版本控制，以后核对CSS字面值不用再靠WebFetch或凭记忆。
 
 ---
 
@@ -111,7 +142,8 @@ Remy 对第二十一轮遗留的3个悬案都表态了（不再是"没决定"）
 | 分类字段（CategoryCombobox+chevron） | ✅ | round19 修过脱节，本轮修 gap；底层 bug 同上已修 |
 | "这笔不计入分摊"勾选框 | ✅ | round14 刻意加的真功能，保留 |
 | 支付方式下拉 | ✅ | 本轮修圆角为10px（继承 field-input chokepoint） |
-| 备注字段（textarea） | ✅ | **round22 修复过一个真 bug**——iOS 缩放字号修复第一版漏了这个字段，`textarea` 裸标签选择器 specificity 不够高，实测聚焦后字号还是10px，没生效；补 `textarea.field-input` 选择器后重新实测=16px，见下方"round22 iOS 输入框缩放实测"一节 |
+| 备注字段（textarea） | ✅ | round22 曾修过一个真 bug（textarea specificity 不够，字号没生效）。**round25 改了解法**：不再靠把字号强推到16px解决iOS放大，改用 `layout.tsx` 的 `viewport.maximumScale:1`，`.field-input`/`.field-input-dark` 恢复方案原本10px，round22那条16px覆盖规则整段删掉。实测聚焦后=10px（不是16px），紧凑视觉恢复；iOS防放大是否真生效见下方"round25 iOS 输入框缩放（viewport 方案）实测"一节，有真实局限没有100%把握 |
+| 全部真实 `<input>`/`<textarea>` 字号（金额/商家/日期/分类/备注等） | ✅ | **round25**——实测全部=10px（源码值），跟round22的16px不是同一个方案，见下方专节 |
 | 收据上传字段 | ✅ | round14 刻意加的真功能，保留 |
 | "跟其他人split"开关 | ✅ | round17 已改成开关（非三段式） |
 | split-panel 外壳（米黄背景/圆角12/padding8/gap7） | ✅ | 已对齐，本轮核实数值全部匹配 |
@@ -142,6 +174,12 @@ Remy 对第二十一轮遗留的3个悬案都表态了（不再是"没决定"）
 | 转账行头像 | ✅ | **round22 去掉**——Remy 明确表态"要"（照方案字面来），已删除，独立 ui-auditor 确认头像真的消失、净值列表的头像（不受影响的那部分）没被误伤、布局没有错位/留白怪异 |
 | "标记已结算"按钮（.big-cta，未收齐时文案即状态） | ✅ | round19 已对齐 |
 
+**round25新增（不属于任何单一屏，是全局导航元素，之前的逐屏核对天然漏掉）**：
+
+| 子区块 | 状态 | 说明 |
+|---|---|---|
+| 全局底部"记一笔消费"操作条按钮（`.actionbar button`） | ✅ | **round25本轮修复**——这颗按钮贴在几乎每个页面底部，属于全局导航元素不属于任何一屏，round20/21的"结算屏+记一笔消费屏CSS token核对"没有覆盖到它（那次核对的是"记一笔消费"*表单页面*，不是这个悬浮操作条按钮），是真实检查盲区。字面规格`padding:9px 14px;font-size:12px;gap:6px`，之前因为全站`.btn-primary`chokepoint的"第四轮全局紧凑化"被动收到11px/10px/8px，跟着chokepoint一起收窄没人专门核对过跟方案的差距。这次局部覆盖三个值改回字面一致（圆角`rounded-xl`保留不变，是Remy 2026-09-13明确反馈过要收窄的，不是这轮问题）。实测：font-size 12px/padding 9px 14px/gap 6px/background rgb(55,55,54)/min-height 44px，全部精确对上 |
+
 ## 屏 05 · 支付方式
 
 | 子区块 | 状态 | 说明 |
@@ -149,6 +187,7 @@ Remy 对第二十一轮遗留的3个悬案都表态了（不再是"没决定"）
 | 标题 | ✅ | 15px |
 | 顶部说明文字（逐字方案原文） | ✅ | round18 已改 |
 | "已配置的支付方式"列表 | ✅ | **本轮修复**——独立 ui-auditor 走查发现之前用的是 `.tx-item`/`rounded-xl`（12px圆角/行间gap 8px），跟 `#scr-payment .list`（14px圆角/gap 2px/padding 3px 5px）不是同一套。已改成共用 `.list` 容器 + `.p-row`(gap 5px)，`.nm` 10px/`.tag-note` 8.5px/`.del-icon` 10px+padding 2px 逐值对齐 |
+| 三个小标题字号（"已配置的支付方式"/"本行程启用的支付方式"/"新增支付方式"） | ✅ | **round25新发现并修复**——round18把这三个小标题统一成`section.blk h4`通用规格10px，但读`reference/artifact-v10-source.html`第378行发现`#scr-payment`这一屏有专属scoped override`section.blk h4{font-size:9px}`（比通用值再收一档），round18没查到这条页面专属规则，一直漏了1px。这次改成9px，线上实测确认生效。这是一处清单打勾但代码值跟方案字面有细微出入的真实案例，如实记录不是隐瞒 |
 | 删除图标（🗑非文字） | ✅ | round19 已改，本轮顺带修了字号/padding |
 | "＋添加支付方式"按钮+展开表单 | ✅ | round17 已决定常驻展开，保留 |
 | "本行程启用的支付方式"勾选列表 | ✅ | **本轮修复**——同上，从个体描边胶囊改成共用 `.list` 容器 + `.check-row`(10.5px) |
@@ -231,6 +270,23 @@ Remy 对第二十一轮遗留的3个悬案都表态了（不再是"没决定"）
 **过程中真的抓到一个bug**：第一版CSS只用了 `input[type=...]` 属性选择器+裸 `textarea` 标签选择器，`textarea` 单独一个标签选择器 specificity (0,0,1) 比不过 `.field-input` 的 (0,1,0)——"记一笔消费"备注框实测聚焦后还是10px，没生效。补了 `textarea.field-input`/`textarea.field-input-dark` 两条更具体的选择器后重新实测=16px。**这是"应该对"和"测出来才知道对不对"的真实区别，如果不实测直接报"已修复"会是一次假报告。**
 
 **方法论局限如实说明**：这套测试量的是"触发iOS强制缩放的技术条件（字号<16px）是否解除"，不是"在真实iPhone Safari上肉眼看有没有跳出缩放动画"——Playwright的Chromium引擎能精确测字号但不能重现Safari那套缩放渲染行为，如果 Remy 自己拿真实iPhone点一下还是感觉到跳动，需要回来反馈进一步排查（但从字号这个决定性变量的角度，触发条件已经不在了）。
+
+---
+
+## round25 iOS 输入框缩放（viewport 方案）实测（2026-09-18）
+
+背景：Remy 明确要求"两个都要"——方案的10-11px紧凑字号 + 不要iOS自动放大跳动，不接受round22"把字号提到16px解决放大"这个牺牲视觉的方案。这轮换成`app/layout.tsx`声明`viewport.maximumScale:1`，删掉round22那条16px覆盖规则，`.field-input`/`.field-input-dark`恢复10px。
+
+**实测方法**：真实 Playwright 脚本，这次用 **WebKit 引擎**（不是round22的Chromium）+ iPhone视口(390×844，deviceScaleFactor 3，isMobile/hasTouch，UA伪装成iOS 17.5 Safari)，登录真实账号真实行程"🇭🇰2026香港"（`tel_session` cookie注入，`wrangler d1 execute --remote`插验证session，测完立刻`DELETE`+`SELECT count(*)`确认归零，marker='pm-round25-viewport-verify-2026-09-18'）。
+
+**实测结果**：
+1. viewport meta 线上确认内容是 `width=device-width, initial-scale=1, maximum-scale=1`，声明已生效。
+2. "记一笔消费"表单里金额/商家名称/日期/分类/备注5个真实输入框，点击聚焦后 `getComputedStyle().fontSize` 全部=10px（不是16px），确认紧凑字号真的恢复了，没有牺牲视觉。
+
+**这轮无法验证、如实说明的局限（不包装成"已解决"）**：
+- Playwright 再换引擎（WebKit）也测不出真实 Safari App 的"聚焦触发整页缩放动画"这个系统级行为——那是 WKWebView 容器自己的原生手势逻辑，不是DOM/CSS层面的东西，无头浏览器无论用什么引擎都复现不了，这条局限round22就存在，这轮换了方案，局限还在，没解决。
+- 上网查证到两个之前没查清楚、会影响 Remy 知情判断的事实：①iOS 10 起苹果官方修正过——**常规 Safari 浏览器标签页**不再遵守 `maximum-scale` 对双指缩放整页的限制（无障碍考量，用户始终能手动缩放），所以如果 Remy 平时是从 Safari 网址/书签打开这个app，双指缩放不会被这条改动关掉，代价比原先设想的小；②如果她是"添加到主屏幕"后从桌面图标打开（PWA独立模式，这个项目确实有`manifest.webmanifest`），那种模式走系统级WKWebView容器，会真的遵守这条限制，双指缩放会被关掉——**这轮没有查到/问到 Remy 平时是从哪种方式打开**，如实记录这个信息缺口，需要她告知。
+- `maximum-scale=1` 能不能解除"聚焦小字号输入框自动放大"，是业界广泛验证过的常见做法（多篇独立技术资料确认iOS>10仍然认这条来控制聚焦缩放），但没有查到任何官方文档保证覆盖所有iOS版本/所有场景，**这轮拿不到"Remy自己真机点一下"这个最终证据**。如果她之后自己测还是会跳，需要回退到round22的16px方案——两套方案二选一，不能同时要（16px方案牺牲视觉紧凑度，viewport方案有前面说的PWA独立模式缩放代价，且都没有100%把握）。
 
 ---
 
