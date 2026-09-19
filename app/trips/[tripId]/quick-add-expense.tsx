@@ -62,6 +62,14 @@ export function QuickAddExpense({
   const [category, setCategory] = useState('');
   const [currency, setCurrency] = useState(baseCurrency);
   const [merchant, setMerchant] = useState('');
+  // fix(2026-09-19，Remy 截图反馈新要求)：快速记账卡原本一直用"提交那一刻"当
+  // expenseDate，没有可改的日期字段——补记前几天的消费（比如晚上才想起来记
+  // 中午吃了什么）没法在这里做，只能去"记一笔消费"完整表单页。这不是方案缺口
+  // （Artifact `.quickadd` 本来就没有日期字段），是这次新加的真功能。默认今天，
+  // 样式跟"记一笔消费"表单页日期字段（`expense-form.tsx` 的 `type="date"`）同一种
+  // 输入控件，只是换成这张卡的深色紧凑 token（`field-input-dark`），不额外加
+  // 可见 label（这张卡里商家名称字段也是纯 placeholder 没有 label，保持一致）。
+  const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [fxRateUsed, setFxRateUsed] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +117,7 @@ export function QuickAddExpense({
     setCategory('');
     setCurrency(baseCurrency);
     setMerchant('');
+    setExpenseDate(new Date().toISOString().slice(0, 10));
     setFxRateUsed('');
     setSplitMode('equal');
     setSplitIncluded(Object.fromEntries(participants.map((p) => [p.id, true])));
@@ -168,7 +177,7 @@ export function QuickAddExpense({
           fxRateUsed: needsManualFxRate ? Number(fxRateUsed) : undefined,
           category: category.trim(),
           merchant: merchant.trim() || undefined,
-          expenseDate: new Date().toISOString(),
+          expenseDate: new Date(expenseDate).toISOString(),
           splits,
         }),
       });
@@ -258,6 +267,16 @@ export function QuickAddExpense({
           onChange={(e) => setMerchant(e.target.value)}
           placeholder="商家名称（可选）"
           aria-label="商家名称"
+          className="field-input-dark"
+        />
+
+        {/* fix(2026-09-19)：日期字段，默认今天，可以改成其它日期方便补记——
+            见上面 state 声明处的完整说明。 */}
+        <input
+          type="date"
+          value={expenseDate}
+          onChange={(e) => setExpenseDate(e.target.value)}
+          aria-label="日期"
           className="field-input-dark"
         />
 

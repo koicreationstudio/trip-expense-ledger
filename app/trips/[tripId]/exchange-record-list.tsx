@@ -60,7 +60,10 @@ export function ExchangeRecordList({ tripId, records }: { tripId: string; record
   }
 
   if (records.length === 0) {
-    return <p className="text-sm text-muted">还没有换汇记录，点上面「取款 / 换汇」开始记。</p>;
+    // fix(2026-09-19，Remy 截图坐实)：之前用 `text-sm`(14px)，Artifact 空状态提示
+    // 字面规格是 `.empty{font-size:11.5px}`，实测线上确实是 14px，字号明显偏大，
+    // 改成字面一致的 11.5px。
+    return <p className="text-[11.5px] text-muted">还没有换汇记录，点上面「取款 / 换汇」开始记。</p>;
   }
 
   return (

@@ -7,6 +7,7 @@ import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadMyShareBreakdown, loadSettlementInput } from '@/lib/db/settlement-query';
 import { computeNetBalances } from '@/lib/domain/settlement';
 import { formatMoney } from '@/lib/money';
+import { ensureMyrRatesFresh, getMyrRateSnapshot, deriveMidRate } from '@/lib/fx/rate-cache';
 import { ExpenseList } from './expense-list';
 import { WalletCard } from './wallet-card';
 import { ExchangeRecordList } from './exchange-record-list';
@@ -90,12 +91,27 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     .from(paymentMethods)
     .where(paymentMethodOwnerFilter(identity));
   const paymentMethodLabelById = new Map(myPaymentMethods.map((m) => [m.id, m.label]));
+  // 活动流每行的支付方式图标（💳/💵/🅰️）要用，见下面 ExpenseList 映射处。
+  const paymentMethodKindById = new Map(myPaymentMethods.map((m) => [m.id, m.kind]));
   // 「本行程启用的支付方式」（2026-09-15 落地 Artifact Version 10 遗留缺口）：钱包卡
   // 「绑定支付方式」下拉/命名提示只给这趟行程勾了启用的选，不是名下全部——已经绑过
   // 某个之后被取消勾选的支付方式的钱包，`paymentMethodLabelById` 这份全量映射还留着，
   // 历史绑定的名字不会因为取消勾选就显示成"未知"。
   const enabledPaymentMethodIds = await loadEnabledPaymentMethodIds(db, params.tripId, identity);
   const enabledPaymentMethods = myPaymentMethods.filter((m) => enabledPaymentMethodIds.has(m.id));
+
+  // fix(2026-09-19，Remy 截图坐实"活动流每行缺约算成另一币种的金额"）：Artifact
+  // 每一行都有一个"≈RM128.40"这种约算小字，之前这里的逻辑是"这笔消费自己的币种
+  // 跟这趟行程本位币不一样才显示约算"（转成本位币）——这条真实行程（🇭🇰2026香港，
+  // 本位币HKD）11笔消费全部就是用HKD记的，跟本位币从来不会不一样，所以这个约算
+  // 永远不出现，这正是 Remy 反馈"完全没有这个信息"的根因，不是漏做了展示，是触发
+  // 条件在这条真实数据下永远不成立。改成跟 Artifact demo 同样的语义：约算的目标
+  // 币种固定是 MYR（Remy 的个人参考币种，这个 app 全站的汇率基建 lib/fx/rate-cache.ts
+  // 本来就是以 MYR 为基准），只要行程本位币不是 MYR 就显示"这笔（已经换算成本位币的）
+  // 金额约等于多少 MYR"，本位币恰好就是 MYR 时才不重复显示。
+  await ensureMyrRatesFresh(db, false);
+  const myrSnapshot = await getMyrRateSnapshot(db);
+  const baseToMyrRate = trip.baseCurrency === 'MYR' ? undefined : deriveMidRate(myrSnapshot.rates, trip.baseCurrency, 'MYR');
 
   return (
     // fix(2026-09-16 第十七轮)：gap-6(24px) 太松——Artifact 卡片间距量出来是 10-14px 这个
@@ -239,25 +255,28 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         <ExpenseList
           tripId={trip.id}
           myParticipantId={identity.participantId}
-          baseCurrency={trip.baseCurrency}
           expenses={tripExpenses.map((e) => ({
             id: e.id,
             category: e.category,
             merchant: e.merchant,
             amount: e.amount,
             currency: e.currency,
-            // 排序/约算成本位币小字要用，见 expense-list.tsx。
+            // 排序小字要用，见 expense-list.tsx。
             amountBaseCurrency: e.amountBaseCurrency,
+            // 约算成 MYR 的小字（"≈RM128.40"）——本位币本身就是 MYR 时不重复显示。
+            approxMyrCents: baseToMyrRate !== undefined ? Math.round(e.amountBaseCurrency * baseToMyrRate) : null,
             expenseDate: e.expenseDate.toISOString(),
             hasReceipt: e.receiptPath !== null,
             payerName: nameById.get(e.payerParticipantId) ?? '未知',
             enteredByParticipantId: e.enteredByParticipantId,
-            // 支付方式筛选 chip 要用的标签：只有「我自己」录入的那些消费才查得到标签
-            // （payment_method 归属私有，别人的 payment_method_id 我读不到是哪一张卡），
-            // 别人录入的消费如果带了 paymentMethodId 也只能显示成"其他人的支付方式"。
+            // 支付方式筛选 chip + meta 行图标要用：只有「我自己」录入的那些消费才查得到
+            // 标签/类型（payment_method 归属私有，别人的 payment_method_id 我读不到是
+            // 哪一张卡/现金），别人录入的消费如果带了 paymentMethodId 也只能显示成
+            // "其他人的支付方式"，kind 也就查不到，给 null。
             paymentMethodLabel: e.paymentMethodId
               ? paymentMethodLabelById.get(e.paymentMethodId) ?? '其他人的支付方式'
               : null,
+            paymentMethodKind: e.paymentMethodId ? paymentMethodKindById.get(e.paymentMethodId) ?? null : null,
             excludeFromSplit: e.excludeFromSplit,
           }))}
         />

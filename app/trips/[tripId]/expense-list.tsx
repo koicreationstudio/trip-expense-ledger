@@ -15,6 +15,10 @@ export interface ExpenseListItem {
   amount: number;
   currency: string;
   amountBaseCurrency: number;
+  // fix(2026-09-19)：约算成 MYR 的小字用（"≈RM128.40"），null=这趟行程本位币
+  // 本身就是 MYR（约算会跟原数字重复，不显示）。服务器端算好传进来，不在
+  // 客户端组件里重新拉汇率。
+  approxMyrCents: number | null;
   expenseDate: string; // ISO
   hasReceipt: boolean;
   payerName: string;
@@ -22,6 +26,8 @@ export interface ExpenseListItem {
   // 只有「我自己」录入的消费才查得到真实标签（payment_method 归属私有），
   // 别人录入的一律是 '其他人的支付方式' 或 null（没选支付方式）。
   paymentMethodLabel: string | null;
+  // 同上，只有「我自己」的才查得到 kind，给 meta 行图标用。
+  paymentMethodKind: 'card' | 'cash' | null;
   // 2026-09-16 新增：这笔是不是被标了"不计入 Hero 卡我承担合计"（机票/宝石这类
   // 默认如此），纯展示小标记，不影响这里任何排序/筛选/金额计算。
   excludeFromSplit: boolean;
@@ -51,6 +57,22 @@ function splitCategoryIcon(category: string): { icon: string; label: string } {
 }
 
 /**
+ * fix(2026-09-19，Remy 截图坐实)：Artifact 每行 meta 里的支付方式是"图标+名称"
+ * （💳 HSBC / 🅰️ 支付宝 / 💵 现金），线上之前是纯文字。这个 app 的 payment_method
+ * 数据模型只有两种 kind（'card'/'cash'，见 lib/db/schema.ts），支付宝这类具体
+ * 渠道只是自由文本 label，没有专属字段——用跟 `splitCategoryIcon` 一样的"尽量
+ * 从既有信息推断，推不出来不崩"思路：label 里认出"支付宝"用方案demo同款的
+ * 🅰️，否则按 kind 给 💳/💵，两者都没有（kind 未知，比如"其他人的支付方式"这种
+ * 查不到 kind 的情况）就不加图标，只显示原文字，不瞎猜一个可能错的图标。
+ */
+function paymentMethodIcon(kind: 'card' | 'cash' | null, label: string): string {
+  if (/支付宝|alipay/i.test(label)) return '🅰️';
+  if (kind === 'cash') return '💵';
+  if (kind === 'card') return '💳';
+  return '';
+}
+
+/**
  * 展示整个行程的活动流，但编辑/删除只对自己录入的那些生效——后端 PATCH/DELETE
  * 已经把 entered_by_participant_id 焊死在 WHERE 里、别人的一律 404，这里按
  * `mine` 隐藏掉那两个入口，不是靠隐藏骗用户，是避免点了才发现 404 的空转。
@@ -76,12 +98,10 @@ export function ExpenseList({
   tripId,
   expenses,
   myParticipantId,
-  baseCurrency,
 }: {
   tripId: string;
   expenses: ExpenseListItem[];
   myParticipantId: string;
-  baseCurrency: string;
 }) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -156,7 +176,9 @@ export function ExpenseList({
   }
 
   if (expenses.length === 0) {
-    return <p className="text-sm text-muted">还没记过账，点下面「记一笔消费」开始。</p>;
+    // fix(2026-09-19，同 exchange-record-list.tsx 那处一起顺手修)：同一类空状态提示，
+    // 同样是 `text-sm`(14px) 没对齐 Artifact `.empty{font-size:11.5px}`，改成一致。
+    return <p className="text-[11.5px] text-muted">还没记过账，点下面「记一笔消费」开始。</p>;
   }
 
   return (
@@ -243,7 +265,6 @@ export function ExpenseList({
         <ul className="flex flex-col">
           {visibleExpenses.map((e) => {
             const mine = e.enteredByParticipantId === myParticipantId;
-            const showConverted = e.currency !== baseCurrency;
             const revealed = mine && revealedId === e.id;
             const { icon, label: categoryLabel } = splitCategoryIcon(e.category);
             // 名称优先显示商家名（方案原文那种"拜神"/"Bolt/Grab"式具体描述），没填
@@ -252,7 +273,10 @@ export function ExpenseList({
             const primaryName = e.merchant?.trim() || categoryLabel;
             const metaParts = [e.payerName, e.expenseDate.slice(5, 10)];
             if (e.merchant?.trim()) metaParts.push(categoryLabel);
-            if (e.paymentMethodLabel) metaParts.push(e.paymentMethodLabel);
+            if (e.paymentMethodLabel) {
+              const payIcon = paymentMethodIcon(e.paymentMethodKind, e.paymentMethodLabel);
+              metaParts.push(payIcon ? `${payIcon} ${e.paymentMethodLabel}` : e.paymentMethodLabel);
+            }
             if (e.hasReceipt) metaParts.push('有收据');
             return (
               <li
@@ -289,9 +313,9 @@ export function ExpenseList({
                       )}
                     </span>
                     <span className="truncate text-[9.5px] text-muted">{metaParts.join(' · ')}</span>
-                    {showConverted && (
+                    {e.approxMyrCents !== null && (
                       <span className="font-serif text-[9.5px] tabular-nums text-muted">
-                        ≈{formatMoney(e.amountBaseCurrency, baseCurrency)}
+                        ≈{formatMoney(e.approxMyrCents, 'MYR')}
                       </span>
                     )}
                   </div>
