@@ -15,6 +15,14 @@ export interface ExpenseListItem {
   amount: number;
   currency: string;
   amountBaseCurrency: number;
+  // fix(2026-09-19 第二十八轮，Remy 真实行程"🇭🇰2026香港"本位币=HKD、消费也全用HKD记，
+  // 坐实真bug)：约算金额原本的显示条件是"e.currency !== baseCurrency"，这条行程
+  // 100%两者相等，条件永远不成立，约算行永远不显示。改成"行程本位币不是MYR就显示
+  // 约算"——Remy是马来西亚人，本位币不是MYR时才需要一个"换算回MYR大概多少钱"的
+  // 参考数字，这个字段是服务端（page.tsx）用 lib/fx/rate-cache.ts 的实时MYR中间
+  // 汇率算好、已经是MYR分为单位的值；汇率缓存/接口暂时不可用时是 null，这时不显示
+  // 约算行（不拿一个算不出来的数字硬凑），不阻塞其它信息正常展示。
+  amountMyr: number | null;
   expenseDate: string; // ISO
   hasReceipt: boolean;
   payerName: string;
@@ -156,7 +164,10 @@ export function ExpenseList({
   }
 
   if (expenses.length === 0) {
-    return <p className="text-sm text-muted">还没记过账，点下面「记一笔消费」开始。</p>;
+    // fix(2026-09-19 第二十八轮)：字号照方案 `.empty{font-size:11.5px}` 改（原来是
+    // Tailwind `text-sm`=14px，比方案规定大，这轮只改字号，颜色/padding不在这次任务
+    // 范围内不动）。
+    return <p className="text-[11.5px] text-muted">还没记过账，点下面「记一笔消费」开始。</p>;
   }
 
   return (
@@ -243,7 +254,9 @@ export function ExpenseList({
         <ul className="flex flex-col">
           {visibleExpenses.map((e) => {
             const mine = e.enteredByParticipantId === myParticipantId;
-            const showConverted = e.currency !== baseCurrency;
+            // fix(2026-09-19 第二十八轮)：不再拿"这一笔的币种"跟本位币比——改成"这趟
+            // 行程的本位币是不是MYR"，理由见上面 ExpenseListItem.amountMyr 字段注释。
+            const showConverted = baseCurrency !== 'MYR' && e.amountMyr !== null;
             const revealed = mine && revealedId === e.id;
             const { icon, label: categoryLabel } = splitCategoryIcon(e.category);
             // 名称优先显示商家名（方案原文那种"拜神"/"Bolt/Grab"式具体描述），没填
@@ -291,7 +304,7 @@ export function ExpenseList({
                     <span className="truncate text-[9.5px] text-muted">{metaParts.join(' · ')}</span>
                     {showConverted && (
                       <span className="font-serif text-[9.5px] tabular-nums text-muted">
-                        ≈{formatMoney(e.amountBaseCurrency, baseCurrency)}
+                        ≈{formatMoney(e.amountMyr!, 'MYR')}
                       </span>
                     )}
                   </div>

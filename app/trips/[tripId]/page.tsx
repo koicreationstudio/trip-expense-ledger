@@ -7,6 +7,7 @@ import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadMyShareBreakdown, loadSettlementInput } from '@/lib/db/settlement-query';
 import { computeNetBalances } from '@/lib/domain/settlement';
 import { formatMoney } from '@/lib/money';
+import { deriveMidRate, ensureMyrRatesFresh, getMyrRateSnapshot } from '@/lib/fx/rate-cache';
 import { ExpenseList } from './expense-list';
 import { WalletCard } from './wallet-card';
 import { ExchangeRecordList } from './exchange-record-list';
@@ -66,6 +67,20 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     .from(expenses)
     .where(eq(expenses.tripId, params.tripId))
     .orderBy(desc(expenses.expenseDate));
+
+  // 活动流"约算金额"要用的本位币→MYR中间汇率（2026-09-19 第二十八轮新增）：
+  // 只在本位币不是 MYR 时才需要，本位币就是 MYR 的行程约算等于自己换算自己没意义，
+  // 也省一次不必要的缓存查询。`ensureMyrRatesFresh`/`getMyrRateSnapshot` 是
+  // lib/fx/rate-cache.ts 现成的共享 chokepoint（汇率比价卡那两个 API 路由已经在用），
+  // 这里复用同一份缓存/换算规则，不是另起一套。缓存/上游接口暂时拿不到这个币种的
+  // 汇率时 `baseCurrencyToMyrRate` 是 undefined，下面每笔消费的 `amountMyr` 会是
+  // null，ExpenseList 那边看到 null 就不显示约算行，不会拿一个凑出来的假数字。
+  let baseCurrencyToMyrRate: number | undefined;
+  if (trip.baseCurrency !== 'MYR') {
+    await ensureMyrRatesFresh(db, false);
+    const myrSnapshot = await getMyrRateSnapshot(db);
+    baseCurrencyToMyrRate = deriveMidRate(myrSnapshot.rates, trip.baseCurrency, 'MYR');
+  }
 
   // 钱包 + 换汇记录都私有：硬编码 participant_id = 自己，跟活动流那种「整个行程可见」
   // 是完全不同的性质（这里是「我自己的现金在哪张卡/现金里」，不共享）。
@@ -246,8 +261,14 @@ export default async function TripPage({ params }: { params: { tripId: string } 
             merchant: e.merchant,
             amount: e.amount,
             currency: e.currency,
-            // 排序/约算成本位币小字要用，见 expense-list.tsx。
+            // 排序要用，见 expense-list.tsx。
             amountBaseCurrency: e.amountBaseCurrency,
+            // 活动流"约算金额"行要用（见 expense-list.tsx ExpenseListItem.amountMyr
+            // 字段注释）：本位币是 MYR 或者汇率暂时拿不到时是 null。
+            amountMyr:
+              baseCurrencyToMyrRate !== undefined
+                ? Math.round(e.amountBaseCurrency * baseCurrencyToMyrRate)
+                : null,
             expenseDate: e.expenseDate.toISOString(),
             hasReceipt: e.receiptPath !== null,
             payerName: nameById.get(e.payerParticipantId) ?? '未知',

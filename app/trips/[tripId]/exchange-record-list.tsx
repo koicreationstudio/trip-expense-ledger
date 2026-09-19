@@ -60,7 +60,10 @@ export function ExchangeRecordList({ tripId, records }: { tripId: string; record
   }
 
   if (records.length === 0) {
-    return <p className="text-sm text-muted">还没有换汇记录，点上面「取款 / 换汇」开始记。</p>;
+    // fix(2026-09-19 第二十八轮)：字号照方案 `.empty{font-size:11.5px}` 改（原来是
+    // Tailwind `text-sm`=14px，比方案规定大，这轮只改字号，颜色/padding不在这次任务
+    // 范围内不动）。
+    return <p className="text-[11.5px] text-muted">还没有换汇记录，点上面「取款 / 换汇」开始记。</p>;
   }
 
   return (
