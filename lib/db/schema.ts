@@ -56,11 +56,37 @@ export const users = sqliteTable(
     // 专属身份直连链接的 token，明文存储（同 invites.code 的存储哲学），
     // 32 字节随机数 base64url 编码，出现在 /id/[token] 这个 URL 里。
     identityToken: text('identity_token'),
+    // 密码/PIN 找回（2026-09-23 第二次落地，round31 事故后由 Remy 本人在对话
+    // 里重新确认才重做，见 lib/auth/pin-hash.ts）：hash 存储，不是明文——跟
+    // 上面的 identityToken 刻意采用不同的存储哲学，原因写在 pin-hash.ts。
+    // `/id/<token>` 链接机制不删，这两列只是多一条恢复路径，可以为空（没设过）。
+    recoveryPinHash: text('recovery_pin_hash'),
+    recoveryPinSetAt: integer('recovery_pin_set_at', { mode: 'timestamp_ms' }),
     createdAt: createdAt(),
   },
   (table) => ({
     emailIdx: uniqueIndex('user_email_idx').on(table.email),
     identityTokenIdx: uniqueIndex('user_identity_token_idx').on(table.identityToken),
+  })
+);
+
+// ---------------------------------------------------------------------------
+// recovery_attempt：/api/account/recover-pin 的限流账本。不挂在某个具体
+// user 上（还没验证出是哪个账号就已经要限流了，防的正是"逐个账号试密码"
+// 这种打法），按调用方 IP 的 hash 分桶——明文 IP 不落库，跟 session 表
+// "cookie 只放明文 token，DB 只存 hash"是同一条隐私原则。
+// 只记时间戳，不记是否成功/是哪个 IP：查询时只需要"这个桶最近 N 分钟内
+// 出现过几次"，不需要更多信息，字段越少越不构成额外的隐私负担。
+// ---------------------------------------------------------------------------
+export const recoveryAttempts = sqliteTable(
+  'recovery_attempt',
+  {
+    id: id(),
+    ipHash: text('ip_hash').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => ({
+    ipHashIdx: index('recovery_attempt_ip_hash_idx').on(table.ipHash),
   })
 );
 

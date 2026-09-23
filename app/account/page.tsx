@@ -7,6 +7,7 @@ import { getDb } from '@/lib/db/client';
 import { users } from '@/lib/db/schema';
 import { BUILD_COMMIT, BUILD_TIME } from '@/lib/build-info';
 import { AccountIdentityLink } from './account-identity-link';
+import { SetPinForm } from './set-pin-form';
 import { HardRefreshButton } from './hard-refresh-button';
 
 /**
@@ -78,6 +79,7 @@ export default async function AccountPage({ searchParams }: { searchParams?: { f
           font-semibold(600)，round26 实测才抓到这个跨屏字重不一致，改成 font-bold。 */}
       <h1 className="text-[15px] font-bold text-ink">我的账号</h1>
       <AccountIdentityLink url={identityUrl} />
+      <SetPinForm hasPinSet={Boolean(row.recoveryPinHash)} />
       <HardRefreshButton />
       <p className="text-[8.5px] text-muted">
         版本 {BUILD_COMMIT} · 部署于 {deployedAtLabel}（UTC+8）

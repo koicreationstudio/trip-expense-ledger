@@ -30,7 +30,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
  * 卡在评估发信服务成本这一步，团队看板 id=2026-09-12_150825_835d7093），
  * 这轮没有动，不属于这次数据修复任务的范围。
  */
-type Step = 'ask' | 'recover' | 'result';
+type Step = 'ask' | 'recover' | 'pin-recover' | 'result';
 
 export function ProvisionGate() {
   const router = useRouter();
@@ -42,6 +42,9 @@ export function ProvisionGate() {
   const [pastedLink, setPastedLink] = useState('');
   const [recoverError, setRecoverError] = useState<string | null>(null);
   const [confirmingNewAccount, setConfirmingNewAccount] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinRecovering, setPinRecovering] = useState(false);
+  const [pinRecoverError, setPinRecoverError] = useState<string | null>(null);
 
   async function handleStart() {
     setConfirmingNewAccount(false);
@@ -76,6 +79,29 @@ export function ProvisionGate() {
     window.location.href = `/id/${token}`;
   }
 
+  async function handlePinRecoverSubmit() {
+    setPinRecoverError(null);
+    setPinRecovering(true);
+    try {
+      const res = await fetch('/api/account/recover-pin', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ pin: pinInput }),
+      });
+      if (res.status === 429) {
+        setPinRecoverError('试太多次了，等 15 分钟再试');
+        return;
+      }
+      if (!res.ok) {
+        setPinRecoverError('密码/PIN 不对，或者还没设过——没设过的话用身份链接找回');
+        return;
+      }
+      router.refresh();
+    } finally {
+      setPinRecovering(false);
+    }
+  }
+
   async function handleCopy() {
     if (!identityUrl) return;
     try {
@@ -106,6 +132,9 @@ export function ProvisionGate() {
         </div>
         <button type="button" onClick={() => setStep('recover')} className="btn-secondary">
           我有专属身份链接，去恢复账号
+        </button>
+        <button type="button" onClick={() => setStep('pin-recover')} className="btn-secondary">
+          我设过密码/PIN，直接找回
         </button>
         {error && <p className="text-[10px] text-coral">{error}</p>}
         <button
@@ -165,13 +194,55 @@ export function ProvisionGate() {
     );
   }
 
+  if (step === 'pin-recover') {
+    return (
+      <main className="flex flex-col gap-3.5">
+        <div>
+          <h1 className="text-[15px] font-semibold text-ink">输入你的密码/PIN</h1>
+          <p className="mt-2 text-[10px] text-muted">
+            之前在&ldquo;我的账号&rdquo;页面设过的那个密码/PIN，对上了就直接帮你登进原来的账号。
+          </p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <label htmlFor="pin-recover-input" className="field-label">
+            密码/PIN
+          </label>
+          <input
+            id="pin-recover-input"
+            type="password"
+            inputMode="numeric"
+            className="field-input"
+            placeholder="至少 4 位"
+            value={pinInput}
+            onChange={(e) => {
+              setPinInput(e.target.value);
+              setPinRecoverError(null);
+            }}
+          />
+        </div>
+        {pinRecoverError && <p className="text-[10px] text-coral">{pinRecoverError}</p>}
+        <button
+          type="button"
+          onClick={handlePinRecoverSubmit}
+          disabled={pinRecovering || !pinInput}
+          className="btn-primary"
+        >
+          {pinRecovering ? '找回中…' : '用这个密码/PIN 登录'}
+        </button>
+        <button type="button" onClick={() => setStep('ask')} className="btn-secondary">
+          返回
+        </button>
+      </main>
+    );
+  }
+
   if (step === 'result' && identityUrl) {
     return (
       <main className="flex flex-col gap-3.5">
         <div>
           <h1 className="text-[15px] font-semibold text-ink">保存好你的专属身份链接</h1>
           <p className="mt-2 text-[10px] text-muted">
-            这条链接是你以后唯一能重新登录这个账号的方式——没有邮箱密码，链接丢了就找不回账号。建议现在复制存到备忘录或密码管理器，之后随时能在&ldquo;我的账号&rdquo;页面里再看一次。
+            这条链接是你以后重新登录这个账号最主要的方式——没有邮箱密码，链接丢了就找不回账号（除非你之后去&ldquo;我的账号&rdquo;页面另外设一个密码/PIN 当备用）。建议现在复制存到备忘录或密码管理器。
           </p>
         </div>
         <div className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[9px] shadow-card">
