@@ -208,7 +208,7 @@ export function CategoryCombobox({
               // 6px;font-size:10.5px}`（reference/artifact-v10-source.html 第307行），线上
               // 实测是 px-[9px]/text-[12.5px]，比方案宽 3px、大 2px，改回字面一致。
               className={`cursor-pointer px-[6px] py-[5px] text-[10.5px] text-ink ${
-                idx === highlightedIndex ? 'bg-[rgba(164,163,160,.14)]' : ''
+                idx === highlightedIndex ? 'bg-[rgba(184,158,97,.14)]' : ''
               } ${idx > 0 ? 'border-t border-sand' : ''}`}
             >
               {opt}

@@ -296,7 +296,7 @@ export function ExpenseList({
                     <span className="truncate text-[12px] font-medium">
                       {primaryName}
                       {e.excludeFromSplit && (
-                        <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.2)] px-[6px] py-[1px] align-middle text-[8.5px] font-medium text-muted">
+                        <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(184,158,97,.2)] px-[6px] py-[1px] align-middle text-[8.5px] font-medium text-muted">
                           不计分摊
                         </span>
                       )}

@@ -19,31 +19,34 @@ const config: Config = {
         // 第三版 DESIGN-BRIEF 全套推翻第二版的「单一强调色」纪律，直接采用
         // remy-thailand 线上页面 `:root` 里验证过的十个 hex 值，不是自己再调一遍。
         // CTA/选中态从 amber 退休，改用 ink（深藏青黑）。
-        // 候选D「渐变灰阶」落地（2026-09-11）：5 阶无彩色灰阶(Bleached Silk/First Star/
-        // Mountain Mist/Welded Iron/Black Olive)，取值来源 DESIGN-BRIEF-color-v6-preview.html
-        // .variant-grayscale .app-screen 区块 + DESIGN-BRIEF-color-directions.md 第六提案候选D表格。
-        // ink 跟 accent-700 这次是同一个值(#373736)，是候选D「标题/Hero/CTA/选中态统一用同一级
-        // 最深灰」的设计意图，不是失误。accent-600/100/50 是 0 处引用的预留色阶，按 ink 新值
-        // 提亮到约 L35%/L88%/L95% 估算(纯中性灰，不抠小数点)。
+        //
+        // 【2026-09-23 第三十八轮：色板从候选D灰阶改回暖色系】Remy 明确表态要改回暖色
+        // （见 DESIGN-BRIEF.md「第三十七轮」体检发现的矛盾——候选D灰阶跟 v5-v7 三轮
+        // 反复论证过的"不能学团队工具冷灰调、这是有温度的私人记账本"直接冲突）。这次
+        // 不是随手挑个暖色，是直接采用 DESIGN-BRIEF.md「色彩强度柔和化（2026-09-08）」
+        // 一节里最后一次经过 WCAG 对比度实算、且被「第七版」确认继续有效的那批暖色值——
+        // 那是 v3 remy-thailand 原始十色板做过一轮柔和化之后的"最终定案态"，不是 v3 最
+        // 早最艳的那版。候选D引入的 accent-*/accent-circle/hero-label 这几个结构性 token
+        // 保留（它们是"给 CTA/头像圈/深底文字单独开一个具名 token"这个合理的工程决定，
+        // 跟灰阶还是暖色无关），只换它们指向的具体色值。下面 `positive`/`negative`（连同
+        // `-dk` 变体）、`coral`、`ok`/`live`、`seafoam` 这几个候选D时期定的语义色本身
+        // 就不是灰阶（是真实带色相的红/绿/蓝），不在这轮"变灰"问题范围内，原样不动。
         accent: {
-          50: '#f2f2f2',
-          100: '#e0e0e0',
-          600: '#595959',
-          700: '#373736', // Black Olive，候选D的 ink，同时也是新的主 CTA / 选中态颜色
-          800: 'color-mix(in srgb, #373736 82%, black)', // hover 按下态，同时也是 Hero 渐变最深端
+          50: 'color-mix(in srgb, #23232E 6%, white)',
+          100: 'color-mix(in srgb, #23232E 12%, white)',
+          600: 'color-mix(in srgb, #23232E 78%, white)',
+          700: '#23232E', // 跟 ink 同值，新的主 CTA / 选中态颜色（取代候选D的 Black Olive 灰）
+          800: 'color-mix(in srgb, #23232E 82%, black)', // hover 按下态
         },
-        ink: '#373736',
-        paper: '#F7F7F6',
-        sand: '#DBDAD6',
-        gold: '#A4A3A0',
-        'gold-lt': 'color-mix(in srgb, #A4A3A0 30%, white)',
-        'gold-dk': '#6E6E6C', // 跟 muted 共用同一色号(Welded Iron)，候选D设计如此，非失误
-        // 候选D落地补丁(2026-09-11 第二轮)：头像圈/图标圈/未选中分段按钮在候选D设计里
-        // 本来是独立的 accent-circle 角色(Mountain Mist)，首轮落地图省事分别借用了 sand(头像圈)
-        // /gold-lt(图标圈)，Remy 拍板改回方案②，新开这个独立 token，真实颜色不变(凑巧
-        // 跟 gold 同值)，但语义上跟 sand/gold-lt 解耦，以后要单独调头像圈/图标圈颜色不会
-        // 牵动 sand/gold-lt 的其它引用处。分段按钮这次代码库里还没实体组件，先不接。
-        'accent-circle': '#A4A3A0',
+        ink: '#23232E', // 色彩强度柔和化（2026-09-08）定案值，比 v3 原始 #1A1A2E 饱和度低约一半，红字（该付）在此底色上对比度仍稳稳站在 3.22:1（大字号门槛之上）
+        paper: '#FEFCF7',
+        sand: '#EDE8DA',
+        gold: '#B89E61', // 柔和化定案值，v3 原始更艳的 #C9A24B 已废弃不用
+        'gold-lt': '#F0E8D6',
+        'gold-dk': '#7E6630', // 三阶金色里柔和化降幅最大的一个（这是 Remy 当初反馈"标题/链接太艳"的真正成因，原始 #8B6914 饱和度比 gold 本身还高）
+        // accent-circle（头像圈/图标圈）继续跟 gold 同值，只是色值本身换回暖金色，
+        // token 结构和候选D落地时一致，不重新讨论要不要独立开这个 token。
+        'accent-circle': '#B89E61',
         // 共用语义色板收尾落地（2026-09-11）：DESIGN-BRIEF-color-v6-preview.html 519-533行
         // 「共用语义色板速查」表定义好三轮却一直没真正接进 tailwind、代码里净额正负色
         // 一直在借用泛用 Tailwind emerald-*/red-*。这批 token 是候选 B/C/D 三个候选共用
@@ -63,7 +66,9 @@ const config: Config = {
         'positive-dk': '#B7D1A8',
         seafoam: '#2DAA85',
         'sf-lt': '#D0F0E5',
-        muted: '#6E6E6C',
+        // 【2026-09-23 第三十八轮】v3 原始暖灰值，候选D落地时把它跟 gold-dk 并成了同一个
+        // 灰色号(Welded Iron #6E6E6C)——这次两者都改回各自的暖色定案值，不再共用同一色号。
+        muted: '#8A7A6A',
         // 第五版补丁：状态色体系（行程/邀请/认领的进度语义），绝不跟
         // emerald(该收)/red(该付) 财务语义色混用（绝对禁止第12条）。
         // wait（待定态）复用现有 gold-dk/gold-lt，不新增 hex（色相跟
@@ -72,10 +77,10 @@ const config: Config = {
         'ok-bg': '#E3ECE0',
         live: '#3E7787',
         'live-bg': '#DFEAEC',
-        // 候选D落地补丁：Hero 深底标签文字色，取值来源 DESIGN-BRIEF-color-v6-preview.html
-        // 209-265行候选D区块 + DESIGN-BRIEF-color-directions.md 第六提案候选D表格，
-        // First Star 稀释更淡，深灰 Hero 底上够亮好读（原硬编码 slate-400/200 冷灰对比度不够）。
-        'hero-label': 'color-mix(in srgb, #DBDAD6 70%, white)',
+        // Hero 深底标签文字色：跟 sand 同色相、稀释更淡，深色 Hero 底上够亮好读
+        // （原硬编码 slate-400/200 冷灰对比度不够，候选D时期取的是灰阶 sand，这次
+        // 【2026-09-23 第三十八轮】换成暖色 sand #EDE8DA，结构不变）。
+        'hero-label': 'color-mix(in srgb, #EDE8DA 70%, white)',
         // 2026-09-16 第十七轮补：Artifact `--cream:#F3E9D2`，"快速记账"卡里"分摊"三段式
         // 分段控件（.seg3）的轨道底色——深色卡片上垫一条暖米黄色的浅色轨道，选中项是
         // 深色实底 pill 嵌在里面，是方案里専门跟"仅我自己/平分/自定义分摊"这组配色对应
@@ -86,28 +91,25 @@ const config: Config = {
         hero: '22px',
       },
       backgroundImage: {
-        // 候选D落地：Hero 渐变改灰阶三段式(Mountain Mist → Welded Iron → Black Olive 82%压暗)，
-        // 取值来源 v6-preview.html .variant-grayscale .hero 区块。
-        // 补漏(2026-09-11配色走查)：右上角光晕层(radial-gradient)首轮落地时漏抄，只落了线性
-        // 渐变主体，现在补上，两层顺序跟色值原样照抄 v6-preview.html 246-249 行。
-        // fix(2026-09-12 净额色协调度走查)：v6-preview.html 自己的注释写的是"最浅两档灰只留
-        // 给右上角光晕，深色落在文字叠加区域，避开 positive-dk 浅绿字对比度问题"，但照抄下来的
-        // 这版渐变第一站是 Mountain Mist(#A4A3A0)，恰好是净额数字所在的卡片顶部——实测这段位置
-        // 背景色约 rgb(144,144,141)，positive-dk(#B7D1A8) 在其上对比度只有 2.12:1（WCAG 大字号
-        // 门槛 3:1 都不过），这也是"浅绿字显得廉价刺眼"的直接原因。改法不动 positive-dk/negative-dk
-        // 这两个共用语义 token 本身（文件里定义值跟色板速查表逐值一致，没有错），只把 Mountain Mist
-        // 从渐变主体里去掉、只留在右上角光晕，渐变主体压缩成 Welded Iron→82%压暗两段，早早在卡片
-        // 顶部就到暗色——这才是真正落实文档自己说的"深色落在文字叠加区域"。钱包区(卡片底部)本来
-        // 就在暗段，不受影响。
+        // 【2026-09-23 第三十八轮：改回暖色系】渐变主体改用「第六版（2026-09-08）」
+        // 已经过 WCAG 实算验证的 ink 同色相三段式（#2A2A38→#23232E→#1B1B24，纯明度
+        // 分层，不引入金色）——候选D那版把渐变主体也换成了 gold-dk(#7E6630) 起步，
+        // 实算过 negative-dk(#E6B1A8) 在这个色值上对比度只有 2.93:1，没过 WCAG 大字号
+        // 3:1 门槛，重蹈了候选D自己在 2026-09-12 修过的同一类"浅色文字在渐变亮段对比度
+        // 不够"问题（当时是 positive-dk 在 Mountain Mist 上只有 2.12:1）。改回纯 ink
+        // 色相就没有这个风险——这三个 hex 本身就是从已经验证过对比度的 ink 系衍生出来的
+        // 深浅变体。右上角的光晕层（装饰性、不叠文字）换成暖金色调 rgba(184,158,97,.30)
+        // （新 gold 的 RGB），呼应整体暖色调，结构（位置/大小/两层叠加顺序）不变。
         'hero-gradient':
-          'radial-gradient(130px 100px at 90% 6%, rgba(219,218,214,.30), transparent 70%), linear-gradient(165deg, #6E6E6C 0%, color-mix(in srgb, #373736 82%, black) 30%, color-mix(in srgb, #373736 82%, black) 100%)',
+          'radial-gradient(130px 100px at 90% 6%, rgba(184,158,97,.30), transparent 70%), linear-gradient(165deg, #2A2A38 0%, #23232E 45%, #1B1B24 100%)',
       },
       boxShadow: {
         // 外层两组阴影让卡片浮起来，inset 高光模拟顶部打光——银行卡/钱包类 UI 常见手法。
-        // 候选D落地：rgba 锚定值从旧 ink (35,35,46) 换成新 ink #373736 的 RGB (55,55,54)。
-        hero: '0 10px 24px -6px rgba(55,55,54,.35), 0 4px 10px rgba(55,55,54,.18), inset 0 1px 0 rgba(255,255,255,.08)',
+        // 【2026-09-23 第三十八轮】rgba 锚定值从候选D的 ink RGB(55,55,54) 改回暖色 ink
+        // #23232E 的 RGB(35,35,46)，跟「第七版」`card` 阴影本来就用的锚定值统一。
+        hero: '0 10px 24px -6px rgba(35,35,46,.35), 0 4px 10px rgba(35,35,46,.18), inset 0 1px 0 rgba(255,255,255,.08)',
         // 第七版：普通卡片的极轻两层阴影，借 team-board 的"极轻阴影"结构但色值锚定本系统的 ink，不借它的中性灰。
-        card: '0 1px 2px rgba(55,55,54,.06), 0 1px 1px rgba(55,55,54,.04)',
+        card: '0 1px 2px rgba(35,35,46,.06), 0 1px 1px rgba(35,35,46,.04)',
       },
     },
   },

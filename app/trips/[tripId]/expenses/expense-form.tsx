@@ -710,7 +710,7 @@ export function ExpenseForm({
                   </span>
                 </div>
                 {splitMismatch && (
-                  <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+                  <p className="rounded-xl border border-sand bg-[rgba(184,158,97,.14)] px-[9px] py-[5px] text-[10px] text-coral">
                     分摊总和要跟消费总金额完全一致才能提交。
                   </p>
                 )}
@@ -721,7 +721,7 @@ export function ExpenseForm({
       </div>
 
       {error && (
-        <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+        <p className="rounded-xl border border-sand bg-[rgba(184,158,97,.14)] px-[9px] py-[5px] text-[10px] text-coral">
           {error}
         </p>
       )}

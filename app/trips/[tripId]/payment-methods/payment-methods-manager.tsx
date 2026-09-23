@@ -43,7 +43,15 @@ const emptyForm = {
   cashbackPercent: '0',
 };
 
-export function PaymentMethodsManager({ tripId }: { tripId: string }) {
+export function PaymentMethodsManager({
+  tripId,
+  defaultOpenBalancePanel = false,
+}: {
+  tripId: string;
+  // fix(2026-09-23 第三十八轮)：钱包卡"去支付方式手动设置余额"深链落地时直接展开这个
+  // 面板，不用让人自己找到底部那颗折叠按钮点开。
+  defaultOpenBalancePanel?: boolean;
+}) {
   const [methods, setMethods] = useState<PaymentMethod[] | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
@@ -65,7 +73,16 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
   const [balanceError, setBalanceError] = useState<string | null>(null);
   // fix(2026-09-14 Artifact Version 10 走查补做)：Artifact 里"设置当前余额"是页面
   // 底部一颗按钮，点开才展开钱包余额清单——不是像这里之前那样常驻在页面最上面的一整块。
-  const [balancePanelOpen, setBalancePanelOpen] = useState(false);
+  const [balancePanelOpen, setBalancePanelOpen] = useState(defaultOpenBalancePanel);
+
+  // fix(2026-09-23 第三十八轮)：从钱包卡"?openBalance=1"深链进来时，这个面板在页面
+  // 最下面，光展开状态不够——不滚过去的话，落地那一刻大概率还停在页面顶部的"添加支付
+  // 方式"表单，看起来像"点了链接却什么都没发生"，跟这次要修的"创建没反应"是同一类
+  // 体验问题，不能在打通入口这一步又留一个新的同类坑。
+  useEffect(() => {
+    if (!defaultOpenBalancePanel) return;
+    document.getElementById('set-balance')?.scrollIntoView({ block: 'start' });
+  }, [defaultOpenBalancePanel]);
 
   async function loadMethods() {
     // 走行程范围的端点（不是账号范围的 /api/payment-methods）：这份响应每条支付方式
@@ -226,7 +243,7 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
           // 独立描边卡片"（之前用的 `tx-item` chokepoint 是圆角12px/自带padding/
           // 行与行之间用 gap-2(8px) 分开，两套完全不同的视觉语言）。改成跟
           // settlement-body.tsx 净值/转账清单同一套写法。
-          <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
+          <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(184,158,97,.14)] px-[5px] py-[3px] shadow-card">
             {methods.map((m) => (
               <li key={m.id} className="flex items-center gap-[5px] py-[3px]">
                 <span
@@ -284,7 +301,7 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
         ) : (
           // fix(2026-09-17 第二十一轮)：同上——这里也改成共用 `.list` 容器包
           // `.check-row`（`font-size:10.5px`），不再是每行各自一个独立描边胶囊。
-          <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
+          <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(184,158,97,.14)] px-[5px] py-[3px] shadow-card">
             {methods.map((m) => (
               <li key={m.id} className="flex items-center gap-[5px] py-[3px]">
                 <input
@@ -429,7 +446,7 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
           的收合形态，位置也挪到最下面——这一步操作的其实是 trip-level 的 wallets（这趟
           行程里具体每张卡/现金的余额），不是上面账号级 paymentMethods（那份只存费率配置，
           没有余额字段），Artifact 把它画在"支付方式"页只是信息架构上的归类，底层数据没变。 */}
-      <section className="flex flex-col gap-2">
+      <section id="set-balance" className="flex flex-col gap-2">
         {/* fix(2026-09-17 第十九轮)：跟上面同一批"改成 .big-cta 全宽"，颜色沿用 Artifact
             `style="background:var(--gold-dk)"`——跟"添加支付方式"那颗纯黑主按钮区分开，
             是方案里同一颗按钮组件的第二种配色，不是新发明的按钮样式。图标 ⚙（0x2699）
@@ -438,14 +455,19 @@ export function PaymentMethodsManager({ tripId }: { tripId: string }) {
           type="button"
           onClick={() => setBalancePanelOpen((v) => !v)}
           className="big-cta"
-          style={{ backgroundColor: '#6E6E6C' }}
+          style={{ backgroundColor: '#7E6630' }}
         >
           ⚙ 设置当前余额
         </button>
         {balancePanelOpen && (
           <div className="flex flex-col gap-2">
+            {/* fix(2026-09-23 第三十八轮，Remy 真实反馈"记了很多现金消费，钱包余额还是0"）：
+                之前这句只说了"改的是钱包不是支付方式"，没说清楚余额跟消费记录之间到底有没有
+                关系——真实数据查证过，钱包如果绑了支付方式，之后新记的同支付方式消费会自动
+                扣这个钱包，但不会回溯计算绑定之前已经记过的消费。这句话补上这层，不然"我明明
+                记了很多现金消费"这个真实困惑还是没被回答。 */}
             <p className="text-[10px] text-muted">
-              这里改的是这趟行程里每个钱包的余额（不是上面账号级的支付方式费率配置）。
+              这里改的是这趟行程里每个钱包的余额（不是上面账号级的支付方式费率配置）。钱包如果绑了支付方式，之后新记的同支付方式消费会自动从这里扣；已经记过的消费不会补算，第一次用要自己先对一次余额。
             </p>
             {wallets === null ? (
               <p className="text-xs text-muted">载入中…</p>

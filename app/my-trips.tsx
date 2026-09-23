@@ -91,7 +91,7 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
   return (
     <div className="flex flex-col gap-4">
       {error && (
-        <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+        <p className="rounded-xl border border-sand bg-[rgba(184,158,97,.14)] px-[9px] py-[5px] text-[10px] text-coral">
           {error}
         </p>
       )}
@@ -177,7 +177,7 @@ function TripCard({
         onClick={() => onOpen(trip.id)}
         disabled={switching}
         className={`flex w-full flex-col gap-1 rounded-[14px] border border-sand px-[10px] py-2 text-left text-[12.5px] hover:border-muted disabled:opacity-50 ${
-          ended ? 'bg-paper opacity-70' : 'bg-[rgba(164,163,160,.14)] shadow-card'
+          ended ? 'bg-paper opacity-70' : 'bg-[rgba(184,158,97,.14)] shadow-card'
         }`}
       >
         {/* fix(2026-09-17 第十九轮)：Artifact 卡片内字段顺序是"标题→标签行→日期行→金额"，

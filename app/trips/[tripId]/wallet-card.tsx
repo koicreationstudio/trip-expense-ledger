@@ -30,7 +30,7 @@ interface Participant {
  * 叠一层区分，深色底下反差太弱，肉眼几乎看不出这是两个东西——难怪 Remy 说"快速记账
  * 功能少了"。核对 Artifact Version 10 源码（`.wallet-block` 和 `.quickadd` 是两个完全
  * 独立的 div，各自 `border-radius:14px` + `box-shadow:var(--shadow-card)`，`.quickadd`
- * 背景是纯色 `var(--ink)` 即 #373736，不是钱包卡那种半透明叠加）后，改成真正独立的
+ * 背景是纯色 `var(--ink)`，不是钱包卡那种半透明叠加）后，改成真正独立的
  * 第二个 `<section>`，返回一个 Fragment 让它跟钱包卡一样是 `<main>`（flex-col gap-6）
  * 的直接子节点，靠 gap-6 天然隔开，不用再补 margin-bottom。
  */

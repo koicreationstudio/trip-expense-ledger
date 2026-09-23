@@ -49,7 +49,7 @@ export function MarkSettledButton({
         onClick={() => setConfirming(true)}
         disabled={submitting || disabled}
         className="big-cta"
-        style={disabled ? { backgroundColor: '#6E6E6C' } : undefined}
+        style={disabled ? { backgroundColor: '#7E6630' } : undefined}
       >
         {submitting
           ? '处理中…'
@@ -58,7 +58,7 @@ export function MarkSettledButton({
             : '标记已结算'}
       </button>
       {error && (
-        <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+        <p className="rounded-xl border border-sand bg-[rgba(184,158,97,.14)] px-[9px] py-[5px] text-[10px] text-coral">
           {error}
         </p>
       )}

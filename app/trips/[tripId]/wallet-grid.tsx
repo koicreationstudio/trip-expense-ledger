@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Trash2 } from 'lucide-react';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
@@ -283,7 +284,7 @@ export function WalletGrid({
         <span className="text-[10px] text-muted">已选：{selectedIconLabel}</span>
       </div>
       {/* 没套 expense-form.tsx 那个 rounded-xl+bg 提示盒——那个盒子的浅灰底色是靠反衬
-          page.tsx 的纯 bg-paper 页面底色出效果的；这个表单本身就是 bg-[rgba(164,163,160,.14)]
+          page.tsx 的纯 bg-paper 页面底色出效果的；这个表单本身就是 bg-[rgba(184,158,97,.14)]
           底，同色盒子叠同色底会看不出盒子只剩边框，索性跟 quick-add-expense.tsx 的错误提示
           一样只用纯文字，字号仍收到跟其它说明性小字同一档 10px。 */}
       {error && <p className="text-[10px] text-coral">{error}</p>}
@@ -311,7 +312,7 @@ export function WalletGrid({
   // default（浅色）变体：表单原地内联展开，自己带一层浅底边框盒子（这个盒子的浅灰底
   // 色是靠反衬页面纯 bg-paper 底色出效果的，跟弹层模式的白色卡片底不是一回事）。
   const inlineFormNode = creating && (
-    <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] p-3">
+    <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(184,158,97,.14)] p-3">
       {formFields}
     </form>
   );
@@ -359,7 +360,7 @@ export function WalletGrid({
           ) : (
             <div
               key={w.id}
-              className="relative w-[120px] shrink-0 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-2"
+              className="relative w-[120px] shrink-0 rounded-xl border border-sand bg-[rgba(184,158,97,.14)] px-[9px] py-2"
             >
               <button
                 type="button"
@@ -414,6 +415,26 @@ export function WalletGrid({
         <p className={`text-[9.5px] ${isDark ? 'text-hero-label' : 'text-muted'}`}>
           这趟行程还没建过钱包——钱包是专属这趟行程的余额记录，跟&ldquo;支付方式&rdquo;（账号级，用于汇率比价）是两回事。点 ＋ 建一个
           {paymentMethods.length > 0 ? '，可以直接照抄已有支付方式的名字' : ''}。
+        </p>
+      )}
+
+      {/* fix(2026-09-23 第三十八轮，Remy 真实反馈"建了钱包余额还是0、没反应")：真实数据
+          查证过这不是技术 bug（钱包确实建成功了、也确实跟"现金"支付方式绑定成功了）——
+          是两层认知落差都没在界面上说清楚：①新建钱包不再有起始余额输入框（round13 拍板
+          改成靠这里的"设置当前余额"承担），但钱包卡本身完全没有任何指向那个功能的入口，
+          Remy 根本不知道要去"支付方式"页；②即使绑定了支付方式，"记账选这个支付方式自动
+          扣钱包"这条联动只对绑定之后新记的消费生效，不会回溯计算钱包成立之前已经记过的
+          消费——Remy 真实那几笔现金消费全部记在钱包建立之前，所以联动完全没触发，不是
+          没做，是这个"仅未来生效"的边界从没被讲清楚过。这次不做回溯计算（那是要不要把
+          "钱包余额"从纯手动字段改成"可回溯重算"的架构决定，范围更大，留给 Remy 表态，
+          见 PENDING-DECISIONS 记录），只把这两层认知落差在界面上讲清楚 + 打通入口。 */}
+      {!creating && wallets.length > 0 && (
+        <p className={`text-[9px] ${isDark ? 'text-hero-label' : 'text-muted'}`}>
+          余额不会跟着消费记录自动变——只有钱包&ldquo;绑定支付方式&rdquo;之后新记的消费才会自动扣，已经记过的不会补算。
+          {' '}
+          <Link href={`/trips/${tripId}/payment-methods?openBalance=1`} className="tap-link">
+            去&ldquo;支付方式&rdquo;手动设置余额 →
+          </Link>
         </p>
       )}
 

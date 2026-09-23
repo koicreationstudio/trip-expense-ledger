@@ -678,8 +678,8 @@ export function FxCompareCard({
                           来源徽章——渠道比价跟我的支付方式现在合并成同一张列表，
                           两边都可能出现同名行（比如都叫"Wise"），没有这个标签会
                           让人以为是重复行。复用 expense-list.tsx 已有的中性徽章
-                          样式（`bg-[rgba(164,163,160,.2)]`），不新开一套配色。 */}
-                      <span className="ml-1.5 inline-flex items-center rounded-full bg-[rgba(164,163,160,.2)] px-[6px] py-[1px] align-middle text-[8.5px] font-medium text-muted">
+                          样式（`bg-[rgba(184,158,97,.2)]`），不新开一套配色。 */}
+                      <span className="ml-1.5 inline-flex items-center rounded-full bg-[rgba(184,158,97,.2)] px-[6px] py-[1px] align-middle text-[8.5px] font-medium text-muted">
                         {row.kind === 'channel' ? '渠道' : '我的方式'}
                       </span>
                       {i === 0 && (

@@ -2,7 +2,15 @@ import { redirect } from 'next/navigation';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { PaymentMethodsManager } from './payment-methods-manager';
 
-export default async function PaymentMethodsPage({ params }: { params: { tripId: string } }) {
+export default async function PaymentMethodsPage({
+  params,
+  searchParams,
+}: {
+  params: { tripId: string };
+  // fix(2026-09-23 第三十八轮)：钱包卡"去支付方式手动设置余额"这条深链带 ?openBalance=1，
+  // 落地直接展开"⚙设置当前余额"面板，不用再让人自己找到底部那颗折叠按钮点开。
+  searchParams?: { openBalance?: string };
+}) {
   const identity = await getCurrentIdentity();
   if (!identity || identity.tripId !== params.tripId) {
     redirect('/');
@@ -29,7 +37,7 @@ export default async function PaymentMethodsPage({ params }: { params: { tripId:
           支付方式挂在你自己身上，跟着你走，不跟着行程走——这趟旅行结束了，卡的设定还留着，下一趟行程一样能直接用。
         </p>
       </div>
-      <PaymentMethodsManager tripId={params.tripId} />
+      <PaymentMethodsManager tripId={params.tripId} defaultOpenBalancePanel={searchParams?.openBalance === '1'} />
     </main>
   );
 }
