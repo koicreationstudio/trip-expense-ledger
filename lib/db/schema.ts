@@ -56,16 +56,6 @@ export const users = sqliteTable(
     // 专属身份直连链接的 token，明文存储（同 invites.code 的存储哲学），
     // 32 字节随机数 base64url 编码，出现在 /id/[token] 这个 URL 里。
     identityToken: text('identity_token'),
-    // 2026-09-23 新增：密码/PIN 找回（补身份直连链接之外第二条找回路径，
-    // Remy 明确要——链接太难记，想要一个自己设的密码/PIN 就能找回）。
-    // 跟上面已废弃的 email/passwordHash 是两码事，不复用那两列：那两列是
-    // 2026-09-09 砍掉的"邮箱密码登录"整套旧机制的遗留字段，代码不再读写；
-    // 这里是全新的、挂在 identityToken 账号体系之上的"第二条恢复路径"，
-    // 语义不同（不是登录用户名密码，是找回口令），用新字段名避免混淆。
-    // 存储格式见 lib/auth/pin-hash.ts：`pbkdf2-sha256$<迭代次数>$<salt>$<hash>`，
-    // 自描述格式，不明文存。
-    recoveryPinHash: text('recovery_pin_hash'),
-    recoveryPinSetAt: integer('recovery_pin_set_at', { mode: 'timestamp_ms' }),
     createdAt: createdAt(),
   },
   (table) => ({
@@ -142,25 +132,6 @@ export const userSessions = sqliteTable(
   (table) => ({
     tokenHashIdx: uniqueIndex('user_session_token_hash_idx').on(table.tokenHash),
     userIdx: index('user_session_user_idx').on(table.userId),
-  })
-);
-
-// ---------------------------------------------------------------------------
-// recovery_pin_attempt：密码/PIN 找回接口的失败次数记流水，防暴力枚举。
-// 这个接口不带账号标识（只输密码，不输用户名——Remy 明确要"直接输密码"这么
-// 简单），按请求来源（cf-connecting-ip 的 sha256）记失败次数，15 分钟窗口内
-// 失败达到阈值就拒绝新的尝试，见 lib/auth/recovery-rate-limit.ts。只记失败，
-// 成功登录不计入，不影响正常使用。
-// ---------------------------------------------------------------------------
-export const recoveryPinAttempts = sqliteTable(
-  'recovery_pin_attempt',
-  {
-    id: id(),
-    clientKey: text('client_key').notNull(),
-    createdAt: createdAt(),
-  },
-  (table) => ({
-    clientKeyIdx: index('recovery_pin_attempt_client_key_idx').on(table.clientKey),
   })
 );
 

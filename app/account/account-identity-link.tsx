@@ -33,7 +33,7 @@ export function AccountIdentityLink({ url }: { url: string }) {
     // 这版保留换行显示（不做单行省略），只是把底色/文字色对齐 spec 的 gold-lt/gold-dk。
     <section className="flex flex-col gap-2">
       <p className="text-[10px] text-muted">
-        这条链接是重新登录这个账号最直接的方式。换设备、清了浏览器数据时，打开这条链接就能回来——下面还能设一个密码/PIN，作为第二条找回路。
+        这条链接是你重新登录这个账号唯一的方式，没有邮箱密码。换设备、清了浏览器数据时，打开这条链接就能回来。
       </p>
       <code className="break-all rounded-xl bg-gold-lt px-[9px] py-2 font-mono text-[9.5px] text-gold-dk">
         {url}
