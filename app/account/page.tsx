@@ -8,6 +8,7 @@ import { users } from '@/lib/db/schema';
 import { BUILD_COMMIT, BUILD_TIME } from '@/lib/build-info';
 import { AccountIdentityLink } from './account-identity-link';
 import { HardRefreshButton } from './hard-refresh-button';
+import { SetPinForm } from './set-pin-form';
 
 /**
  * 专属身份链接不能只在开号那一刻展示一次就找不回——这里是随时能回来
@@ -52,6 +53,15 @@ export default async function AccountPage({ searchParams }: { searchParams?: { f
   const backHref = searchParams?.from ? `/trips/${searchParams.from}` : '/';
   const backLabel = searchParams?.from ? '返回行程' : '返回首页';
 
+  const pinSetAtLabel = row.recoveryPinSetAt
+    ? new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Kuala_Lumpur',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(row.recoveryPinSetAt)
+    : null;
+
   // 部署时间统一按马来西亚时区(UTC+8)显示，跟 Remy 自己看时间的习惯对齐，
   // 不用她再心算 UTC 时间戳换算。BUILD_TIME/BUILD_COMMIT 是
   // scripts/generate-build-info.mjs 在上一次 `npm run build`（deploy.sh
@@ -78,6 +88,7 @@ export default async function AccountPage({ searchParams }: { searchParams?: { f
           font-semibold(600)，round26 实测才抓到这个跨屏字重不一致，改成 font-bold。 */}
       <h1 className="text-[15px] font-bold text-ink">我的账号</h1>
       <AccountIdentityLink url={identityUrl} />
+      <SetPinForm setAtLabel={pinSetAtLabel} />
       <HardRefreshButton />
       <p className="text-[8.5px] text-muted">
         版本 {BUILD_COMMIT} · 部署于 {deployedAtLabel}（UTC+8）
