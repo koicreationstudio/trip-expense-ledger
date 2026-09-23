@@ -75,28 +75,28 @@ export function PaymentMethodsManager({
   // 底部一颗按钮，点开才展开钱包余额清单——不是像这里之前那样常驻在页面最上面的一整块。
   const [balancePanelOpen, setBalancePanelOpen] = useState(defaultOpenBalancePanel);
 
-  // fix(2026-09-23 第三十八轮，ui-auditor 真机走查坐实：第一版只用一次 useEffect + 直接
-  // scrollIntoView，落地后页面纹丝不动还是停在顶部)：根因是 Next.js Link 导航自带一次
-  // "滚回页面顶部"的行为，时机跟这个 effect 差不多同一帧，两边抢滚动位置，我这边即使
-  // 真的调用了 scrollIntoView 也会被随后（或几乎同时）的默认滚动重置抢跑覆盖掉——
-  // 这次同时做两件事：①调用方（wallet-grid.tsx 的 Link）加 `scroll={false}` 关掉
-  // Next 那次默认滚动，不再有人跟这里抢 ②这边改用两层 requestAnimationFrame（等一次
-  // 完整的布局/绘制周期过去，而不是 effect 跑完那一刻 DOM 几何信息还没稳定）再滚，
-  // 比 mount 那一刻立刻滚更可靠。
+  // fix(2026-09-23 第三十八轮第三版，ui-auditor 两轮真机走查坐实前两版都没用，第三版
+  // 换了两处一起改，别再单独改其中一处）：
+  // 第一版（纯 `scrollIntoView`，mount 时机太早）没滚；第二版（`scroll={false}` +
+  // 两层 `requestAnimationFrame` 手动纠时机）复测仍然纹丝不动——scrollTop 全程停在
+  // 0，连"滚到了错误位置"这种中间态都没出现，说明问题不只是"时机没算准"。真正的根因
+  // 更可能是：这个面板上方还有"已配置的支付方式"列表，靠 `loadMethods()`/
+  // `loadWallets()` 两个独立的 `fetch` 异步加载（见下面 `useEffect(() => { loadMethods();
+  // loadWallets(); }, [])`），mount 那一刻列表还是空的，`#set-balance` 这个 section 虽然
+  // 已经在 DOM 里，但它上方内容还没撑开，滚哪都不稳——两层 rAF（约 32ms）远远等不到网络
+  // 请求回来，等数据到齐、页面真正撑高之后，没有人再滚第二次。
+  // 这次两处一起改：①`wallet-grid.tsx` 的触发链接换成 Next Link 原生支持、文档里写明
+  // 的 hash 定位（`?openBalance=1#set-balance`），不再自己维护 `scroll={false}` 这个
+  // 开关，让 Next 用它自己更成熟的机制处理"导航后滚到哪" ②这里改成在 `wallets` 真正
+  // 加载完成（从 `null` 变成数组，页面已经撑到最终高度）之后再补滚一次，双保险：hash
+  // 定位覆盖"数据碰巧已经到齐"的情况，这个 effect 覆盖"hash 定位时数据还没到、页面还
+  // 没撑开"的情况。
   useEffect(() => {
-    if (!defaultOpenBalancePanel) return;
-    let raf1 = 0;
-    let raf2 = 0;
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        document.getElementById('set-balance')?.scrollIntoView({ block: 'start' });
-      });
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
-  }, [defaultOpenBalancePanel]);
+    // `methods` 也一起等——它渲染在 `#set-balance` 上方的"已配置的支付方式"列表，
+    // 同样异步加载，只等 `wallets` 的话可能 `methods` 还没到、上方内容还没撑开。
+    if (!defaultOpenBalancePanel || wallets === null || methods === null) return;
+    document.getElementById('set-balance')?.scrollIntoView({ block: 'start' });
+  }, [defaultOpenBalancePanel, wallets, methods]);
 
   async function loadMethods() {
     // 走行程范围的端点（不是账号范围的 /api/payment-methods）：这份响应每条支付方式
