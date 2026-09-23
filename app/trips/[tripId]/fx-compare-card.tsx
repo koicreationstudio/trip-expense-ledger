@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { yuanToCents, centsToYuan } from '@/lib/money';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
@@ -66,6 +66,26 @@ import { resolveHoldCandidates, resolveTargetCandidates, resolveDefaultTarget } 
  *    展示的汇率 = 实时中间价 × (1 + 该渠道固定点差/手续费百分比)——点差/手续费
  *    这些百分比本身还是参考值（不是接口现查，这个没有变），变的只是"中间价"
  *    这一个数字的来源。
+ * 6. fix(2026-09-23 第三十三轮，Remy 报真 bug C+D，方案二拍板)：之前"渠道比价"
+ *    （5个固定渠道，`enabledChannelKeys` 过滤）和"我的支付方式"（真实卡片，
+ *    `includeMyCards` 一个总开关控制要不要显示整组）是两套完全独立的过滤 state，
+ *    列表渲染时把两组结果直接拼在一起、毫无视觉区分——用户取消勾选"⚙自选渠道"
+ *    里的某几项，列表里同名的"我的支付方式"那几行完全不受影响，看起来像是过滤
+ *    没生效（这就是 D），而且两组都可能出现同名渠道（比如都叫"Wise"）却没有
+ *    来源标签区分（这就是 C）。Remy 拍板选方案二：把两组过滤开关合并成一套
+ *    `enabledCompareKeys`，`channel:<key>`/`card:<paymentMethodId>` 统一命名空间，
+ *    取消勾选任何一项（不管是固定渠道还是真实卡片）立刻从下面列表消失，每行
+ *    保留一个来源徽章（渠道/我的方式）。"我的支付方式"是异步从服务器拉的，
+ *    合并进同一张勾选清单要处理两件事：①卡片列表还没拉回来之前，dropdown 里
+ *    显示"加载中…"占位而不是空的勾选框（不能让用户勾选到还不存在的东西）；
+ *    ②卡片拉回来的那一刻要把新出现的卡默认勾选上（不然用户还没见过这张卡，
+ *    它却已经被排除在外），用 `initializedCardKeysRef` 记录"这张卡是不是已经
+ *    出现过、需不需要再次自动勾选"，避免每次 `forceRefresh` 重新拉取时把用户
+ *    手动取消勾选过的卡又强制勾回来。旧的 `includeMyCards` 总开关退休，"我的
+ *    支付方式要不要出现在比较范围里"这个能力完全下放给每张卡各自的勾选框；
+ *    是否具备"可以比较我的卡"这个资格（`showCards`）继续只看"是否配置过支付
+ *    方式 + 我持有是否等于行程本位币"这两条业务规则，跟自选比较项过滤是两回事，
+ *    不要混在一起判断。
  */
 
 // fix(2026-09-17 第二十二轮)：这张表从"唯一数据来源"降级成"实时汇率抓不到时的
@@ -188,10 +208,16 @@ export function FxCompareCard({
   const effectiveTarget = targetCandidates.includes(targetCurrency) ? targetCurrency : (targetCandidates[0] ?? '');
 
   const [amountYuan, setAmountYuan] = useState('1000');
-  const [enabledChannelKeys, setEnabledChannelKeys] = useState<Set<string>>(
-    new Set(STATIC_CHANNELS.map((c) => c.key))
+  // fix(2026-09-23 第三十三轮，方案二)：统一命名空间——渠道是 `channel:<key>`，
+  // 我的支付方式是 `card:<paymentMethodId>`，同一个 Set 同一套勾选/过滤逻辑，
+  // 不再是"渠道用 enabledChannelKeys、我的方式用 includeMyCards 总开关"两条平行轨道。
+  const [enabledCompareKeys, setEnabledCompareKeys] = useState<Set<string>>(
+    new Set(STATIC_CHANNELS.map((c) => `channel:${c.key}`))
   );
-  const [includeMyCards, setIncludeMyCards] = useState(true);
+  // 记录"这张卡是不是已经在 dropdown 里出现过、默认勾选过一次"——卡片列表异步到达，
+  // 第一次看到某张卡时自动勾选（不能让用户第一眼就看到一张已经被排除的卡）；之后
+  // 同一张卡再出现（比如点"↻刷新"重新拉取）不再重复默认勾选，尊重用户手动取消过的选择。
+  const initializedCardKeysRef = useRef<Set<string>>(new Set());
 
   const [cardRecommendations, setCardRecommendations] = useState<FxRecommendationResult[] | null>(null);
   const [cardsLoading, setCardsLoading] = useState(false);
@@ -206,7 +232,10 @@ export function FxCompareCard({
   const [liveRatesFetchedAt, setLiveRatesFetchedAt] = useState<string | null>(null);
   const [liveRatesFailed, setLiveRatesFailed] = useState(false);
 
-  const showCards = includeMyCards && hasPaymentMethods && effectiveHold === baseCurrency;
+  // fix(2026-09-23 第三十三轮，方案二)：这里只判断"有没有资格比较我的卡"（配置过
+  // 支付方式 + 我持有等于行程本位币两条业务规则），不再叠加 includeMyCards 总开关——
+  // "要不要显示某一张具体的卡"这件事下放给下面 enabledCompareKeys 逐卡过滤。
+  const showCards = hasPaymentMethods && effectiveHold === baseCurrency;
 
   const fallbackMyrRates: Record<string, number> = { MYR: 1, ...FX_RATES_FALLBACK.MYR };
   const usingFallbackRates = liveRates === null;
@@ -271,6 +300,23 @@ export function FxCompareCard({
       }
       const data = (await res.json()) as { recommendations: FxRecommendationResult[] };
       setCardRecommendations(data.recommendations);
+      // fix(2026-09-23 第三十三轮，方案二)：卡片列表这一刻才第一次真的到达浏览器——
+      // 把"没见过"的卡默认勾进 enabledCompareKeys（不然它们一出现就已经被排除在
+      // 比较范围外，用户还没机会看过就先被过滤掉了），"见过"的卡不重复处理，尊重
+      // 用户手动取消勾选过的状态。
+      setEnabledCompareKeys((prev) => {
+        const next = new Set(prev);
+        let changed = false;
+        for (const r of data.recommendations) {
+          const key = `card:${r.paymentMethodId}`;
+          if (!initializedCardKeysRef.current.has(key)) {
+            initializedCardKeysRef.current.add(key);
+            next.add(key);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
     } finally {
       setCardsLoading(false);
     }
@@ -281,7 +327,7 @@ export function FxCompareCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded, effectiveHold, effectiveTarget, showCards, liveRates]);
 
-  const visibleChannels = STATIC_CHANNELS.filter((c) => enabledChannelKeys.has(c.key));
+  const visibleChannels = STATIC_CHANNELS.filter((c) => enabledCompareKeys.has(`channel:${c.key}`));
 
   const channelRows: CompareRow[] = midRate
     ? visibleChannels.map((c) => {
@@ -298,31 +344,35 @@ export function FxCompareCard({
     : [];
 
   const cardRows: CompareRow[] = showCards
-    ? (cardRecommendations ?? []).map((r) => {
-        const notionalTargetAmountYuan = midRate ? amount * midRate : null;
-        const costYuan = r.costInCompareCurrency !== null ? centsToYuan(r.costInCompareCurrency) : null;
-        const impliedRate =
-          notionalTargetAmountYuan && costYuan && costYuan > 0 ? notionalTargetAmountYuan / costYuan : null;
-        return {
-          key: `card-${r.paymentMethodId}`,
-          label: r.label,
-          note:
-            r.unavailable || costYuan === null
-              ? '汇率缺失，建议手动核对'
-              : `刷卡支付 · 折合花 ${costYuan.toFixed(2)} ${baseCurrency}`,
-          kind: 'card',
-          effectiveRate: impliedRate,
-          amountInTarget: impliedRate ? amount * impliedRate : null,
-        };
-      })
+    ? (cardRecommendations ?? [])
+        .filter((r) => enabledCompareKeys.has(`card:${r.paymentMethodId}`))
+        .map((r) => {
+          const notionalTargetAmountYuan = midRate ? amount * midRate : null;
+          const costYuan = r.costInCompareCurrency !== null ? centsToYuan(r.costInCompareCurrency) : null;
+          const impliedRate =
+            notionalTargetAmountYuan && costYuan && costYuan > 0 ? notionalTargetAmountYuan / costYuan : null;
+          return {
+            key: `card-${r.paymentMethodId}`,
+            label: r.label,
+            note:
+              r.unavailable || costYuan === null
+                ? '汇率缺失，建议手动核对'
+                : `刷卡支付 · 折合花 ${costYuan.toFixed(2)} ${baseCurrency}`,
+            kind: 'card',
+            effectiveRate: impliedRate,
+            amountInTarget: impliedRate ? amount * impliedRate : null,
+          };
+        })
     : [];
 
   const allRows = [...channelRows, ...cardRows]
     .filter((r) => r.effectiveRate !== null)
     .sort((a, b) => (b.effectiveRate ?? 0) - (a.effectiveRate ?? 0));
 
-  function toggleChannel(key: string) {
-    setEnabledChannelKeys((prev) => {
+  // fix(2026-09-23 第三十三轮，方案二)：改名自 toggleChannel，现在管两种 key
+  // （channel:xxx / card:xxx），逻辑本身（勾选/取消勾选同一个 Set）没有变化。
+  function toggleCompareKey(key: string) {
+    setEnabledCompareKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -422,7 +472,9 @@ export function FxCompareCard({
               )}
             </div>
 
-            {/* ⚙自选渠道 下拉——勾选框对应 5 个静态渠道 */}
+            {/* ⚙自选比较项 下拉——fix(2026-09-23 第三十三轮，方案二)：改名自"⚙自选渠道"，
+                合并了 5 个固定渠道 + 真实支付方式两组勾选框到同一个下拉、同一套 Set，
+                不再是两个互相不知道对方存在的独立开关。 */}
             <div className="relative">
               <button
                 type="button"
@@ -433,10 +485,13 @@ export function FxCompareCard({
                 }}
                 className="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
               >
-                ⚙ 自选渠道 ▾
+                ⚙ 自选比较项 ▾
               </button>
               {channelOpen && (
                 <div className="absolute left-0 top-full z-10 mt-1 min-w-[170px] rounded-[10px] border border-sand bg-white p-1 shadow-card">
+                  <div className="px-[6px] pb-[2px] pt-[3px] text-[8.5px] font-semibold uppercase tracking-wide text-gold-dk">
+                    渠道
+                  </div>
                   {STATIC_CHANNELS.map((c) => (
                     <label
                       key={c.key}
@@ -444,12 +499,41 @@ export function FxCompareCard({
                     >
                       <input
                         type="checkbox"
-                        checked={enabledChannelKeys.has(c.key)}
-                        onChange={() => toggleChannel(c.key)}
+                        checked={enabledCompareKeys.has(`channel:${c.key}`)}
+                        onChange={() => toggleCompareKey(`channel:${c.key}`)}
                       />
                       {c.name}
                     </label>
                   ))}
+                  {showCards && (
+                    <>
+                      <div className="mt-[2px] border-t border-sand px-[6px] pb-[2px] pt-[5px] text-[8.5px] font-semibold uppercase tracking-wide text-gold-dk">
+                        我的方式
+                      </div>
+                      {/* fix(2026-09-23 第三十三轮)：卡片列表异步拉取，还没拉回来之前
+                          不能显示空的勾选框（用户会以为"我的方式"就是空的、可以勾但
+                          勾了也没东西），用文字占位说明还在加载。 */}
+                      {cardsLoading && cardRecommendations === null ? (
+                        <p className="px-[6px] py-[4px] text-[10px] text-gold-dk">加载中…</p>
+                      ) : (cardRecommendations ?? []).length === 0 ? (
+                        <p className="px-[6px] py-[4px] text-[10px] text-gold-dk">暂无支付方式</p>
+                      ) : (
+                        (cardRecommendations ?? []).map((r) => (
+                          <label
+                            key={r.paymentMethodId}
+                            className="flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-[6px] py-[4px] text-[10.5px] text-ink hover:bg-gold-lt"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={enabledCompareKeys.has(`card:${r.paymentMethodId}`)}
+                              onChange={() => toggleCompareKey(`card:${r.paymentMethodId}`)}
+                            />
+                            {r.label}
+                          </label>
+                        ))
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -512,14 +596,12 @@ export function FxCompareCard({
           </div>
 
           {hasPaymentMethods && effectiveHold === baseCurrency ? (
-            <label className="flex items-center gap-1.5 text-[10px] text-gold-dk">
-              <input
-                type="checkbox"
-                checked={includeMyCards}
-                onChange={(e) => setIncludeMyCards(e.target.checked)}
-              />
-              一起比较我的支付方式（用你在「支付方式」页配置的真实汇率加点/手续费）
-            </label>
+            // fix(2026-09-23 第三十三轮，方案二)：原本这里是"一起比较我的支付方式"
+            // 总开关（includeMyCards），现在退休——每张卡自己的勾选框已经并进上面
+            // "⚙自选比较项"下拉，不需要再单独一个总开关重复控制同一件事。
+            <p className="text-[10px] text-gold-dk">
+              你在「支付方式」页配置的支付方式已经并入上面&ldquo;⚙自选比较项&rdquo;，取消勾选哪张卡它就会从下面列表消失（用的是真实汇率加点/手续费）。
+            </p>
           ) : (
             !hasPaymentMethods && (
               <p className="text-[10px] text-gold-dk">
@@ -543,7 +625,7 @@ export function FxCompareCard({
             <p className="text-[10px] text-gold-dk">这个币种组合暂时没有参考汇率，换一组「我持有/目标币种」再看。</p>
           ) : allRows.length === 0 ? (
             <p className="text-[10px] text-gold-dk">
-              自选渠道都取消勾选了，而且没有可比较的支付方式——去上面&ldquo;⚙自选渠道&rdquo;里勾几个看看。
+              自选比较项都取消勾选了——去上面&ldquo;⚙自选比较项&rdquo;里勾几个看看。
             </p>
           ) : (
             <ul className="flex flex-col gap-[7px]">
@@ -555,6 +637,14 @@ export function FxCompareCard({
                   <div className="flex items-center justify-between gap-[6px] font-semibold">
                     <span>
                       {row.label}
+                      {/* fix(2026-09-23 第三十三轮，方案二，对应 Remy 报的真 bug C)：
+                          来源徽章——渠道比价跟我的支付方式现在合并成同一张列表，
+                          两边都可能出现同名行（比如都叫"Wise"），没有这个标签会
+                          让人以为是重复行。复用 expense-list.tsx 已有的中性徽章
+                          样式（`bg-[rgba(164,163,160,.2)]`），不新开一套配色。 */}
+                      <span className="ml-1.5 inline-flex items-center rounded-full bg-[rgba(164,163,160,.2)] px-[6px] py-[1px] align-middle text-[8.5px] font-medium text-muted">
+                        {row.kind === 'channel' ? '渠道' : '我的方式'}
+                      </span>
                       {i === 0 && (
                         <span className="ml-1.5 inline-flex items-center rounded-full bg-ok px-[7px] py-[2px] align-middle text-[9px] font-bold text-white">
                           ✓最划算
