@@ -75,13 +75,27 @@ export function PaymentMethodsManager({
   // 底部一颗按钮，点开才展开钱包余额清单——不是像这里之前那样常驻在页面最上面的一整块。
   const [balancePanelOpen, setBalancePanelOpen] = useState(defaultOpenBalancePanel);
 
-  // fix(2026-09-23 第三十八轮)：从钱包卡"?openBalance=1"深链进来时，这个面板在页面
-  // 最下面，光展开状态不够——不滚过去的话，落地那一刻大概率还停在页面顶部的"添加支付
-  // 方式"表单，看起来像"点了链接却什么都没发生"，跟这次要修的"创建没反应"是同一类
-  // 体验问题，不能在打通入口这一步又留一个新的同类坑。
+  // fix(2026-09-23 第三十八轮，ui-auditor 真机走查坐实：第一版只用一次 useEffect + 直接
+  // scrollIntoView，落地后页面纹丝不动还是停在顶部)：根因是 Next.js Link 导航自带一次
+  // "滚回页面顶部"的行为，时机跟这个 effect 差不多同一帧，两边抢滚动位置，我这边即使
+  // 真的调用了 scrollIntoView 也会被随后（或几乎同时）的默认滚动重置抢跑覆盖掉——
+  // 这次同时做两件事：①调用方（wallet-grid.tsx 的 Link）加 `scroll={false}` 关掉
+  // Next 那次默认滚动，不再有人跟这里抢 ②这边改用两层 requestAnimationFrame（等一次
+  // 完整的布局/绘制周期过去，而不是 effect 跑完那一刻 DOM 几何信息还没稳定）再滚，
+  // 比 mount 那一刻立刻滚更可靠。
   useEffect(() => {
     if (!defaultOpenBalancePanel) return;
-    document.getElementById('set-balance')?.scrollIntoView({ block: 'start' });
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        document.getElementById('set-balance')?.scrollIntoView({ block: 'start' });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   }, [defaultOpenBalancePanel]);
 
   async function loadMethods() {

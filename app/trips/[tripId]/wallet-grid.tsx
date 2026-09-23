@@ -432,7 +432,12 @@ export function WalletGrid({
         <p className={`text-[9px] ${isDark ? 'text-hero-label' : 'text-muted'}`}>
           余额不会跟着消费记录自动变——只有钱包&ldquo;绑定支付方式&rdquo;之后新记的消费才会自动扣，已经记过的不会补算。
           {' '}
-          <Link href={`/trips/${tripId}/payment-methods?openBalance=1`} className="tap-link">
+          {/* fix(2026-09-23 第三十八轮，ui-auditor 真机走查抓到)：`scroll={false}` 关掉
+              Next.js Link 默认的"导航后自动滚到页面顶部"行为——不关的话它会在
+              payment-methods-manager.tsx 那个 scrollIntoView 生效之后（甚至同一帧内）
+              把滚动位置重新拉回顶部，两边抢滚动位置，用户看到的是"没滚"这个结果。
+              目标滚动位置交给落地页那边的 useEffect 自己决定，这里只负责不添乱。 */}
+          <Link href={`/trips/${tripId}/payment-methods?openBalance=1`} scroll={false} className="tap-link">
             去&ldquo;支付方式&rdquo;手动设置余额 →
           </Link>
         </p>
