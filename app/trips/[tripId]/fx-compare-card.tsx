@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { yuanToCents, centsToYuan } from '@/lib/money';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
 import { deriveMidRate } from '@/lib/fx/derive-mid-rate';
+import { resolveHoldCandidates, resolveTargetCandidates, resolveDefaultTarget } from '@/lib/fx/fx-compare-defaults';
 
 /**
  * 汇率比价——2026-09-16 第十八轮，Remy 拍板"要根治"：把原本两张独立卡片
@@ -133,32 +134,11 @@ function formatAtmFeeNote(targetCurrency: string, myrRates: Record<string, numbe
   return `银行外汇费约 2% + ${symbol}${rounded} 固定手续费`;
 }
 
-// "我持有"候选清单是产品需求（哪几个基准值得让用户选），不是汇率数据决定的——
-// 继续从 FX_RATES_FALLBACK 的 key 集合取（MYR/USD/HKD/CNY 四个基准），这个清单
-// 跟当前用的是实时汇率还是离线表无关，两种数据源都覆盖同一组基准币种。
-function resolveHoldCandidates(enabledCurrencies: string[] | null): string[] {
-  const allHolds = Object.keys(FX_RATES_FALLBACK);
-  if (!enabledCurrencies || enabledCurrencies.length === 0) return allHolds;
-  return allHolds.filter((h) => enabledCurrencies.includes(h));
-}
-
-// fix(2026-09-17 第二十轮，Remy 真机截图坐实的回归)：目标币种候选必须是 Artifact
-// 写死的固定 5 项 THB/USD/SGD/CNY/HKD，跟"我持有"选了哪个币种无关——第十九轮那次
-// 改成 `Object.keys(FX_RATES[hold] ?? {})` 看起来解决了"候选选不到"的问题，但引入
-// 了一个新 bug：FX_RATES.HKD 这一行本身没有 HKD 自己的 key（自己换自己没有意义，
-// 数据表当然不会有），它的 key 集合是 {THB,USD,SGD,CNY,MYR}——MYR 只是因为这张表
-// 记录的是"从 HKD 出发能查到的其它币种汇率"这个副作用，不是方案要的候选。结果
-// "我持有 HKD" 时目标候选变成 THB/USD/SGD/CNY/MYR，方案要的 HKD 本身反而在"我持有
-// 不是 HKD"时才会出现——这正是 Remy 这轮反馈"目标币种下拉缺 HKD、多了个 MYR"的
-// 根因。改回固定字面量清单，只排除掉正好等于当前持有币种的那个（自己换自己没
-// 意义，这个排除逻辑无论方案还是 Remy 都没有反对），不再借用 FX_RATES 表的 key
-// 集合当候选来源——候选清单和汇率数据是两件事，候选清单是产品需求，汇率数据只是
-// 拿来算数字用的，不该让数据表凑巧长什么样反过来决定候选清单长什么样。
-const TARGET_CURRENCY_CANDIDATES = ['THB', 'USD', 'SGD', 'CNY', 'HKD'] as const;
-
-function resolveTargetCandidates(hold: string): string[] {
-  return TARGET_CURRENCY_CANDIDATES.filter((c) => c !== hold);
-}
+// fix(2026-09-23，Remy 真实反馈"我主币种是 HKD，为何强制显示 THB"，真 bug)：
+// "我持有"/"目标币种"候选清单 + 目标币种默认值这三条规则，2026-09-23 起拆到
+// `lib/fx/fx-compare-defaults.ts`（零依赖纯函数，跟 `lib/fx/derive-mid-rate.ts`
+// 同一个理由——单独测试不用挂组件），import 在文件顶部，别再在这个文件里重新
+// 定义一份，会跟 lib 那份漂移。根因/历史背景见该文件顶部注释。
 
 /** ISO 时间戳转成"HH:MM"给脚注用，按浏览器本地时区显示（不强制转成某个固定时区）。 */
 function formatFetchedAt(iso: string): string {
@@ -202,7 +182,9 @@ export function FxCompareCard({
   const effectiveHold = holdCandidates.includes(holdCurrency) ? holdCurrency : (holdCandidates[0] ?? '');
   const targetCandidates = effectiveHold ? resolveTargetCandidates(effectiveHold) : [];
 
-  const [targetCurrency, setTargetCurrency] = useState<string>('THB');
+  const [targetCurrency, setTargetCurrency] = useState<string>(
+    resolveDefaultTarget(effectiveHold, enabledCurrencies)
+  );
   const effectiveTarget = targetCandidates.includes(targetCurrency) ? targetCurrency : (targetCandidates[0] ?? '');
 
   const [amountYuan, setAmountYuan] = useState('1000');
