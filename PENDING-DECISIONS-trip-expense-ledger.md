@@ -1,5 +1,48 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-23 深夜，第三十八轮，色板改回暖色系 + 结算页FAB遮挡排查（判定非真bug）+ 钱包余额联动排查 + DESIGN-BRIEF失实订正，commit `a96f065`+`c2f22c7`，新 session 开工前必看】
+
+背景：Remy 审过第三十七轮报告后追加 4 件事，trip-expense-ledger-pm 这轮处理。**第三十七轮（commit `6962d73`）当时没有补写这份文档的记录，只有 git commit message 和 `DESIGN-BRIEF.md`「第三十七轮：全面体检」一节**——那一轮做了 3 个真实 bug 修复（汇率比价候选池扩充/钱包空状态说明文字/文件上传按钮改造）+ creative-director 系统性视觉体检（发现②③两个"悬案"其实已经解决、色板已从暖色变灰阶但从没跟 Remy 确认过）。这轮（第三十八轮）接着体检报告处理。
+
+### 一、色板改回暖色系（`tailwind.config.ts`/`app/globals.css`/`reference/artifact-v10-source.html`）
+
+依据 `DESIGN-BRIEF.md`「色彩强度柔和化（2026-09-08）」+「第七版」两节已经过 WCAG 对比度实算的暖色定案值，不是随手挑的：`ink #23232E`/`gold #B89E61`/`gold-dk #7E6630`/`gold-lt #F0E8D6`/`paper #FEFCF7`/`sand #EDE8DA`/`muted #8A7A6A`。全仓库硬编码 rgba 灰阶 RGB（旧 gold `164,163,160` 30 处、旧 ink `55,55,54` 1 处）一并改回暖色 RGB。`hero-gradient` 主体改用「第六版」验证过对比度的纯 ink 色相三段式，**没有**沿用候选D"渐变起点用 gold-dk"的结构——实算过 `negative-dk` 在新 `gold-dk` 上对比度只有 2.93:1 不达标，重蹈候选D自己在 2026-09-12 修过的同一类问题。`reference/artifact-v10-source.html` 的 `:root` 色板一并同步改回暖色——这份文件是历轮"逐 token 核对 Artifact"反复当权威源头用的（round18/20/26/32），不同步的话下次核对又会把暖色误判成漂移改回灰阶，这是这次色板拉锯的根本机制，详见 `DESIGN-BRIEF.md`「第三十八轮」一节「四」。
+
+favicon（`app/icon.svg`、`public/icons/icon-192.png`/`icon-512.png`，用 sharp 重新生成）、`app/manifest.ts` 的 PWA 主题色一并同步改回暖色。
+
+ui-auditor 真机走查（生产环境，真实行程🇭🇰2026香港，桌面+手机）：**通过**，深色 Hero 卡能看出藏青色调、金棕色文字、暖米白背景，桌面/手机/三个页面视觉一致，console 0 error。
+
+### 二、结算页 FAB 遮挡最后一行净值——排查结论：**不是真 bug，round37 截图证据是 Playwright fullPage 截图渲染假象**
+
+`record-expense-bar.tsx`/`.action-bar`/`.action-bar-reserve` 结构本身（2026-09-12 就已从悬浮胶囊重构成占位横带 + 页面容器预留同高度底部空白）核实正确，没有做任何改动。ui-auditor 真机走查用**真实滚动（非 fullPage 截图）**到结算页真正底部，展开 remy（16行明细）和 htoo（5行，清单最后一位）两种场景，桌面+手机都测过：**最后一行净值完全可见，没有被 FAB 压住**。对比 fullPage 截图模式这次在结算页本身没复现假象，但在**行程主页**的 fullPage 截图里复现了同类现象（FAB 画在页面中段而不是文档真实底部）——这进一步坐实"fullPage 截图模式下 fixed 元素会按视口高度定格"这个判断是通用机制，不是结算页独有的 bug。**如果 Remy 之后在真机上（不是截图里）还遇到"滚到底还是被压住"，请带上"是否已经滚到底部（下面还有没有更多内容）"这个细节反馈**，比对照截图更容易判断。
+
+### 三、钱包余额联动排查——真实数据坐实：联动逻辑本身已存在且正常工作，只是"仅未来生效、不回溯"这条边界从没讲清楚
+
+D1 真实数据核对：Remy 刚建的"现金"钱包（`id=872246bc...`，created_at `2026-09-23T15:03 UTC`）确实创建成功、确实绑定了"现金"支付方式（`id=a31f5c30...`）——不是技术 bug。`app/api/trips/[tripId]/expenses/route.ts` 第 95-118 行的自动扣款逻辑本身工作正常，但**只对绑定之后新记的消费生效，不回溯**（代码注释里写的"v1 明确的简化边界"）。查了 Remy 那 5 笔真实"现金"消费（咖啡/云吞面/雪糕/酒店tax/taxi），`created_at` 全部早于钱包创建时间——联动链路一次都没触发过，不是没做，是时间上赶不上。**上一轮"两者完全独立"的诊断不完整**，这次订正。
+
+已修复（打通发现路径，不是产品判断）：
+- `wallet-grid.tsx` 钱包卡下方新增常驻提示 + 深链 `?openBalance=1`
+- `payment-methods-manager.tsx` 接住深链自动展开"设置当前余额"面板 + 自动滚动过去（第一版滚动没生效，根因是 Next Link 默认"导航后滚回顶部"跟这边的 `scrollIntoView` 抢跑，第二版给触发链接加 `scroll={false}` + 落地页改两层 `requestAnimationFrame`，commit `c2f22c7`，ui-auditor 复测通过）
+
+**留给 Remy 表态的产品决定**：要不要做"历史消费回溯计算"（绑定钱包时/事后把这个支付方式名下、钱包建立之前的历史消费也补算进余额）。方案 A（维持现状，只讲清楚边界，已做）vs 方案 B（新建钱包/首次绑定时提供一次性"要不要把历史消费也算进来"的选项，需要新设计，范围更大，这轮没做）。详细利弊见 `DESIGN-BRIEF.md`「第三十八轮」一节「三 (d)」。
+
+### 四、DESIGN-BRIEF.md「原样保留」失实订正——选了方案(a)：补回被删的三节内容
+
+round37 commit（`6962d73`）message 写"原样保留没删改"，但 `git show 6962d73 -- DESIGN-BRIEF.md` 实际是 112 insertions/365 deletions——"色彩强度柔和化"/"第六版"/"第七版"约365行被整段删除。这轮补回原文（逐字照 `git show 6962d73~1:DESIGN-BRIEF.md` 还原，没有改写），理由：这三节正是这轮改色依据的来源（上面「一」用到的具体 hex 值全部来自这里），选补回不只是订正失实，也是把依据留住。文档最前面的提醒横幅、「第三十七轮」体检那节的对比表格都保留原样当证据链，旁边加了指向「第三十八轮」的更新提示。
+
+### 五、验证方式
+
+全程真实行程「🇭🇰2026香港」（`trip id=f78a6b5e-8612-4097-8bfd-88a5db664045`），身份直连链接登录（`/id/aNhfVNPU7ZGosHWFmdLfp5WtUxB_QGBqjNldoMGqaWA`）。D1 查证全部 SELECT 只读，没有写操作。ui-auditor 两轮真机走查（第一轮测色板+FAB+钱包CTA，第二轮专测自动滚动修复），全程只做浏览/点击/截图，没有提交任何会改动真实数据的表单（尤其"设置当前余额"表单全程没点保存）。lint/typecheck/109个单测两轮都过。`./deploy.sh` 五关两轮都过，`/api/health` 回读 200。
+
+### 六、这轮没处理、但走查/巡查过程中在团队看板上看到的新发现（不在这轮任务范围内，留给下一轮）
+
+- 支付方式页"本行程启用的支付方式"用的是浏览器原生 checkbox（默认蓝色），跟旁边自定义深色 switch 不搭（`payment-methods-manager.tsx`）
+- 行程切换器 / 汇率比价"我持有"下拉，点空白处/Esc 关不掉，只能再点一次触发按钮（`trip-header-nav.tsx`/`fx-compare-card.tsx`/`select-dropdown.tsx`）
+- `loadUserTripsWithBalance` 对每趟行程各起独立查询，是同函数里自打脸的 N+1（`lib/db/user-trips-query.ts`/`lib/db/settlement-query.ts`），当前行程数少影响小，行程数变多会线性变慢
+- 记账表单"跟其他人split"面板的米黄底色（`--cream` token）跟页面其余背景的冷暖协调度，这轮暖色回归后大概率已经自然改善，但没有专门再截图确认，下一轮如果顺手处理这块可以带一并核实
+
+---
+
 ## 【2026-09-23，第三十六轮，补第三十五轮缺失的 ui-auditor 真机走查（用本地 dev server 而非生产 URL），C/D 方案二三项核对全过；顺带排查清一个开发模式假 bug，新 session 开工前必看】
 
 背景：trip-expense-ledger-pm 派工，专门补第三十五轮遗留的缺口——C/D 方案二（渠道比价+我的支付方式合并成统一自选比较项，commit `e685345`）代码已推送 origin/main 但从没经过 ui-auditor 真机走查（当时没有可访问的生产 URL，因为同一份 origin/main 上还挂着一条 Remy 还没批准部署的 PIN 找回功能，`./deploy.sh` 整站部署会把两者一起送上生产）。活动板任务 `id=2026-09-23_173612_852f1b0a` 因此被标了 ⚠️。这轮明确要求改用**本地开发服务器**而不是生产 URL 来完成走查，避免死等部署形成循环等待。
