@@ -1,0 +1,1 @@
+ALTER TABLE `wallet` ADD `historical_backfill_applied_at` integer;

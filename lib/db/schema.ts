@@ -355,6 +355,19 @@ export const wallets = sqliteTable(
     // 支付方式页新增功能）：允许补录成之前的日期，不强制等于 updatedAt/now。跟
     // currentBalance 是同一次 PATCH 一起写，不单独起表。
     balanceUpdatedAt: integer('balance_updated_at', { mode: 'timestamp_ms' }),
+    // fix(2026-09-24 第三十九轮，团队看板"历史现金消费回溯补算进钱包余额")：这个钱包
+    // 绑定支付方式那一刻，有没有已经把"当时已存在、匹配这个支付方式+币种"的历史消费
+    // 补扣过一次——只在创建钱包时（POST /api/trips/[tripId]/wallets）付带
+    // `paymentMethodId` 才会触发这次一次性补算，算完立刻写这个时间戳。存在的意义是
+    // 幂等：防止同一批历史消费被算两次。选择"创建时算一次、写死这个时间戳"而不是
+    // "每次显示余额都重新动态算一遍"，是因为这次补算的范围有一条**永远不会变的硬
+    // 边界**——「这个钱包诞生之前已经存在的消费」，这条线一旦某一刻算完，未来无论
+    // 再过多久都不会有新的消费补进这条线以内（新消费只会发生在"以后"，不会倒着长回
+    // "以前"），不属于"随时间推移会变得不准"那类需要动态重算的数据，写死这个时间戳
+    // 反而比每次都重新扫一遍历史消费表更省、也更不容易因为"到底该不该重新算"产生
+    // 新的歧义。当前 UI 只在建钱包那一刻能设置 `paymentMethodId`（没有事后重新绑定
+    // 的入口），所以这个字段目前只会在 INSERT 时写一次，不会被后续 PATCH 触碰。
+    historicalBackfillAppliedAt: integer('historical_backfill_applied_at', { mode: 'timestamp_ms' }),
     createdAt: createdAt(),
   },
   (table) => ({

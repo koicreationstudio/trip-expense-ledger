@@ -10,6 +10,7 @@ import type { SplitShare } from '@/lib/domain/split';
 import { COMMON_CATEGORIES } from '@/lib/domain/categories';
 import { CategoryCombobox } from '@/components/category-combobox';
 import { SelectDropdown } from '@/components/select-dropdown';
+import { Switch } from '@/components/switch';
 
 interface Participant {
   id: string;
@@ -566,22 +567,15 @@ export function ExpenseForm({
               关掉开关 = 这笔就是自己的消费，不问是谁垫的；打开才需要决定跟谁分、谁先垫钱。跟谁分的名单现在会跟着「邀请管理」页面的参与者实时同步（这版已经接起来了）：邀请管理那边加了新参与者，这里下次进来会读到最新名单。
             </span>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={splitMode !== 'onlyMe'}
-            aria-label="跟其他人 split 这笔"
-            onClick={() => handleSelectSplitMode(splitMode === 'onlyMe' ? 'equal' : 'onlyMe')}
-            className={`relative inline-flex h-[18px] w-[32px] shrink-0 items-center rounded-full transition-colors ${
-              splitMode !== 'onlyMe' ? 'bg-accent-700' : 'bg-sand'
-            }`}
-          >
-            <span
-              className={`inline-block h-[14px] w-[14px] transform rounded-full bg-white shadow transition-transform ${
-                splitMode !== 'onlyMe' ? 'translate-x-[16px]' : 'translate-x-[2px]'
-              }`}
-            />
-          </button>
+          {/* fix(2026-09-24 第三十九轮)：这个开关的样式抽成了共用组件
+              `components/switch.tsx`（`payment-methods-manager.tsx`"本行程启用的
+              支付方式"那批原生 checkbox 这轮也改成调用它），这里改成调用组件本体，
+              视觉/行为跟之前完全一致，只是不再是本文件独有的一份实现。 */}
+          <Switch
+            checked={splitMode !== 'onlyMe'}
+            onChange={() => handleSelectSplitMode(splitMode === 'onlyMe' ? 'equal' : 'onlyMe')}
+            ariaLabel="跟其他人 split 这笔"
+          />
         </div>
 
         {splitMode !== 'onlyMe' && (

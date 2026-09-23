@@ -1,8 +1,8 @@
 import { eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { expenses, participants, trips } from './schema';
-import { loadSettlementInput } from './settlement-query';
-import { computeNetBalances } from '../domain/settlement';
+import { loadSettlementInputForTrips } from './settlement-query';
+import { computeNetBalances, type SettlementExpenseInput } from '../domain/settlement';
 
 export interface UserTripSummary {
   id: string;
@@ -87,19 +87,29 @@ export async function loadUserTripsWithBalance(db: Db, userId: string): Promise<
     }
   }
 
-  return Promise.all(
-    dedupedRows.map(async (row) => {
-      const settlementInput = await loadSettlementInput(db, row.id);
-      const netBalance = computeNetBalances(settlementInput).get(row.participantId) ?? 0;
-      const totals = totalsByTripId.get(row.id);
-      return {
-        ...row,
-        netBalance,
-        totalExpenseBaseCurrency: Number(totals?.total ?? 0),
-        expenseCount: Number(totals?.count ?? 0),
-        tripStartDate: row.tripStartDate ? row.tripStartDate.toISOString() : null,
-        tripEndDate: row.tripEndDate ? row.tripEndDate.toISOString() : null,
-      };
-    })
-  );
+  // fix(2026-09-24 第三十九轮，团队看板 id=2026-09-23_232430_18dcf425)：上面
+  // expenseTotals 那段已经是"一次分组查全部行程"的 list-once 写法，但净额计算
+  // 之前是对每趟行程各自 `await loadSettlementInput(db, row.id)`——同一个函数
+  // 自己打自己脸的 N+1（行程数=N 时额外多 2N 条查询）。改用批量版
+  // `loadSettlementInputForTrips`，不管 dedupedRows 有几条，固定 2 条查询，
+  // 净额计算本身（`computeNetBalances`）不用改，只是输入从"逐个 await"换成
+  // "查一次、内存里按 tripId 取"。
+  let settlementInputByTripId = new Map<string, SettlementExpenseInput[]>();
+  if (tripIds.length) {
+    settlementInputByTripId = await loadSettlementInputForTrips(db, tripIds);
+  }
+
+  return dedupedRows.map((row) => {
+    const settlementInput = settlementInputByTripId.get(row.id) ?? [];
+    const netBalance = computeNetBalances(settlementInput).get(row.participantId) ?? 0;
+    const totals = totalsByTripId.get(row.id);
+    return {
+      ...row,
+      netBalance,
+      totalExpenseBaseCurrency: Number(totals?.total ?? 0),
+      expenseCount: Number(totals?.count ?? 0),
+      tripStartDate: row.tripStartDate ? row.tripStartDate.toISOString() : null,
+      tripEndDate: row.tripEndDate ? row.tripEndDate.toISOString() : null,
+    };
+  });
 }

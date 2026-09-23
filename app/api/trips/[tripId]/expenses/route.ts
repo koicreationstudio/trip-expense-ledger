@@ -95,6 +95,12 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
   // 记账自动扣钱包余额：只在「选了支付方式 + 那个支付方式绑了一个钱包 + 钱包币种
   // 跟这笔消费币种完全一致」时才扣，不一致就静默跳过（不做隐式换算猜汇率，也不用
   // 额外 UI 提示「没扣」——这是 v1 明确的简化边界，DESIGN-BRIEF 之外的产品决定）。
+  // fix(2026-09-24 第三十九轮)：这段只处理「这笔消费发生时钱包已经存在+已绑定」的
+  // 情况——「钱包创建之前就已经存在的历史消费」这条互补的边界，改在
+  // `app/api/trips/[tripId]/wallets/route.ts` POST 里处理（用
+  // `expenses.createdAt < wallet.createdAt` 分界，创建钱包那一刻如果直接绑了支付
+  // 方式，一次性把这条线以内的历史消费补进起始余额），这两段各管一半时间线，刚好
+  // 在钱包诞生那一刻接力，不重叠、不用互相知道对方的存在。
   const linkedWallet = body.paymentMethodId
     ? await db.query.wallets.findFirst({
         where: and(

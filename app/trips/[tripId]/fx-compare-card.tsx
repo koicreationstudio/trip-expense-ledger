@@ -6,6 +6,7 @@ import { yuanToCents, centsToYuan } from '@/lib/money';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
 import { deriveMidRate } from '@/lib/fx/derive-mid-rate';
 import { resolveHoldCandidates, resolveTargetCandidates, resolveDefaultTarget } from '@/lib/fx/fx-compare-defaults';
+import { SelectDropdown, useDismissableOpen } from '@/components/select-dropdown';
 
 /**
  * 汇率比价——2026-09-16 第十八轮，Remy 拍板"要根治"：把原本两张独立卡片
@@ -219,9 +220,14 @@ export function FxCompareCard({
   enabledCurrencies: string[] | null;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const [holdOpen, setHoldOpen] = useState(false);
-  const [targetOpen, setTargetOpen] = useState(false);
+  // fix(2026-09-24 第三十九轮)："自选比较项"是多选 checkbox 面板（渠道+我的支付方式
+  // 各自可以勾多个），不是"选一个 value"这种形状，套不进 `SelectDropdown` 的 value/
+  // onChange 单选模型（上面"我持有"/"目标币种"那两个已经换成调用 `SelectDropdown`
+  // 本体了，这个换不了）。但"点空白/Escape 关闭"这段行为是完全通用的，改用同一个
+  // `useDismissableOpen` 共用 hook（`SelectDropdown` 内部也是用这个），不再自己写
+  // 第二份 `mousedown`/`keydown` 监听器。
   const [channelOpen, setChannelOpen] = useState(false);
+  const channelContainerRef = useDismissableOpen(channelOpen, () => setChannelOpen(false));
 
   const holdCandidates = resolveHoldCandidates(enabledCurrencies);
   // 默认"我持有"优先选这趟行程的本位币（这样默认就能同时看到渠道+我的卡两组数据，
@@ -441,82 +447,45 @@ export function FxCompareCard({
                 真实行程上排除掉当前目标币种后最终只剩 3 个——扩到 8 选
                 （`HOLD_CURRENCY_CANDIDATES`，见 `lib/fx/fx-compare-defaults.ts`
                 顶部大注释），不再用 enabledCurrencies 收窄可选范围。 */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setHoldOpen((v) => !v);
-                  setTargetOpen(false);
-                  setChannelOpen(false);
-                }}
-                className="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
-              >
-                💰 我持有 {effectiveHold || '…'} ▾
-              </button>
-              {holdOpen && (
-                <div className="absolute left-0 top-full z-10 mt-1 min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card">
-                  {holdCandidates
-                    .filter((h) => h !== effectiveTarget)
-                    .map((h) => (
-                      <button
-                        key={h}
-                        type="button"
-                        onClick={() => {
-                          setHoldCurrency(h);
-                          setHoldOpen(false);
-                        }}
-                        className="block w-full whitespace-nowrap rounded-[7px] px-2 py-1.5 text-left text-[10.5px] text-ink hover:bg-gold-lt"
-                      >
-                        {h}
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
+            {/* fix(2026-09-24 第三十九轮，团队看板反馈"点空白/Escape 关不掉")：这两个
+                下拉之前是各自手搓的 `useState` + `absolute` 面板，没接住空白点击/Escape
+                （根因见 `components/select-dropdown.tsx` 顶部说明）。这两个都是"选一个
+                值触发 onChange"的单选形状，结构上跟 `SelectDropdown` 完全吻合，直接换成
+                调用它本体（不是再抽一份关闭逻辑出来抄），关闭行为、键盘习惯从此跟全站
+                其它下拉共用同一份实现，不会再单独漏。触发按钮样式用 `triggerClassName`
+                还原成原来的圆角胶囊，`renderValue` 还原原来的按钮文案（"我持有"这颗要
+                显示当前选中值，"目标币种"这颗原本就是固定文案、不随选中值变，两边都照
+                原样保留，这次只换实现不换外观）。 */}
+            <SelectDropdown
+              value={effectiveHold}
+              onChange={(v) => setHoldCurrency(v)}
+              options={holdCandidates
+                .filter((h) => h !== effectiveTarget)
+                .map((h) => ({ value: h, label: h }))}
+              ariaLabel="我持有的币种"
+              triggerClassName="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
+              panelClassName="absolute left-0 top-full z-10 mt-1 min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
+              renderValue={() => `💰 我持有 ${effectiveHold || '…'}`}
+            />
 
             {/* 🎯目标币种 下拉——Artifact `.fchip`/`.fdrop-menu` 规格 */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setTargetOpen((v) => !v);
-                  setHoldOpen(false);
-                  setChannelOpen(false);
-                }}
-                className="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
-              >
-                🎯 目标币种 ▾
-              </button>
-              {targetOpen && (
-                <div className="absolute left-0 top-full z-10 mt-1 min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card">
-                  {targetCandidates.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => {
-                        setTargetCurrency(c);
-                        setTargetOpen(false);
-                      }}
-                      className="block w-full whitespace-nowrap rounded-[7px] px-2 py-1.5 text-left text-[10.5px] text-ink hover:bg-gold-lt"
-                    >
-                      {TARGET_CURRENCY_LABELS[c] ?? c}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <SelectDropdown
+              value={effectiveTarget}
+              onChange={(v) => setTargetCurrency(v)}
+              options={targetCandidates.map((c) => ({ value: c, label: TARGET_CURRENCY_LABELS[c] ?? c }))}
+              ariaLabel="目标币种"
+              triggerClassName="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
+              panelClassName="absolute left-0 top-full z-10 mt-1 min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
+              renderValue={() => '🎯 目标币种'}
+            />
 
             {/* ⚙自选比较项 下拉——fix(2026-09-23 第三十三轮，方案二)：改名自"⚙自选渠道"，
                 合并了 5 个固定渠道 + 真实支付方式两组勾选框到同一个下拉、同一套 Set，
                 不再是两个互相不知道对方存在的独立开关。 */}
-            <div className="relative">
+            <div ref={channelContainerRef} className="relative">
               <button
                 type="button"
-                onClick={() => {
-                  setChannelOpen((v) => !v);
-                  setHoldOpen(false);
-                  setTargetOpen(false);
-                }}
+                onClick={() => setChannelOpen((v) => !v)}
                 className="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
               >
                 ⚙ 自选比较项 ▾

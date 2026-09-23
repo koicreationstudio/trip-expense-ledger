@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { UserTripSummary } from '@/lib/db/user-trips-query';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { useDismissableOpen } from '@/components/select-dropdown';
 import { LogoutButton } from './logout-button';
 
 /**
@@ -45,6 +46,13 @@ export function TripHeaderNav({
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // fix(2026-09-24 第三十九轮，团队看板反馈"点空白/Escape 关不掉")：这颗"切到其它
+  // 行程"面板之前只有触发按钮自己的 onClick 能开关，没接住点空白处/按 Escape 关闭——
+  // 跟 fx-compare-card.tsx 那两处是同一类漏网（详见 select-dropdown.tsx 顶部说明）。
+  // 这个面板本身是整块管理面板（切换行程按钮+删除图标+"新建行程"链接混排），跟
+  // `SelectDropdown` 的"选一个 value"单选形状对不上，套不进那个组件本体，但"点空白/
+  // Escape 关闭"这段行为改用同一个共用 hook，不用重新手写一份监听器。
+  const dismissRef = useDismissableOpen(open, () => setOpen(false));
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -117,7 +125,7 @@ export function TripHeaderNav({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div ref={dismissRef} className="flex flex-col gap-2">
       {/* topbar-row：Artifact `.title-block h3{font-size:15px;font-weight:700}` /
           `.title-block p{font-size:10.5px}` / `.account-links{font-size:10.5px}` +
           `a{text-decoration:underline}`（一直是下划线，不是只有 hover 才有）/

@@ -71,6 +71,13 @@
       "when": 1790156697516,
       "tag": "0009_wise_tarot",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1790189408672,
+      "tag": "0010_soft_vanisher",
+      "breakpoints": true
     }
   ]
 }

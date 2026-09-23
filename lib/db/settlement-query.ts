@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { Db } from './client';
 import { expenses, expenseSplits, settlementConfirmations } from './schema';
 import type { SettlementExpenseInput } from '../domain/settlement';
@@ -7,16 +7,42 @@ import type { SettlementExpenseInput } from '../domain/settlement';
  * 结算是唯一允许跨参与者读取的查询，这里只查 settlement 算法需要的三个字段
  * （payer/金额/分摊），不带 note/category/receiptPath，从查询源头就不把私密字段
  * 拉进内存，而不是依赖后面响应时"记得别展开"。
+ *
+ * fix(2026-09-24 第三十九轮，团队看板反馈 N+1)：真正干活的是下面
+ * `loadSettlementInputForTrips`（批量版，一次查全部行程），这个单行程版本只是
+ * 套一层薄壳（传 `[tripId]` 再从返回的 Map 里取一条），两个函数背后是同一份查询
+ * 逻辑，不是两份互相漂移的实现——`app/trips/[tripId]/settlement/page.tsx` 等只需要
+ * 单趟行程结算结果的调用方continue 用这个签名不用改。
  */
 export async function loadSettlementInput(db: Db, tripId: string): Promise<SettlementExpenseInput[]> {
+  const byTripId = await loadSettlementInputForTrips(db, [tripId]);
+  return byTripId.get(tripId) ?? [];
+}
+
+/**
+ * fix(2026-09-24 第三十九轮，团队看板 id=2026-09-23_232430_18dcf425)：
+ * `loadUserTripsWithBalance`（`user-trips-query.ts`）消费总额那段本来就是一次分组
+ * 聚合查全部行程（list-once 纪律），但紧接着对每趟行程又调一次
+ * `loadSettlementInput` 算净额——每趟行程各起 2 条独立查询（expenses + splits
+ * join），是同一个函数里自己打自己脸的 N+1。改成这个批量版本：不管有几趟行程，
+ * 固定 2 条查询（`inArray(tripId, tripIds)`），查完在内存里按 tripId 分组，
+ * 调用方从 Map 里按需取，行程数再多也不会线性变慢。
+ */
+export async function loadSettlementInputForTrips(
+  db: Db,
+  tripIds: string[]
+): Promise<Map<string, SettlementExpenseInput[]>> {
+  if (tripIds.length === 0) return new Map();
+
   const expenseRows = await db
     .select({
       id: expenses.id,
+      tripId: expenses.tripId,
       payerParticipantId: expenses.payerParticipantId,
       amountBaseCurrency: expenses.amountBaseCurrency,
     })
     .from(expenses)
-    .where(eq(expenses.tripId, tripId));
+    .where(inArray(expenses.tripId, tripIds));
 
   const splitRows = await db
     .select({
@@ -26,7 +52,7 @@ export async function loadSettlementInput(db: Db, tripId: string): Promise<Settl
     })
     .from(expenseSplits)
     .innerJoin(expenses, eq(expenseSplits.expenseId, expenses.id))
-    .where(eq(expenses.tripId, tripId));
+    .where(inArray(expenses.tripId, tripIds));
 
   const splitsByExpenseId = new Map<string, { participantId: string; shareAmountBaseCurrency: number }[]>();
   for (const row of splitRows) {
@@ -35,11 +61,17 @@ export async function loadSettlementInput(db: Db, tripId: string): Promise<Settl
     splitsByExpenseId.set(row.expenseId, list);
   }
 
-  return expenseRows.map((row) => ({
-    payerParticipantId: row.payerParticipantId,
-    amountBaseCurrency: row.amountBaseCurrency,
-    splits: splitsByExpenseId.get(row.id) ?? [],
-  }));
+  const byTripId = new Map<string, SettlementExpenseInput[]>();
+  for (const row of expenseRows) {
+    const list = byTripId.get(row.tripId) ?? [];
+    list.push({
+      payerParticipantId: row.payerParticipantId,
+      amountBaseCurrency: row.amountBaseCurrency,
+      splits: splitsByExpenseId.get(row.id) ?? [],
+    });
+    byTripId.set(row.tripId, list);
+  }
+  return byTripId;
 }
 
 export interface SettlementDetailEntry {

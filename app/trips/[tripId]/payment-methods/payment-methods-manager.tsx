@@ -5,6 +5,7 @@ import { PAYMENT_METHOD_SETTLEMENT_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { SelectDropdown } from '@/components/select-dropdown';
+import { Switch } from '@/components/switch';
 
 interface PaymentMethod {
   id: string;
@@ -75,25 +76,25 @@ export function PaymentMethodsManager({
   // 底部一颗按钮，点开才展开钱包余额清单——不是像这里之前那样常驻在页面最上面的一整块。
   const [balancePanelOpen, setBalancePanelOpen] = useState(defaultOpenBalancePanel);
 
-  // fix(2026-09-23 第三十八轮第三版，ui-auditor 两轮真机走查坐实前两版都没用，第三版
-  // 换了两处一起改，别再单独改其中一处）：
-  // 第一版（纯 `scrollIntoView`，mount 时机太早）没滚；第二版（`scroll={false}` +
-  // 两层 `requestAnimationFrame` 手动纠时机）复测仍然纹丝不动——scrollTop 全程停在
-  // 0，连"滚到了错误位置"这种中间态都没出现，说明问题不只是"时机没算准"。真正的根因
-  // 更可能是：这个面板上方还有"已配置的支付方式"列表，靠 `loadMethods()`/
-  // `loadWallets()` 两个独立的 `fetch` 异步加载（见下面 `useEffect(() => { loadMethods();
-  // loadWallets(); }, [])`），mount 那一刻列表还是空的，`#set-balance` 这个 section 虽然
-  // 已经在 DOM 里，但它上方内容还没撑开，滚哪都不稳——两层 rAF（约 32ms）远远等不到网络
-  // 请求回来，等数据到齐、页面真正撑高之后，没有人再滚第二次。
-  // 这次两处一起改：①`wallet-grid.tsx` 的触发链接换成 Next Link 原生支持、文档里写明
-  // 的 hash 定位（`?openBalance=1#set-balance`），不再自己维护 `scroll={false}` 这个
-  // 开关，让 Next 用它自己更成熟的机制处理"导航后滚到哪" ②这里改成在 `wallets` 真正
-  // 加载完成（从 `null` 变成数组，页面已经撑到最终高度）之后再补滚一次，双保险：hash
-  // 定位覆盖"数据碰巧已经到齐"的情况，这个 effect 覆盖"hash 定位时数据还没到、页面还
-  // 没撑开"的情况。
+  // fix(2026-09-24 第三十九轮，第四版，真正的根因——前三版都在"时机"上找，找错了
+  // 维度）：用 Playwright 在生产环境实机插桩 `Element.prototype.scrollIntoView`
+  // （记录每次调用时目标元素的 `getBoundingClientRect` + 调用前后 `window.scrollY`），
+  // 逐毫秒还原真实时间线坐实：这个 effect 本身的触发时机、依赖数组、调用参数从第二版
+  // 起就没有问题——`wallets`/`methods` 双双非空后确实会准时触发，触发那一刻用
+  // `getBoundingClientRect` 量出来的目标绝对位置（877px）也是对的、跟最终布局一致。
+  // **真正卡住的原因是纯几何限制，不是时机**：这个面板此时的
+  // `document.documentElement.scrollHeight` 只有 1125px（就 1 个钱包、几张卡片，内容
+  // 本来不长），视口高度 844px，浏览器能滚动的距离上限是 `1125-844=281px`——跟历次
+  // 复测卡住不动的那个位置分毫不差。`scrollIntoView({block:'start'})` 想把一个已经
+  // 接近页面末尾的区块顶到视口最上面，但页面剩余的"可滚动余量"物理上不够，浏览器只能
+  // 滚到底就不动了，不管重试几次、时机多准都没用。已用同一份生产代码实测验证：往
+  // `document.body` 尾部插一个 100vh 占位块，同一次 `scrollIntoView` 调用立刻能精确
+  // 滚到 `elTop≈0`。下面 `<section id="set-balance">` 之后新增的占位 `div`
+  // （`h-screen`，只在 `defaultOpenBalancePanel && balancePanelOpen` 时渲染）就是
+  // 照这个思路补的"可滚动余量"，保证不管这趟行程有几个钱包/几张支付方式（内容多短都一样）
+  // 这个 effect 永远有足够空间把目标滚到视口顶部。这个 effect 本身的逻辑（等两份数据都
+  // 到齐、`{block:'start'}`）不用改，问题不在这里。
   useEffect(() => {
-    // `methods` 也一起等——它渲染在 `#set-balance` 上方的"已配置的支付方式"列表，
-    // 同样异步加载，只等 `wallets` 的话可能 `methods` 还没到、上方内容还没撑开。
     if (!defaultOpenBalancePanel || wallets === null || methods === null) return;
     document.getElementById('set-balance')?.scrollIntoView({ block: 'start' });
   }, [defaultOpenBalancePanel, wallets, methods]);
@@ -318,12 +319,19 @@ export function PaymentMethodsManager({
           <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(184,158,97,.14)] px-[5px] py-[3px] shadow-card">
             {methods.map((m) => (
               <li key={m.id} className="flex items-center gap-[5px] py-[3px]">
-                <input
+                {/* fix(2026-09-24 第三十九轮，团队看板 id=2026-09-23_232946_2850b4c5)：
+                    之前是浏览器原生 `<input type="checkbox">`（默认蓝色），跟这个项目
+                    唯一一套自定义深色开关（原本只有 expense-form.tsx"跟其他人 split
+                    这笔"那处，这轮抽成了 `components/switch.tsx` 共用组件）不搭。
+                    `<button>` 本身是 HTML labelable element，`id` 传给它、下面
+                    `<label htmlFor>` 照常指向、点文字一样能触发，不用额外接
+                    aria-labelledby（跟 select-dropdown.tsx 里同样的做法）。 */}
+                <Switch
                   id={`pm-enabled-${m.id}`}
-                  type="checkbox"
                   checked={m.enabled}
                   disabled={togglingId === m.id}
                   onChange={() => handleToggleEnabled(m)}
+                  ariaLabel={`本行程启用「${m.label}」`}
                 />
                 <label htmlFor={`pm-enabled-${m.id}`} className="flex-1 text-[10.5px]">
                   {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
@@ -475,13 +483,13 @@ export function PaymentMethodsManager({
         </button>
         {balancePanelOpen && (
           <div className="flex flex-col gap-2">
-            {/* fix(2026-09-23 第三十八轮，Remy 真实反馈"记了很多现金消费，钱包余额还是0"）：
-                之前这句只说了"改的是钱包不是支付方式"，没说清楚余额跟消费记录之间到底有没有
-                关系——真实数据查证过，钱包如果绑了支付方式，之后新记的同支付方式消费会自动
-                扣这个钱包，但不会回溯计算绑定之前已经记过的消费。这句话补上这层，不然"我明明
-                记了很多现金消费"这个真实困惑还是没被回答。 */}
+            {/* fix(2026-09-24 第三十九轮，团队看板"历史现金消费回溯补算进钱包余额")：round38
+                这句话说"已经记过的消费不会补算"，那时候是真的。这轮实现了创建钱包时的一次性
+                历史回溯（同支付方式+同币种，建钱包那一刻之前记过的消费会一次性补进起始余额），
+                这句话改成讲实际行为，同时如实标出没覆盖的边界——不是所有历史消费都保证会被
+                补算，取决于钱包创建时有没有直接绑支付方式。 */}
             <p className="text-[10px] text-muted">
-              这里改的是这趟行程里每个钱包的余额（不是上面账号级的支付方式费率配置）。钱包如果绑了支付方式，之后新记的同支付方式消费会自动从这里扣；已经记过的消费不会补算，第一次用要自己先对一次余额。
+              这里改的是这趟行程里每个钱包的余额（不是上面账号级的支付方式费率配置）。建钱包时如果直接绑了支付方式，绑定前的同支付方式+同币种历史消费会一次性补进来；之后新记的消费持续自动扣。如果是钱包建好之后才补绑支付方式，中间那段时间记的消费不会自动补，还是要自己来这里对一次。
             </p>
             {wallets === null ? (
               <p className="text-xs text-muted">载入中…</p>
@@ -567,6 +575,14 @@ export function PaymentMethodsManager({
           </div>
         )}
       </section>
+
+      {/* fix(2026-09-24 第三十九轮，第四版)：纯几何占位，不是视觉内容——保证上面那个
+          `useEffect` 在把 `#set-balance` 滚到视口顶部时，页面底下永远有至少一屏的
+          "可滚动余量"，不会因为这趟行程钱包/支付方式配得少、页面本来就不够长而滚不动
+          （根因见上面 effect 里的完整分析）。只在深链自动展开这个场景渲染——平时手动点
+          "⚙设置当前余额"展开不需要这块空白，面板收起时也跟着收掉，不会在页面底下
+          永久留一块空白区域。`aria-hidden` 防屏幕阅读器读到一个空 div。 */}
+      {defaultOpenBalancePanel && balancePanelOpen && <div aria-hidden="true" className="h-screen" />}
 
       <ConfirmDialog
         open={confirmingId !== null}

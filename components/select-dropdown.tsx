@@ -10,6 +10,51 @@ export interface SelectDropdownOption {
 }
 
 /**
+ * fix(2026-09-24 第三十九轮)：「点空白/按 Escape 关不掉」这个毛病这个项目已经反复出现
+ * 过（round38 团队看板记录的 trip-header-nav.tsx/fx-compare-card.tsx 两处，本身也是
+ * 这个组件最早取代掉的一批手搓下拉里漏网的两个）——根因始终是同一个：每处下拉各自
+ * `useState` 一个 `open` 开关，只写了"点触发按钮切换"，没人记得再补一段
+ * `mousedown`/`keydown` 监听器。这个组件从一开始就有这段逻辑（见下面），但只有真的
+ * 调 `<SelectDropdown>` 组件本体的地方才享受得到——手搓面板不调用组件、只是照抄一段
+ * 视觉样式的地方，不会自动继承这段行为，还是得自己重新接。
+ *
+ * 抽成这个独立 hook，给两类地方共用同一个实现（不是两份抄写）：
+ * 1. `SelectDropdown` 组件本体自己（下面）——改成调用这个 hook，不再自己重复一份。
+ * 2. 单选值下拉套不进去的场景（下拉里是多选 checkbox 面板、或者是像
+ *    trip-header-nav.tsx"切换行程"那种整块管理面板，不是"选一个 value 触发
+ *    onChange"这种形状）——这些地方结构上没法直接换成 `<SelectDropdown>`（value/
+ *    onChange 单值模型硬套上去要么削足适履要么要素齐全度不够），但"点空白/Escape
+ *    关闭"这个行为本身是完全通用的，用这个 hook 就不用再手写第二份 `mousedown`/
+ *    `keydown` 监听器。
+ */
+export function useDismissableOpen(open: boolean, onClose: () => void) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  return containerRef;
+}
+
+/**
  * 全站统一的自定义单选下拉，取代原生 `<select>`。
  *
  * 背景（第十九轮独立 ui-auditor 盲测坐实的全站系统性问题）：quick-add-expense.tsx
@@ -62,31 +107,16 @@ export function SelectDropdown({
   renderValue?: (selected: SelectDropdownOption | undefined) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listboxId = useId();
   const selected = options.find((o) => o.value === value);
 
-  useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
+  // fix(2026-09-24 第三十九轮)：点空白/Escape 关闭这段逻辑改用下面抽出来的共用 hook，
+  // 不再自己单独维护一份——这个组件本体也是这个 hook 的调用方之一，不是特殊代码路径。
+  const containerRef = useDismissableOpen(open, () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  });
 
   return (
     <div ref={containerRef} className="relative">
