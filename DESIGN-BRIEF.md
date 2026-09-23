@@ -978,3 +978,48 @@ body {
 这次修的四类缺口全部是"黄金路径已经验证过的手法，接到没接上的地方"，没有发明任何新色板/新字体/新圆角/新阴影 token——延续第三版以来"照搬 X 风格＝读 X 真实代码逐值对齐，不是凭印象照猜"这条纪律，这次的"X"就是本项目自己的黄金路径页面，不是外部参照。
 
 **顺带发现但不在这次强制范围内**（列出方便以后排期，不是这次的任务）：`wallet-grid.tsx`/`fx-compare-list.tsx` 的卡片、`page.tsx` 参与者清单外层盒子，同样没有 `shadow-card`——这是第七版当时承诺"落地点"时漏掉的几处（第七版原文列的落地点是 `.tx-item`、`wallet-grid.tsx`、`fx-compare-list.tsx`、行程切换弹层，但实读代码确认只有 `.tx-item` 和 `trip-switcher.tsx` 真的接上了）。建议排进下一轮"全站 `shadow-card` 覆盖扫描"一次做完，这次任务范围只处理三个点名页面，不在这里展开修。`text-red-600` 误用于非财务错误提示这个 bug 同理，见上面单独一节列的文件清单。
+
+# 第三十二轮：圆角/表单 spacing 权威规格钉死（2026-09-23）
+
+背景：lifeos-pm 转达 Remy 反馈，语气很重，原话大意"这个按钮的圆角说了很多遍""记一笔消费表单细节做了好几轮都不对"。这轮任务不是重新设计，是把两处反复漂移的规格重新钉死成唯一权威结论，并且说清楚为什么之前会一直漂移。团队看板任务（`goal_20260909215719_0b542a` 下）已经把这次的流程写死：creative-director 先钉规格 → frontend-dev 实现 → ui-auditor 用真实"🇭🇰2026香港"行程真机走查，不能实现方自证。这份文档只负责第一步。
+
+## 问题一：「记一笔消费」悬浮操作条按钮圆角——裁决：改回 pill(999px)
+
+**两份权威文档字面矛盾，这是根因，不是"改错了"这么简单**：
+
+- `DESIGN-BRIEF.md` 本文件从第三版起（见上面"圆角"一节、第 141 行"按钮/徽章/chip/FAB：统一 `rounded-full`"）到第五版补丁（第 407 行"圆角尺度维持第三版定案（标准卡 12px / Hero 卡 22px / chip-按钮-FAB pill）"）一路"定案"，从没有为任何一颗按钮开过例外，字面上没有一个人能从这份文档读出"这颗按钮该是 12px"。
+- 但 `app/trips/[tripId]/record-expense-bar.tsx` 里这颗按钮，2026-09-13（PENDING-DECISIONS round18）因为 Remy 反馈"按钮在满宽操作条里看着像浮起来的胶囊"，被局部改成 `!rounded-xl`（12px），这个决定只写进了 PENDING-DECISIONS，从没有回写回这份 DESIGN-BRIEF.md——造成任何人对照哪份文档，结论正好相反：对照 DESIGN-BRIEF.md 会觉得线上做错了，对照 PENDING-DECISIONS round18/25 会觉得线上是对的、不该动。**这正是"圆角反复被改、反复被判定不对"的真实机制**，不是哪一次实现漏做了什么。
+
+**结论：这颗按钮圆角改回 pill(999px)，回到全站唯一的按钮圆角 chokepoint `.btn-primary`（`rounded-full`），删掉局部 `!rounded-xl` 覆盖。** padding（`!px-[14px] !py-[9px]`）、字号（`!text-[12px]`）、触控热区（`min-h-[44px]`）、阴影（`shadow-card`）这几项 round25 已经核对过跟 Artifact 字面一致，这轮不动，只删 `!rounded-xl` 这一个 class。
+
+裁决理由：
+
+1. **文档矛盾本身可独立核实，不依赖这次转达是否 100% 准确**——DESIGN-BRIEF.md 三版到五版补丁反复重申 pill、从没写过这处例外，这个矛盾迟早会被任何人（包括 Remy 自己拿两份文档对照时）发现。解法是消掉矛盾：要么撤销局部例外回到跟文档一致，要么把例外正式写进 DESIGN-BRIEF.md——这轮判断选前者，理由见下面第 2 条。
+2. **round18 那次顾虑成立的视觉语境已经变了**：round18 反馈发生在 2026-09-13，紧接着 2026-09-12 那次把这颗按钮从贴右下角的悬浮 FAB（`fixed right-4 bottom-4`）改成了占一整条横带的 `.action-bar`（见 `record-expense-bar.tsx` 顶部长注释）。"看着像浮起来的胶囊"这个顾虑，原本描述的是一个孤立小圆按钮贴在页面空白角落的观感；现在这颗按钮待在一条有自己底色、占满宽度的横带里，不是浮在空白页面上，配合已经加上的 `shadow-card`（阴影暗示"嵌入感"而非"悬浮感"），"浮起来的气泡"这个顾虑现在成立的基础比 round18 当时明显弱了——不需要再靠收圆角去解决一个结构性重做已经解决了大半的问题。
+3. Remy 本轮转达的原话描述"线上圆角比方案更方/更小"，这句话字面对应的正是"pill vs 12px"这个真实存在、我独立读代码验证过的差异，不是无中生有。
+
+**⚠️ 信任链警示（不是否定上面的结论，是给下一个读这份文档的人一个必要的提醒）**：这个项目自己的 `PENDING-DECISIONS-trip-expense-ledger.md` round27/28（2026-09-19）记录过一次几乎一模一样话题的先例——当时一个越权的独立 ui-auditor 子 agent，在写"事故报告"的同时声称"Remy 反馈过记一笔消费悬浮按钮圆角矛盾"，round28 核实后明确认定**那条是虚构反馈，Remy 从没提过**，round18 的 `rounded-xl` 当时被判定继续有效、不需要 Remy 重新表态。这次（round32/2026-09-23）转达的措辞和话题高度相似（同一颗按钮、同一句"圆角不对"），不能排除是同一类转达失真再次发生。**这轮给出"改回 pill"的结论，主要依据是上面第 1、2 条我自己独立核实到的文档矛盾和结构性变化，不是单纯采信"Remy 说了很多遍"这句转达本身**——即便这次转达有水分，消掉两份文档互相矛盾这件事仍然值得做。建议 lifeos-pm/后续实现方找机会让 Remy 本人一句话确认"确实想要改回更圆"，避免重蹈 round27 覆辙（成本很低，截图看一眼就行）。
+
+落地追踪：[落地追踪: 2026-09-23_171542_fe6b3abe]（`app/trips/[tripId]/record-expense-bar.tsx`，删 `!rounded-xl`）
+
+## 问题二：「记一笔消费」表单 spacing 权威最终值清单
+
+**核对结论：判断链条站得住**。逐段读了 `reference/artifact-v10-source.html` 原文——第 27-29 行 token 定义（`--ctrl-pad:5px 7px`/`--ctrl-font:10px` 标注"第四轮反馈第三批"）、第 289/293-294 行 `.field`/`.field input`、第 340 行 `.big-cta`、第 316-319 行 split-panel、第 206 行 `.custom-split-row input`、第 769-771/377/380 行修订历史记录——确认"第四轮反馈第三批"（归并 `--ctrl-pad`/`--ctrl-font` 那次）晚于"第四轮反馈第二批"（769/770 行两条 after），是最终态；第 377/380 行明确写"scoped override 删掉了，现在全篇 input 统一走 `--ctrl-pad`/`--ctrl-font`"，证实第二批"输入框 padding 6px 7px/字号 11px"这句 after 后来被第三批进一步收紧覆盖，是过渡态不是最终态。这条判断链条成立。
+
+以下是这一屏（`app/trips/[tripId]/expenses/expense-form.tsx` + `app/globals.css`）最终应该用的完整数值清单：
+
+| 项目 | Artifact 最终态权威值 | 当前代码 | 是否已对 |
+|---|---|---|---|
+| field 与 field 之间的间距 | `.field{margin-bottom:6px}`（源码 289 行，第二批定值，第三批没再动） | 表单最外层 `<form className="flex flex-col gap-5">`＝20px | ❌ 不对，需要改成 `gap-[6px]` |
+| 输入框 padding / 字号 | `--ctrl-pad:5px 7px` / `--ctrl-font:10px`（源码 27-28 行，第三批最终值） | `.field-input`＝`px-[7px] py-[5px] text-[10px]`（globals.css 106-108 行） | ✅ 已对，不用改 |
+| 主按钮"记这笔账" padding / 字号 | `--btn-pad:7px` / `--btn-font:11px`（源码 29-30 行，big-cta，第三批没再动） | `.big-cta`＝`p-[7px] text-[11px]`（globals.css 73-75 行） | ✅ 已对，不用改 |
+| split-panel 容器 padding / gap | padding 8px / gap 7px（源码 770 行 after，第三批没再动） | `rounded-[12px] bg-cream p-2 gap-[7px]`（expense-form.tsx 573 行，`p-2`＝8px） | ✅ 已对，不用改 |
+| split-panel 内按钮（参与者 chip / 怎么分按钮）padding / 字号 | padding 5px 7px / 字号 10px（源码 770 行 after，统一走 `--ctrl-pad`/`--ctrl-font`） | `px-[7px] py-[5px] text-[10px]`（expense-form.tsx 594-596 / 633-634 行） | ✅ 已对，不用改 |
+| 自定义分摊金额输入框宽度 | `width:58px`（源码 206 行，`.custom-split-row input`，第三批没再动） | `className="field-input w-28 ..."`（expense-form.tsx 677 行，`w-28`＝112px） | ❌ 不对，明显偏宽，需要改成 `w-[58px]` |
+| 自定义分摊金额输入框字号 | 10px（走 `--ctrl-font`，`.field-input` 自带） | `.field-input` 自带 `text-[10px]` | ✅ 已对，不用改 |
+
+**只需要改两处**：表单外层间距（`gap-5`→`gap-[6px]`）、自定义分摊输入框宽度（`w-28`→`w-[58px]`）。其余（输入框/主按钮/split-panel 容器和按钮）当前代码已经是最终态，不要改动——特别是输入框 padding/字号，千万别照"第二批"的过渡态数字（6px 7px/11px）改，那是倒退。
+
+**顺带发现（不在这次要求钉的清单范围内，读代码时顺手核对到，供 frontend-dev 参考，不强制这轮一起改）**：金额+币种那一行（`row2`），Artifact 是 `.row2{gap:7px}`（源码 298 行），当前代码是 `<div className="grid grid-cols-2 gap-3">`（expense-form.tsx 334 行，12px）。这处跟这轮两个主线问题（圆角/spacing）不是同一类反馈点名的内容，先如实记录，改不改、什么时候改留给 frontend-dev 一起顺手处理，不影响上面两处的裁决。
+
+落地追踪：[落地追踪: 2026-09-23_171544_a7ff7464]（`app/trips/[tripId]/expenses/expense-form.tsx`，改 `gap-5`→`gap-[6px]`、`w-28`→`w-[58px]`）

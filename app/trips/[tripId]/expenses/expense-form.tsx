@@ -330,7 +330,7 @@ export function ExpenseForm({
     // 这类 HTML5 constraint 会在 preventDefault 生效前被浏览器抢先拦截弹原生英文气泡
     // （"填 0"这个具体数值就是被 min 挡住，只有"留空"能落到下面 JS 校验），关掉原生
     // 校验统一交给已经写好的中文错误提示处理。
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-[6px]" noValidate>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-[2px]">
           <label className="field-label" htmlFor="amount">
@@ -674,7 +674,7 @@ export function ExpenseForm({
                           });
                         }}
                         placeholder="0.00"
-                        className="field-input w-28 font-serif tabular-nums"
+                        className="field-input w-[58px] font-serif tabular-nums"
                       />
                       <span className="text-[10px] text-muted">{currency}</span>
                     </div>

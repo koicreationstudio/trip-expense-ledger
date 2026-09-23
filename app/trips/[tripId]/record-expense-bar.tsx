@@ -59,11 +59,11 @@ export function RecordExpenseBar({ tripId }: { tripId: string }) {
           字号从手写的 14px 换成全站 .btn-primary 这个 chokepoint 的 12.5px），这轮改的是
           它待的地方，不是它长什么样——要不要改成满宽主 CTA 是另一个设计决定，交 Remy 定。 */}
       <div className="mx-auto flex w-full max-w-3xl justify-end px-4">
-        {/* 2026-09-13：Remy 反馈按钮在满宽操作条里看着像"浮起来的胶囊"，圆角从全
-            pill 收成 rounded-xl + 加阴影，让它读起来像嵌在操作条里的实心按钮，
-            不是贴在空白处的气泡。只覆盖这一个位置（!important 局部覆盖），
-            不动 .btn-primary 这个全站共用 chokepoint，其它按钮维持原样。
-            这条圆角决定是 Remy 明确反馈过的，这轮没有动。
+        {/* 2026-09-23 第三十二轮：round18 那次把圆角局部收成 rounded-xl 的例外已经
+            撤销，改回全站统一的 pill（跟着 .btn-primary 这个 chokepoint 的
+            rounded-full 走，不再局部覆盖圆角）。权威裁决和理由见
+            DESIGN-BRIEF.md「第三十二轮：圆角/表单 spacing 权威规格钉死」小节，
+            这里不重复贴大段论证，以后要改圆角先去那份文档对齐，别只看这条注释。
             fix(2026-09-18，第二十五轮，逐 token 核对 Artifact `.actionbar button`)：
             读了 Artifact V10 源码第286行确认字面规格是
             `padding:9px 14px; font-size:12px; gap:6px`——`.btn-primary` 这个全站
@@ -74,7 +74,7 @@ export function RecordExpenseBar({ tripId }: { tripId: string }) {
             最小热区）继续保留不收——热区是安全底线，不跟着视觉密度一起收。 */}
         <Link
           href={`/trips/${tripId}/expenses/new`}
-          className="btn-primary gap-[6px] !rounded-xl !px-[14px] !py-[9px] !text-[12px] shadow-card"
+          className="btn-primary gap-[6px] !px-[14px] !py-[9px] !text-[12px] shadow-card"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
           记一笔消费
