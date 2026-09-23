@@ -1,5 +1,91 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-23，第三十五轮，C/D 方案二代码已实现+推送，但部署被一个真实的跨任务协调冲突挡住；顺带排查的分摊明细跳转 bug 未能坐实，新 session 开工前必看】
+
+背景：lifeos-pm 派工，续第三十三轮——Remy 已经拍板 C/D（渠道比价重复显示+自选渠道过滤不同步）选**方案二**（大改，合并两组独立过滤开关），活动板任务 `id=2026-09-23_173612_852f1b0a`（并入了同一批的 `id=2026-09-23_173148_72340d91`，结算页分摊明细跳转 bug 排查）。
+
+### 一、C/D 方案二：代码已实现、测过、推送到 origin/main，**但还没部署**（原因见下面第三节，不是漏做）
+
+**改动文件**：`app/trips/[tripId]/fx-compare-card.tsx`。
+
+- 退休 `enabledChannelKeys`（只管 5 个固定渠道）+ `includeMyCards`（"我的支付方式"总开关）这两条独立过滤轨道，合并成一个 `enabledCompareKeys: Set<string>`，统一命名空间 `channel:<key>` / `card:<paymentMethodId>`，同一套 `toggleCompareKey` 勾选逻辑。取消勾选任意一项（不管固定渠道还是真实卡片）立刻从下面的比价列表消失——解决真 bug D。
+- 每行加一个来源徽章"渠道"/"我的方式"（`row.kind` 早就存在，只是之前没用来渲染；徽章样式复用 `expense-list.tsx` 已有的中性徽章 `bg-[rgba(164,163,160,.2)]`，没有新开一套配色）——解决真 bug C（两组都可能出现同名行如"Wise"，现在一眼能分清来源）。
+- "我的支付方式"数据是异步从 `/api/trips/{tripId}/fx-recommendation` 拉的，处理了两件事按方案要求的加载时序：①卡片列表还没拉回来之前，"⚙自选比较项"下拉里"我的方式"分组显示"加载中…"文字占位，不会出现空的、可以勾但勾了也没东西的勾选框；②卡片第一次真的到达浏览器那一刻，用 `initializedCardKeysRef`（`useRef<Set<string>>`）记录"这张卡是不是已经出现过"，没出现过的自动勾选进 `enabledCompareKeys`（不能让用户还没见过某张卡，它就已经被排除在比较范围外），已经出现过的（比如点"↻刷新"重新拉取同一批卡）不重复默认勾选，尊重用户手动取消过的选择。
+- `showCards`（"有没有资格比较我的卡"这条业务规则——配置过支付方式 + 我持有等于行程本位币）保持不变，不再叠加 `includeMyCards`，这条资格判断跟"具体显示哪几项"的过滤逻辑解耦——两件事分开判断，之前是混在一起的。
+- 原来"一起比较我的支付方式"那个总开关的位置，改成一句说明文字，告诉用户这个能力已经并进上面的"⚙自选比较项"。
+
+**验证**：`npm run lint` / `npm run typecheck`（含 `wrangler types` 生成）/ `npm test`（86 个测试，全部通过，没有新增测试——这次是重构现有过滤逻辑不是新算法，靠已有测试覆盖 + 手动读代码核对没有破坏契约）。**这三项验证是在一个全新 `npm install` 的隔离环境里跑的**（原因见第三节），不是在可能被别的任务残留文件污染的共享目录里跑的。
+
+**如实说明这轮没有拿到的证据**：**没有 ui-auditor 真机走查，也没有在 Remy 真实的"🇭🇰2026香港"行程上点过一遍**——因为这个改动还没有部署到生产环境（原因见第三节），没有可以走查的 URL。代码逻辑本身有单元测试和我自己逐行核对过，但按这个项目的铁律，**这轮不能算"已完成"**，只能算"代码就绪、待部署后补验证"。
+
+### 二、顺带排查"查看 XX 的分摊明细 ▾ 偶发整页跳转回行程主页"——**未能坐实为代码缺陷，不建假守护**
+
+**代码审查**：读了 `settlement-body.tsx`（触发按钮）、`settlement/page.tsx`（服务端鉴权+redirect）、`trips/[tripId]/layout.tsx`（顶部导航+同一条鉴权）、`trip-header-nav.tsx`（唯一带 `router.push`/`router.refresh` 的组件，但都是"切换行程"/"删除行程"这些用户主动触发的操作里）、`record-expense-bar.tsx`（底部固定操作条）。这个按钮是纯 `<button type="button" onClick={() => setExpandedId(...)}>`，没有嵌套在任何 `<form>`/`<Link>`/其它可点击父元素里，没有全局的 outside-click 监听器，点击本身只改一个 client state，不发任何网络请求、不调用任何 `router.push`/`redirect`。代码层面找不到任何会在点这个按钮时触发导航的路径。
+
+**真机复现尝试**：写了一个只读 Playwright 脚本（装在 session scratchpad `pw-settlement-repro/repro.mjs`，独立 `npm install playwright`，不借用别的项目 node_modules），用 Remy 真实身份 token（`identity_token=aNhfVNPU7ZGosHWFmdLfp5WtUxB_QGBqjNldoMGqaWA`）登录真实"🇭🇰2026香港"行程（`POST /api/account/switch-trip` 铸 Layer1 session，跟首页点行程卡片做的事一致），在结算页对 remy/htoo 两个参与者各自的展开按钮，3 种引擎/视口组合（chromium 手机 390×844、chromium 桌面 1280×900、webkit 手机 390×844）× 15 轮 × 2 按钮 = **90 次点击**，每次点击后立刻检查 `page.url()` 有没有变化，**零次复现导航**。console 只有跟这次改动无关的字体 preload 历史警告，无报错。
+
+**验证过程中产生的真实 session/user_session 测试残留已清理**：脚本走的是真实登录路径，累计产生 9 条 `user_session` + 6 条 `session`（remy participant `5a81e7ae-72d1-4d9d-9fbf-bee617458dea`），全部按 `created_at` 精确定位（跟这批之前 29 分钟前的一条真实历史记录 `4922abbc`... 有清晰的时间断层，没有误删任何非本次测试产生的记录），`DELETE` 后 `SELECT count(*)` 两张表都核对归零。
+
+**结论（如实分级，不是拍板）**：这不是"确认没有 bug"——90 次脚本点击测不出真实触摸手势/网络条件下才会出现的问题，这是这次能做到的复现力度的上限。目前唯一有一点证据支撑、但**没有独立验证过**的猜测：这颗按钮 `ml-[25px]`，手机窄视口下离左边缘不算特别远，如果用户手指触碰点/轻微左滑接近 iOS Safari"系统级边缘左滑返回上一页"手势的判定区，浏览器会把这次触摸当成"后退"处理而不是点击——从"行程主页"点结算 tab 进来的浏览历史，后退目标正好是"行程主页"，跟症状描述的"跳转回行程主页"（不是跳到别的页面、不是跳到 `/`）吻合。**这只是排除法之后最有证据支撑的假设，不是确定结论**，Playwright 模拟点击本来就不触发真实系统级触摸手势，没法验证这条猜测本身。
+
+**没有建守护**：按项目"修复类任务收尾协议"，守护要防的是一个坐实的缺陷复发；这轮没有找到任何代码层面的缺陷可防，建一个针对"猜测性系统手势冲突"的"守护"只会是个测不出东西的空壳（写个 Playwright 测试点这个按钮 100 次断言不跳转——这个测试现在就是绿的，因为我已经跑过一次一模一样的东西了，加进 CI 不会带来任何新增保护，纯粹是凑数）。如实标注不适用，不硬凑一条假防线。**如果 Remy 之后又碰到这个情况，请她留意一下：是不是手指触碰点比较靠近屏幕左边缘，或者有没有一个轻微的左右滑动动作**——这条线索能把上面的猜测坐实或推翻，目前没有更多信息没法继续往下查。
+
+### 三、真实发现的部署阻塞：跟另一条并行任务共享同一个生产部署目标，现在部署会连带上线一个 Remy 还没批准上生产的功能
+
+**发现经过**：C/D 代码改完后，例行跑 `npm test` 时发现测试列表里多出了 `lib/auth/pin-hash.test.ts`/`lib/domain/recovery-pin.test.ts`/`app/api/account/pin-recovery-flow.test.ts` 三个陌生测试文件（round31 已经把密码/PIN 找回功能整个撤销删除过，理论上不该存在）。查证发现：这不是 round31 事故复发，是**另一条真实、合法的并行任务**——团队看板 `id=2026-09-23_172107_e0a5e17a`/`238bf4f3`（"密码/PIN找回重做(第二轮确认)"，协调者用 AskUserQuestion 当面问过 Remy 本人重新确认"要，现在重开工"）——正在同一份共享工作目录里推进，见上面**第三十四轮**的记录（这轮顺手把那条记录也一起接上了，之前只是草稿没提交）。这条任务本身划了一条明确边界："代码已就绪可随时部署，但这次不自己跑 `./deploy.sh` 或 `wrangler d1 migrations apply --remote`——等 Remy 亲口说'部署吧'才动手"，已经 commit（`0ed1b19`）+ push 到 `origin/main`。
+
+**这对我这轮 C/D 修复造成的实际影响**：`deploy.sh` 新加的闸门①要求"本地 HEAD 必须等于 `origin/main`"，而 `origin/main` 现在已经包含了那条 PIN commit（`0ed1b19`）。我自己的 C/D 修复用独立 git worktree（`~/Desktop/.worktrees/trip-expense-ledger-fx-compare-cd-fix`，跟共享主目录物理隔离，不会被那条并行任务的未提交文件污染，也不会污染它）干净地 rebase 到 `0ed1b19` 之上、commit（`e685345`）、push 到 `origin/main`——这一步本身没有问题，两边改的文件完全不重叠（我只碰 `fx-compare-card.tsx`，PIN 那条明确说了排除了这个文件）。**但如果现在跑 `./deploy.sh`，会把我的 C/D 修复和那条还没被 Remy 批准上生产的 PIN 找回功能一起送上生产**——这违反了 round34 任务自己划的边界，而且 PIN 功能依赖的 D1 迁移（`0009_wise_tarot.sql`，新增 `recovery_pin_hash`/`recovery_attempt` 等）**还没有 `wrangler d1 migrations apply --remote` 到生产数据库**，如果 Worker 代码先部署上去，`/account` 页和 `/trips/new` 新出现的"我设过密码/PIN"入口一旦被点，会因为生产 D1 缺列直接报错——不是"顺便带上一个已经完工的功能"这么简单，是会让一个半成品出现在生产环境。
+
+**这轮没有做的事，是刻意等待协调，不是卡住不会做**：没有运行 `./deploy.sh`，因此没有生产 URL 可以给 ui-auditor 走查，也没有办法完成"必须在 Remy 真实行程数据上验证"这条铁律要求的最后一步。代码本身（C/D 修复）已经就绪、经过测试、推送到 `origin/main`，随时可以在部署冲突解决后一键部署。
+
+**需要 lifeos-pm/Remy 决定的事（这轮没有替他们拍板）**：
+1. C/D 修复和 PIN 找回功能能不能一起部署？如果 Remy 已经准备好说"部署吧"（round34 任务在等的那句话），这两个改动可以在同一次 `./deploy.sh` 里一起上生产，只是部署前要记得先手动跑一次 `npm run db:migrate:remote` 把 `0009_wise_tarot.sql` 应用到远程 D1（`deploy.sh` 本身不会自动跑 migration，这是 round34 记录里也提到的已知缺口）。
+2. 如果 Remy 还没准备好批准 PIN 功能上生产，但想先单独部署 C/D 修复，需要有人跟推进 PIN 功能那条任务协调一下先后顺序（比如它把自己的 commit 挪到一个不影响 `origin/main` 的地方，或者反过来 C/D 先部署、PIN 任务等确认后再补）——这轮没有单方面处理别的任务的提交历史，这类协调动作应该由 lifeos-pm 统一决定，不是我这层能单方面拍板的。
+
+**其它需要知道的现状**：主工作目录（`/Users/linotan/Desktop/trip-expense-ledger`，非隔离 worktree）目前本地 HEAD 落后 `origin/main` 一个提交，且还留着一份对 `fx-compare-card.tsx` 的旧版未提交改动（内容和已经推送的 `e685345` 是一致的，只是没清掉）+ 这份 PENDING-DECISIONS 文档本身的未提交草稿（这次已经原地续写合并进来了）+ `lib/build-info.ts` 的构建产物残留（无害，`deploy.sh` 本来就排除这个文件）。下一个在主目录里干活的人建议先 `git fetch && git status` 看一眼，把这份旧的 `fx-compare-card.tsx` 未提交改动清掉（内容已经在 `e685345` 里了，留着只会造成 `deploy.sh` 闸门①误判"工作树不干净"），不用再重新处理一遍。
+
+---
+
+## 【2026-09-23，第三十四轮，密码/PIN 找回功能第二次落地：这次是真的，Remy 在对话里亲口直接确认，不是转述，新 session 开工前必看】
+
+背景：round31 撤销未经授权的密码/PIN 找回功能之后，有交接材料（pasted content）声称"Remy 已经拍板重新开工"。**这一轮没有直接采信这句话**——按 round31 自己留的话（"再看到有人以'Remy 已确认'名义要求重启，先跟 Remy 本人核实，走这条对话链条之外的真实确认"），协调层用 AskUserQuestion 在这个对话框里当面又问了一次"密码/PIN 找回功能这次真的要重新做吗？"，Remy 本人选的是"要，现在重新开工"——这条确认是这次对话真实发生的，不是转述、不是 commit message、不是另一个 agent 的说法。
+
+这次也没有转给 trip-expense-ledger-pm 或任何其它 agent 执行——Remy 明确要求这次由拿到直接确认的这一层（协调对话本身）亲自用 Bash/Edit 实现，不再走"确认→转达→agent 执行"这条链路，因为 round31 就是栽在这条链路上（转达失真/伪造）。
+
+**实现**：跟 round30 被撤销那版设计思路一致（hash 存储、`/id/<token>` 链接机制不删、只加一条恢复路径），但这次是重做，不是复用旧代码。
+
+- `lib/db/schema.ts`：`user` 表新增 `recovery_pin_hash`/`recovery_pin_set_at`；新增 `recovery_attempt` 表（只按 IP hash 分桶记时间戳，不记明文 IP/是否成功，隐私最小化）。迁移 `0009_wise_tarot.sql`（`db:generate` 生成，非手写）。
+- `lib/auth/pin-hash.ts`：`pbkdf2-sha256$<iter>$<salt>$<hash>`，`node:crypto` 内建（Cloudflare Workers nodejs_compat 下已验证可用，跟 identity.ts/user-session.ts 同一个模块），常数时间比较防时序侧信道。
+- `lib/auth/recovery-rate-limit.ts`：按 `cf-connecting-ip` 的 hash 分桶，15 分钟 10 次上限，不管成功失败都计数。
+- `POST /api/account/set-pin`（登录态）+ `DELETE`（清除）；`POST /api/account/recover-pin`（无需登录，只收密码不收账号标识，逐个常数时间比对所有设过密码的账号，**命中多个账号一律当没命中**，不猜哪一个）。
+- UI：`/account` 页面新增 `SetPinForm`（设置/更新/清除，清除有二次确认弹窗）；`/trips/new` 的"先确认一下"岔路新增"我设过密码/PIN，直接找回"入口，跟"我有专属身份链接"平级。
+
+**验证（这次真的做了，不是自称）**：
+- `npm run lint` / `npm run typecheck` 全过。
+- `npm test`：106 个测试全过，其中 20 个是这轮新增（`pin-hash.test.ts` 5 条含"损坏格式不抛异常"防御性测试、`recovery-pin.test.ts` 5 条边界值、`pin-recovery-flow.test.ts` 10 条覆盖成功/错误密码/从没设过/命中两个账号一律拒绝/清除后失效/限流第 11 次 429）。
+- 本地 `wrangler dev` + Playwright 真机走查完整闭环（不是读代码猜）：`/account` 页设 PIN "7412" → 用 Playwright 清浏览器 cookie（模拟真实清数据场景）→ `/trips/new` 走"我设过密码/PIN，直接找回" → 输入密码 → 成功登进 → 回 `/account` 页核对 identityToken 链接字符串完全一致，证明找回的确实是同一个账号，不是误建了新账号 → 再测清除 PIN 后旧密码找回 401。过程中先测过"没设过 PIN 时输入任意密码"应该失败的路径，确认不会误判成功。
+- 本地开发 D1（`.wrangler/state`）踩到一个坑：里面还残留 round30 那版迁移留下的物理 schema（`0009_dry_dragon_man.sql` 被删了，但列已经加进本地 sqlite 文件，`d1_migrations` 记录的是旧文件名），跟新生成的 `0009_wise_tarot.sql` 撞了 `duplicate column name`。这只影响本机开发用的本地模拟库，跟生产 D1（远程、单独的资源）无关；手动把 `recovery_attempt` 表建好、`d1_migrations` 补一行 `0009_wise_tarot.sql` 的记录后本地库状态跟新迁移一致，`wrangler d1 migrations apply --local` 确认"无待应用迁移"。
+
+**代码状态**：已 commit（`0ed1b19`）+ push 到 `origin/main`。commit 时明确只加了这轮新增的文件，排除了同一份工作树里另一个 tab 当时正在改的 `app/trips/[tripId]/fx-compare-card.tsx`（round33 记录的 Wise 合并任务，进行中）、这份文档本身（另一个 tab 也在写）、`lib/build-info.ts`（构建产物）——没有卷入别人的未完成工作。
+
+**没有做的事，是刻意留白，不是漏做**：没有跑 `./deploy.sh`，也没有跑 `wrangler d1 migrations apply --remote` 碰生产 D1。这是这轮任务本身划的边界（"准备好后不自己部署，等 Remy 亲口说'部署吧'才动手"），不是被什么挡住了。真要部署，记得生产 D1 的 migration 也要手动 apply 一次（`npm run db:migrate:remote`），这条命令目前没有 deploy.sh 那样的守护包着（round33 之前那条事故根因分析里提到的"D1 migration/rollback 零 deny 覆盖"缺口还没补，见团队看板 `id=2026-09-23_165930_ce219d6b`），部署前手动跑这一步的人自己要小心。
+
+## 【2026-09-23，第三十三轮，Remy 报 4 个真实 bug（结算页排版/汇率比价目标币种/渠道比价重复显示/自选渠道过滤），A/B 已处理，C/D 是同一根因等 Remy 拍板，新 session 开工前必看】
+
+背景：Remy 逐条附截图报了 4 个 trip-expense-ledger 真实 bug，团队看板任务 `id=2026-09-23_170019_7105d412`。这轮全程用真实行程"🇭🇰2026香港"（trip id `f78a6b5e-8612-4097-8bfd-88a5db664045`，本位币 HKD，enabledCurrencies=[MYR,HKD,USD,CNY]）测试，走的是身份直连链接登录（`/id/<token>`），测完把临时验证 session 精确删除（`SELECT count(*)` 核对归零），没留垃圾数据。
+
+**A（结算页排版跟拍板方案对不上）——查下来现在是对的，没有代码改动**：读仓库存的权威规格 `reference/artifact-v10-source.html` `#scr-settlement` 块（list padding 3px 5px / 头像 18×18px+9px / 姓名 10.5px / 金额 9.5px / 分摊明细展开触发链接 8.5px / 展开后每条消费明细 10px），逐 token 比对 `settlement-body.tsx` 源码，字面完全一致；独立 ui-auditor 用真实 HK 行程真机截图核实（桌面+手机+展开态），三层字号呈"该收金额>展开明细>分摊明细链接"的正确递减关系，头像/姓名比例协调，跟支付方式/邀请管理页视觉密度一致，console 0 error。**没有发现任何跟方案不符的地方，判断 Remy 这次的截图对比可能是之前某一轮修复前的旧状态，这轮没有改代码**。侧面发现一个新现象：点"查看XX的分摊明细▾"偶发（复现1/2次）整页跳转回行程主页，不稳定，超出这轮任务范围没深挖，标记留给下一轮排查。
+
+**B（汇率比价目标币种默认值不跟随行程本位币，真 bug）——已修复+部署+真机验证**：根因是 `fx-compare-card.tsx` 里 `targetCurrency` 初始值硬编码字面量 `'THB'`，从来没跟 trip 的 `enabledCurrencies` 联动过（最早在"2026曼谷"泰铢语境开发时顺手写死，几轮合并迭代都没人把它改成动态推导）。真实 D1 数据核实"🇭🇰2026香港" `enabledCurrencies` 里从头到尾没有 THB，但因为 THB 在固定候选表里排第一、且从不等于这趟行程默认的 `effectiveHold`(HKD)，永远被选中当默认目标，跟这趟行程毫无关系——不是"状态串号"（不是两趟行程共享了 state），是从来没做过 trip-aware 的默认值推导。修法：把候选清单/默认值推导拆到新建的 `lib/fx/fx-compare-defaults.ts`（零依赖纯函数，同 `lib/fx/derive-mid-rate.ts` 既有模式），`resolveDefaultTarget` 优先从行程真实启用的币种里挑第一个合法目标，选不到才退回固定候选表第一项（"2026曼谷"这类 `enabledCurrencies=null` 的旧行程继续默认 THB 不受影响）。新增 `lib/fx/fx-compare-defaults.test.ts` 8 条回归测试，mutation 验证过（临时把 `resolveDefaultTarget` 改回硬编码 `'THB'`，测试如期失败，确认非空壳）。lint/typecheck/86 个单测全过，`./deploy.sh` 五关正常走完部署（commit `0907db6`，生产 Version `2416f50c-b6a9-498b-b11c-e7a89148014e`），独立 ui-auditor 用真实 HK 行程复测：标题栏现在显示"汇率比价 → USD"（不再是 THB），"我持有"默认 HKD，两者不撞车，console 0 新增报错。
+
+**C（渠道比价 Wise 重复显示无分组标签）+ D（自选渠道过滤跟下方列表不同步）——诊断确认是同一个根因，不是两个独立问题，代码没有改动，等 Remy 拍板**：
+
+独立 ui-auditor 真机诊断（真实 HK 行程，逐个勾选/取消勾选 + accessibility snapshot 核对复选框状态）证实：D **不是**"过滤 state 没接上渲染"这种技术故障——`enabledChannelKeys` 状态变化、勾选框视觉状态、`STATIC_CHANNELS.filter()` 过滤逻辑全部验证正确（取消勾选 ATM/换钱店/支付宝，这三行确实从列表消失）。真正原因：`fx-compare-card.tsx` 渲染的列表把两组**独立数据源**合并显示——"渠道比价"（Wise/TNG跨境/ATM取款/换钱店/支付宝 5 个固定渠道，受"⚙自选渠道"下拉控制）+ "我的支付方式"（Remy 在支付方式页配置的真实卡片/账户，受旁边"一起比较我的支付方式"这个勾选框控制，这个勾选框一直存在且默认勾选，Remy 测试全程没碰过它），两组毫无视觉区分，都叫"Wise"/都叫"支付宝"的行混在一个列表里。真实数据实测：默认展开 9 条（支付宝×2/现金/Wise×2/HSBC 大马 Visa Signature/TNG跨境，外加原本应有的ATM+换钱店），取消勾选自选渠道里的 ATM/换钱店/支付宝、只留 Wise+TNG 后，列表仍显示 6 条（支付宝/现金/Wise/Wise/HSBC/TNG）——因为"我的支付方式"那 3～4 条完全不受"自选渠道"这个下拉控制，这正是 Remy 感觉"勾选好像没生效"的确切原因。
+
+**这个决定影响面不小，前端改动前必须先交给 Remy 拍板，这轮没有擅自实现**。带回两个候选方案：
+- **方案一（改动小，倾向这个）**：保留现有两组各自独立的过滤开关不动（"⚙自选渠道"管 5 个固定渠道、"一起比较我的支付方式"管真实卡片），只加视觉分组——列表拆成"渠道比价"/"我的支付方式"两个有小标题的区块，各自内部按汇率排序；"⚙自选渠道"这个按钮文字可以顺手改成"⚙自选换汇渠道"更明确管的是哪一组。这样两个"Wise"因为分属不同标题下面，一看就知道不是重复；"自选渠道"这个控件本来就一直在正确工作，只是没人告诉用户它只管一半，分组后这个误解自然消失，间接也解决了 D。改动风险低，不碰现有过滤逻辑。
+- **方案二（改动大）**：把两个独立开关合并成一个统一的"自选比较项"下拉，里面同时列出 5 个固定渠道 + Remy 这趟行程配置的每一张卡/现金，取消勾选任何一项（不管渠道还是卡）立刻从列表消失，每行仍保留小标签区分来源。这样"自选渠道"能 100% 控制列表全部内容，D 的体验彻底消失，但要重构两组独立 filter state 合并成一套，且"我的支付方式"那组数据是异步从服务器拉的，合并进同一张勾选清单要多处理一次加载时序，改动和回归风险都比方案一大。
+
 ## 【2026-09-23，第三十二轮，creative-director 裁决：圆角/表单 spacing 权威规格钉死，新 session 开工前必看】
 
 背景：lifeos-pm 转达 Remy 反馈，语气很重，大意"这个按钮的圆角说了很多遍""记一笔消费表单细节做了好几轮都不对"。这轮不是重新设计，是把两处反复漂移的规格重新钉死。详细裁决理由、逐值核对过程见 `DESIGN-BRIEF.md` 最后一节"第三十二轮：圆角/表单 spacing 权威规格钉死（2026-09-23）"，这里只记结论，避免两份文件重复贴大段文字。
