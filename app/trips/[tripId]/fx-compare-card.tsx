@@ -86,16 +86,36 @@ import { resolveHoldCandidates, resolveTargetCandidates, resolveDefaultTarget } 
  *    是否具备"可以比较我的卡"这个资格（`showCards`）继续只看"是否配置过支付
  *    方式 + 我持有是否等于行程本位币"这两条业务规则，跟自选比较项过滤是两回事，
  *    不要混在一起判断。
+ * 7. fix(2026-09-23 第三十七轮，Remy 报真 bug"目标币种下拉选项太少")：真机核对
+ *    下来 Remy 大概率点开的其实是"我持有"下拉——旧的 `HOLD_CURRENCY_CANDIDATES`
+ *    只有 4 项（MYR/USD/HKD/CNY），且还会被这趟行程的 `enabledCurrencies` 再收窄
+ *    一次、下拉本身又要排除掉当前"目标币种"选中的那个，三层叠加导致真实行程上
+ *    最终只剩 3 项。`enabledCurrencies` 这趟行程创建之后完全没有编辑入口，等于
+ *    把"我持有能选什么"焊死在开行程那一刻——这次把"我持有"/"目标币种"两个下拉
+ *    的候选池统一改成读 `lib/fx/fx-compare-defaults.ts` 的 `FX_SUPPORTED_
+ *    CURRENCIES`（跟 `lib/fx/fetch-rates.ts` 已经在拉实时汇率的 7 个币种逐一
+ *    对应，外加 MYR 自己），`enabledCurrencies` 降级成只决定默认选哪个，不再
+ *    限制能选什么。离线兜底表 `FX_RATES_FALLBACK` 跟着补齐 THB/SGD/PHP/LKR
+ *    四个新增基准行 + 给已有行补上 PHP/LKR 两列，PHP/LKR 的数值是拿 open.er-api
+ *    同源的 USD 基准换算（1 USD≈62.76 PHP、1 USD≈329.13 LKR，2026-09-23 查证），
+ *    再用这张表已有的 USD→其它币种汇率交叉推算出来的，不是凭空编的。
  */
 
 // fix(2026-09-17 第二十二轮)：这张表从"唯一数据来源"降级成"实时汇率抓不到时的
 // 离线兜底"——正常情况下页面用的是 `/api/trips/{tripId}/fx-mid-rates` 现抓的
 // 实时汇率，这张表只在 API 失败/加载中的短暂窗口顶一下，界面上会标"离线参考汇率"。
+// fix(2026-09-23 第三十七轮)：补齐 THB/SGD/PHP/LKR 四个新增基准行（候选池从 4
+// 扩到 8，见上面大注释第 7 点），所有新数值都是从这张表已有的 MYR/USD 基准
+// 交叉换算出来的，来源可追溯，不是瞎编。
 const FX_RATES_FALLBACK: Record<string, Record<string, number>> = {
-  MYR: { THB: 8.12, USD: 0.245, SGD: 0.318, CNY: 1.61, HKD: 1.92 },
-  USD: { THB: 33.03, MYR: 4.08, SGD: 1.3, CNY: 6.58, HKD: 7.82 },
-  HKD: { THB: 4.229, USD: 0.1276, SGD: 0.1656, CNY: 0.8385, MYR: 0.5208 },
-  CNY: { THB: 5.044, USD: 0.1522, SGD: 0.1975, HKD: 1.1926, MYR: 0.6211 },
+  MYR: { THB: 8.12, USD: 0.245, SGD: 0.318, CNY: 1.61, HKD: 1.92, PHP: 15.38, LKR: 80.67 },
+  USD: { THB: 33.03, MYR: 4.08, SGD: 1.3, CNY: 6.58, HKD: 7.82, PHP: 62.76, LKR: 329.13 },
+  HKD: { THB: 4.229, USD: 0.1276, SGD: 0.1656, CNY: 0.8385, MYR: 0.5208, PHP: 8.011, LKR: 42.01 },
+  CNY: { THB: 5.044, USD: 0.1522, SGD: 0.1975, HKD: 1.1926, MYR: 0.6211, PHP: 9.554, LKR: 50.10 },
+  THB: { USD: 0.0302, MYR: 0.1232, SGD: 0.0392, CNY: 0.1983, HKD: 0.2365, PHP: 1.894, LKR: 9.935 },
+  SGD: { USD: 0.7707, MYR: 3.1447, THB: 25.53, CNY: 5.063, HKD: 6.038, PHP: 48.37, LKR: 253.7 },
+  PHP: { USD: 0.01594, MYR: 0.06502, THB: 0.5279, SGD: 0.02067, CNY: 0.1047, HKD: 0.1248, LKR: 5.244 },
+  LKR: { USD: 0.003038, MYR: 0.01240, THB: 0.1007, SGD: 0.003942, CNY: 0.01996, HKD: 0.02380, PHP: 0.1907 },
 };
 
 const FX_SYMBOLS: Record<string, string> = {
@@ -105,7 +125,16 @@ const FX_SYMBOLS: Record<string, string> = {
   CNY: '¥',
   HKD: 'HK$',
   MYR: 'RM',
+  PHP: '₱',
+  LKR: 'Rs',
 };
+
+// fix(2026-09-23 第三十七轮)："我持有"下拉候选池从 4 扩到 8（见上面大注释第 7 点），
+// 但下面"基准换算卡片"这一排是纯展示性的快速参考卡，Artifact 原意只是"补两张
+// 基准卡"（round7 第 3 点原话），不是要跟着下拉选项数量一起涨到 8 张挤爆这一排。
+// 这里刻意保留原本 4 个最常用的基准（不是意外遗漏，是有意跟下拉候选池解耦），
+// 下拉本身该有多少个选项是另一件事，不受这张表长度限制。
+const QUICK_BASE_CARD_CURRENCIES = ['MYR', 'USD', 'HKD', 'CNY'] as const;
 
 const TARGET_CURRENCY_LABELS: Record<string, string> = {
   THB: 'THB 泰铢',
@@ -114,6 +143,8 @@ const TARGET_CURRENCY_LABELS: Record<string, string> = {
   CNY: 'CNY 人民币',
   HKD: 'HKD 港币',
   MYR: 'MYR 令吉',
+  PHP: 'PHP 比索',
+  LKR: 'LKR 卢比',
 };
 
 interface StaticChannel {
@@ -403,10 +434,13 @@ export function FxCompareCard({
                 终点才能选"——这不是方案要求的（方案本身"我持有"也是固定 tab，
                 这条是 Remy 这轮在方案基础上加的新要求，如实记这是新判断不是
                 方案原文）。改成跟目标币种同一套"点开小菜单选"的交互，可选范围
-                还是 holdCandidates（这趟行程真实持有、且这套汇率数据支持当基准
-                的币种——MYR/USD/HKD/CNY 四选，不是无限任意币种，扩到更多基准
-                是另一件事，需要 open.er-api.com 那边也能查到对应汇率，这次
-                没有做）。 */}
+                还是 holdCandidates（这套汇率数据支持当基准的币种——不是无限任意
+                币种，扩到更多基准需要 open.er-api.com 那边也能查到对应汇率）。
+                fix(2026-09-23 第三十七轮，Remy 报真 bug"选项太少")：这里原本只有
+                MYR/USD/HKD/CNY 四选，而且还会被 enabledCurrencies 再收窄一次，
+                真实行程上排除掉当前目标币种后最终只剩 3 个——扩到 8 选
+                （`HOLD_CURRENCY_CANDIDATES`，见 `lib/fx/fx-compare-defaults.ts`
+                顶部大注释），不再用 enabledCurrencies 收窄可选范围。 */}
             <div className="relative">
               <button
                 type="button"
@@ -554,9 +588,12 @@ export function FxCompareCard({
             </button>
           </div>
 
-          {/* 基准换算卡片 + 「我持有」tab——Artifact `.fx-base-row` + `.navtabs` */}
+          {/* 基准换算卡片 + 「我持有」tab——Artifact `.fx-base-row` + `.navtabs`。
+              故意用 QUICK_BASE_CARD_CURRENCIES（固定 4 个）不用 holdCandidates
+              （下拉候选池，2026-09-23 扩到 8 个）——这排卡片是"补两张基准卡"的
+              快速参考展示，不该跟着下拉选项数量一起涨到 8 张。 */}
           <div className="flex flex-wrap gap-[6px]">
-            {holdCandidates.map((h) => {
+            {QUICK_BASE_CARD_CURRENCIES.map((h) => {
               const rate = effectiveTarget ? deriveMidRate(activeRates, h, effectiveTarget) : undefined;
               if (rate === undefined) return null;
               return (

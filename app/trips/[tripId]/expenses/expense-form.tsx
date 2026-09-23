@@ -513,16 +513,31 @@ export function ExpenseForm({
         />
       </div>
 
-      <div className="flex flex-col gap-[2px]">
+      {/* fix(2026-09-23 第三十七轮，Remy 真实反馈"原生 Choose File 按钮跟整体风格不搭")：
+          原生 <input type=file> 在不同浏览器/系统上长得完全不一样（灰色系统按钮+"未选择任何
+          文件"这类英文/系统语言文案），是全站唯一没被自定义样式覆盖的表单控件。改成常见的
+          "隐藏原生 input + label 当触发按钮"包装：input 本身还在（accept/onChange 逻辑完全
+          没动，屏幕阅读器/键盘操作走的还是原生 input，只是视觉上用 sr-only 隐藏），套一个
+          `.btn-secondary` 样式的 label 当"选择文件"按钮（跟这个表单其它次要按钮同一套规格，
+          不是新发明一套），旁边用现有 `.field-label` 同档文字显示已选文件名/未选状态。 */}
+      <div className="flex flex-col gap-[4px]">
         <label className="field-label" htmlFor="receipt">
           收据（可选{isEdit && initialExpense.hasReceipt ? '，已有收据，上传新文件会替换' : ''}）
         </label>
+        <div className="flex items-center gap-2">
+          <label htmlFor="receipt" className="btn-secondary cursor-pointer">
+            📎 选择文件
+          </label>
+          <span className="min-w-0 flex-1 truncate text-[10.5px] text-muted">
+            {receiptFile?.name ?? (isEdit && initialExpense.hasReceipt ? '已有收据（未更换）' : '未选择文件')}
+          </span>
+        </div>
         <input
           id="receipt"
           type="file"
           accept=".jpg,.jpeg,.png,.webp,.pdf"
           onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-          className="text-[12.5px]"
+          className="sr-only"
         />
       </div>
 
