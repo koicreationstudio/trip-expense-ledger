@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { extractIdentityToken } from '@/lib/domain/identity-recovery';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { validateRecoveryPin } from '@/lib/domain/recovery-pin';
 
 /**
  * 第一次进 /trips/new 且没有账号：先自动开号拿到专属身份链接，要求确认
@@ -27,13 +26,11 @@ import { validateRecoveryPin } from '@/lib/domain/recovery-pin';
  * 没有再多一道"你确定"的关卡）。这次给"我是新用户，直接开始"这颗按钮补一道
  * 二次确认弹窗，文案直接把后果说清楚，逼这个人多想一秒，不是纯装饰性摩擦。
  * 没有做、也做不到的事：这道确认拦不住"这个人真心以为自己没用过"的情况——
- * 那种情况下需要的是跨设备的身份找回机制。原计划是邮箱找回（团队看板
- * id=2026-09-12_150825_835d7093），卡在评估发信服务成本这一步；2026-09-23
- * Remy 改口明确要"密码/PIN 找回"（链接太难记），不做邮箱那条路了——这轮补上
- * 的就是这个：'recoverByPin' 分支，跟身份链接（'recover' 分支）平级，两条路
- * 都在，不是二选一。团队看板那条旧待办这轮当作"已经用另一种方式解决"处理。
+ * 那种情况下需要的是邮箱找回这类跨设备的身份找回机制（Remy 已经原则拍板要做，
+ * 卡在评估发信服务成本这一步，团队看板 id=2026-09-12_150825_835d7093），
+ * 这轮没有动，不属于这次数据修复任务的范围。
  */
-type Step = 'ask' | 'recover' | 'recoverByPin' | 'result';
+type Step = 'ask' | 'recover' | 'result';
 
 export function ProvisionGate() {
   const router = useRouter();
@@ -45,9 +42,6 @@ export function ProvisionGate() {
   const [pastedLink, setPastedLink] = useState('');
   const [recoverError, setRecoverError] = useState<string | null>(null);
   const [confirmingNewAccount, setConfirmingNewAccount] = useState(false);
-  const [pin, setPin] = useState('');
-  const [pinError, setPinError] = useState<string | null>(null);
-  const [pinSubmitting, setPinSubmitting] = useState(false);
 
   async function handleStart() {
     setConfirmingNewAccount(false);
@@ -82,31 +76,6 @@ export function ProvisionGate() {
     window.location.href = `/id/${token}`;
   }
 
-  async function handleRecoverByPin() {
-    setPinError(null);
-    const validation = validateRecoveryPin(pin);
-    if (!validation.ok) {
-      setPinError(validation.message);
-      return;
-    }
-    setPinSubmitting(true);
-    try {
-      const res = await fetch('/api/account/recover-pin', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pin }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { message?: string } | null;
-        setPinError(data?.message ?? '找回失败，检查一下密码有没有输对');
-        return;
-      }
-      router.refresh();
-    } finally {
-      setPinSubmitting(false);
-    }
-  }
-
   async function handleCopy() {
     if (!identityUrl) return;
     try {
@@ -137,9 +106,6 @@ export function ProvisionGate() {
         </div>
         <button type="button" onClick={() => setStep('recover')} className="btn-secondary">
           我有专属身份链接，去恢复账号
-        </button>
-        <button type="button" onClick={() => setStep('recoverByPin')} className="btn-secondary">
-          我设过密码/PIN，直接找回
         </button>
         {error && <p className="text-[10px] text-coral">{error}</p>}
         <button
@@ -199,48 +165,13 @@ export function ProvisionGate() {
     );
   }
 
-  if (step === 'recoverByPin') {
-    return (
-      <main className="flex flex-col gap-3.5">
-        <div>
-          <h1 className="text-[15px] font-semibold text-ink">用密码/PIN 找回</h1>
-          <p className="mt-2 text-[10px] text-muted">
-            在&ldquo;我的账号&rdquo;页面设置过找回密码的话，输入那个密码就能直接找回账号，不用翻身份链接。
-          </p>
-        </div>
-        <div className="flex flex-col gap-2">
-          <label htmlFor="pin-recover-input" className="field-label">
-            密码/PIN
-          </label>
-          <input
-            id="pin-recover-input"
-            type="password"
-            className="field-input"
-            value={pin}
-            onChange={(e) => {
-              setPin(e.target.value);
-              setPinError(null);
-            }}
-          />
-        </div>
-        {pinError && <p className="text-[10px] text-coral">{pinError}</p>}
-        <button type="button" onClick={handleRecoverByPin} disabled={pinSubmitting} className="btn-primary">
-          {pinSubmitting ? '找回中…' : '找回账号'}
-        </button>
-        <button type="button" onClick={() => setStep('ask')} className="btn-secondary">
-          返回
-        </button>
-      </main>
-    );
-  }
-
   if (step === 'result' && identityUrl) {
     return (
       <main className="flex flex-col gap-3.5">
         <div>
           <h1 className="text-[15px] font-semibold text-ink">保存好你的专属身份链接</h1>
           <p className="mt-2 text-[10px] text-muted">
-            这条链接是重新登录这个账号最直接的方式，建议现在复制存到备忘录或密码管理器，之后随时能在&ldquo;我的账号&rdquo;页面里再看一次。也可以去那个页面顺手设一个密码/PIN，以后忘了存链接还有一条找回路。
+            这条链接是你以后唯一能重新登录这个账号的方式——没有邮箱密码，链接丢了就找不回账号。建议现在复制存到备忘录或密码管理器，之后随时能在&ldquo;我的账号&rdquo;页面里再看一次。
           </p>
         </div>
         <div className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[9px] shadow-card">
