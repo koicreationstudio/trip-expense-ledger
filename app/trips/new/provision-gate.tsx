@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { extractIdentityToken } from '@/lib/domain/identity-recovery';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 /**
  * 第一次进 /trips/new 且没有账号：先自动开号拿到专属身份链接，要求确认
@@ -17,6 +18,17 @@ import { extractIdentityToken } from '@/lib/domain/identity-recovery';
  * 所以查不到账号先停在 'ask' 这一步，明确问清楚是不是老用户，只有用户自己
  * 选"我是新用户"才走原本的开号流程；选"我有身份链接"就地粘贴恢复，
  * 复用现成的 /id/[token] 登录路由，不重新发明验证逻辑。
+ *
+ * 2026-09-23 加第二层摩擦（第一版安全网挡不住的真实事故：Remy 换设备/清了
+ * cookie 后确实卡在这一步，但因为手边没有存好身份链接，还是点了"我是新用户，
+ * 直接开始"，2026-09 曼谷账号又分裂出一个香港账号，两笔真实行程各挂各的账号，
+ * 靠人工查 D1 合并才发现——第一版只是"停下来问一句"，点了确认就直接开号，
+ * 没有再多一道"你确定"的关卡）。这次给"我是新用户，直接开始"这颗按钮补一道
+ * 二次确认弹窗，文案直接把后果说清楚，逼这个人多想一秒，不是纯装饰性摩擦。
+ * 没有做、也做不到的事：这道确认拦不住"这个人真心以为自己没用过"的情况——
+ * 那种情况下需要的是邮箱找回这类跨设备的身份找回机制（Remy 已经原则拍板要做，
+ * 卡在评估发信服务成本这一步，团队看板 id=2026-09-12_150825_835d7093），
+ * 这轮没有动，不属于这次数据修复任务的范围。
  */
 type Step = 'ask' | 'recover' | 'result';
 
@@ -29,8 +41,10 @@ export function ProvisionGate() {
   const [error, setError] = useState<string | null>(null);
   const [pastedLink, setPastedLink] = useState('');
   const [recoverError, setRecoverError] = useState<string | null>(null);
+  const [confirmingNewAccount, setConfirmingNewAccount] = useState(false);
 
   async function handleStart() {
+    setConfirmingNewAccount(false);
     setError(null);
     setProvisioning(true);
     try {
@@ -94,9 +108,22 @@ export function ProvisionGate() {
           我有专属身份链接，去恢复账号
         </button>
         {error && <p className="text-[10px] text-coral">{error}</p>}
-        <button type="button" onClick={handleStart} disabled={provisioning} className="btn-primary">
+        <button
+          type="button"
+          onClick={() => setConfirmingNewAccount(true)}
+          disabled={provisioning}
+          className="btn-primary"
+        >
           {provisioning ? '开号中…' : '我是新用户，直接开始'}
         </button>
+        <ConfirmDialog
+          open={confirmingNewAccount}
+          message="确定吗？如果你以前用这个工具记过账、只是暂时找不到身份链接了，现在开新号不会自动带出你以前的行程——之后想合并需要人工处理。真的是第一次用才继续。"
+          confirmLabel="确定，开新账号"
+          variant="danger"
+          onConfirm={handleStart}
+          onCancel={() => setConfirmingNewAccount(false)}
+        />
       </main>
     );
   }
