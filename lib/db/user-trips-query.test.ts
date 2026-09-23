@@ -117,7 +117,8 @@ describe('loadUserTripsWithBalance expenseTotals 聚合查询容错', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]?.id).toBe(trip.id);
-      // 净额走的是 loadSettlementInput 那条独立查询，没被伪造，照常算出来。
+      // 净额走的是 loadSettlementInputForTrips 那条独立查询（第三十九轮从
+      // loadSettlementInput 逐行程 N+1 改成批量版），没被伪造，照常算出来。
       expect(result[0]?.netBalance).toBe(0);
       // 聚合查询失败 → 降级成 0，不是 undefined、也不该把异常往上抛。
       expect(result[0]?.totalExpenseBaseCurrency).toBe(0);
