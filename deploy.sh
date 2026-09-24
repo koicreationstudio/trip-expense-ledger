@@ -23,10 +23,12 @@ echo "▶ [trip-expense-ledger deploy] ① 工作树干净 + HEAD 已推 origin/
 # 噪音排除（跟 scripts/generate-build-info.mjs 自己的 dirty-check 用同一套约定，
 # 保持一致）：
 #   - audit-diffs/  走查截图，这个项目长期不进 git，约定如此不是遗漏
+#   - design-references/  设计方案参照截图（Remy 反馈截图/Artifact mockup 存本地
+#                    给 ui-auditor 比对用），跟 audit-diffs 同类，不进 git
 #   - *.md          PENDING-DECISIONS-trip-expense-ledger.md 等本地记事本，设计
 #                    上就是「写完不进 git」，跟部署的代码是否等于 HEAD 无关
 #   - lib/build-info.ts  prebuild 钩子每次构建自动重写，不代表真实代码改动
-DIRTY="$(git status --porcelain -- . ':!audit-diffs' ':!*.md' ':!lib/build-info.ts')"
+DIRTY="$(git status --porcelain -- . ':!audit-diffs' ':!design-references' ':!*.md' ':!lib/build-info.ts')"
 if [ -n "$DIRTY" ]; then
   echo "✘ 工作树有未提交改动，不部署（要上生产的代码必须先进 git，不能凭工作树现状部署）："
   echo "$DIRTY"
