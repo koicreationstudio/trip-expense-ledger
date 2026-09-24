@@ -1,5 +1,28 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-24，第四十八轮，汇率查询加超时 + 汇率比价卡"自选比较项"换深色开关，新 session 开工前必看】
+
+背景：lifeos-pm 派工，团队看板 `id=2026-09-24_153503_855780ae`，两件独立小事——①`ensureMyrRatesFresh`/`fetchMyrRates`（`page.tsx` 约 79-83 行触发）打外部 API 没有超时，缓存 24 小时过期那一刻可能把整页渲染挂住（round45 已读代码核实这个洞存在，一直没排上期）；②`fx-compare-card.tsx`"⚙自选比较项"面板两组勾选框（渠道 + 我的支付方式）还是原生方框 checkbox，round46 item6 已查清楚这处在 Artifact 权威设计源里本来就是原生 checkbox（不是漏改），这次是 Remy 明确要求"全站 checkbox 一律统一成开关"才纳入范围。全程只碰声明的三个文件（`page.tsx`/`lib/fx/fetch-rates.ts`/`fx-compare-card.tsx`），开工前 `claim.py list` 核对过没有跟当天并行跑的钱包深链/结算页改版任务撞车。
+
+**① 超时怎么加的**：`lib/fx/fetch-rates.ts` 的 `fetchMyrRates` 请求上加 `AbortSignal.timeout(5000)`（5 秒）。全项目 `grep fetch(` 扫过 `app/`+`lib/`+`scripts/` 三个目录，确认这是整个代码库唯一一处打第三方外部 API 的地方（其余全部 `fetch()` 调用打的都是同源 `/api/...` 路由），没有既定的超时数值可以照抄，5 秒是这次新定的值——够一次正常的境外 API 往返，也不会让首屏卡出明显的等待感。超时触发后走既有的 `catch { return null }` 分支，跟原来"网络异常/HTTP非2xx/JSON形状不对"三种失败路径共用同一条降级链路：`ensureMyrRatesFresh` 保留现有缓存不清空 → `getMyrRateSnapshot` 缺币种时对应 key 不写入 → `deriveMidRate` 查不到就返回 `undefined` → `page.tsx` 每笔消费的 `amountMyr` 是 `null`，`ExpenseList` 看到 `null` 就不显示约算行；`fx-compare-card.tsx` 那边显示"正在抓实时汇率…"/"离线参考汇率"文案兜底。没有另写新的降级分支，复用的是这条链路本来就有的设计。
+
+**验证**：①单测新增 2 条（`lib/fx/fetch-rates.test.ts`，共 8 条全过）——一条断言 `fetchImpl` 真的收到了 `AbortSignal` 实例（mutation 验证：删掉 `signal` 那行这条测试会失败）；②真实定时器验证（不 mock `AbortSignal.timeout`，用一个"永不 resolve、只在 abort 时 reject"的假 `fetchImpl`，让真实 5000ms 定时器跑完）——实测 `elapsedMs=5002`，证明超时是真的在约 5 秒后触发，不是读代码猜的。这条验证脚本是临时写的（`lib/fx/_manual-real-timeout-check.test.ts`），跑完确认结果后已经移出仓库（没有提交，`git status` 确认工作树干净），不是永久测试文件。**如实说明这条的覆盖边界**：`page.tsx` 这个 `await` 发生在服务端组件里（Cloudflare Worker 端直接打 `open.er-api.com`），不经过浏览器，所以没法用 Playwright 的网络节流工具去模拟"生产环境下这个请求真的卡住"这个完整场景——上面的定时器验证是对超时机制本身（`fetchMyrRates` 这一个函数）的真实验证，不是对整条服务端请求链路端到端的真实节流验证，这个边界如实记录，不夸大成"整条链路都在慢网络下验证过"。
+
+**② 开关样式怎么换的**：两处原生 `<input type="checkbox">`（渠道列表 + 我的支付方式列表）换成 `components/switch.tsx` 的 `Switch` 组件——这个组件是 round39（commit 记录见团队看板 `id=2026-09-23_232946_2850b4c5`）从 `expense-form.tsx` 抽出来的全站唯一深色开关实现，`payment-methods-manager.tsx`"本行程启用的支付方式"那批也是调用同一个组件。这次没有另写样式，DOM 结构也照抄 `payment-methods-manager.tsx` 的写法（`Switch` 和 `<label htmlFor>` 同级摆放，不是 `label` 包 `Switch`），保证行为/可访问性一致。
+
+**验收（ui-auditor 生产真机走查，用 Remy 真实「🇭🇰2026香港」行程 `f78a6b5e-8612-4097-8bfd-88a5db664045`，身份直连链接登录，只读操作没提交任何写表单）**：
+- ①行程主页正常加载，几秒内渲染完，console 0 error，活动流消费带出"≈RM..."约算行（说明这次汇率缓存正常抓到，没有触发降级分支，也符合预期——降级分支设计上就是给"抓不到"兜底，不是每次都要触发才算数）
+- ②"⚙自选比较项"下拉面板截图（桌面 `02b-rate-compare-dropdown-tall.png`、手机 `05-rate-compare-dropdown-mobile.png`）跟支付方式页开关截图（`03-payment-methods-desktop.png`/`06-payment-methods-mobile.png`）比对：胶囊形状/圆角/选中态深色背景+白色圆点靠右/未选中态浅灰背景圆点靠左，两处一致；点击"比较渠道「Wise」"实测取消勾选后对应行从下方结果列表消失，重新勾选后重新出现，功能正常。**我自己看过这几张截图核实过，不是只信 ui-auditor 的文字结论**（视口截图，不是 fullPage 模式，遵守 round38 记过的坑）
+- console 只有 13 条字体预加载 warning，跟这次两处改动无关，是既有问题，如实记录不归入这轮
+
+**发现一个改动范围外的现象，没有处理**：ui-auditor 走查手机端时观察到两次页面自己跳转到结算页（不是点击触发）、关浏览器时状态栏还有一条挂起的 `.../settlement` 加载——这个现象没能稳定复现，全程没有点击任何写入按钮，没有产生数据变更。跟本轮改动的文件（`fx-compare-card.tsx`/`fetch-rates.ts`）无关，更像是团队看板 `id=2026-09-24_153655_4ba1adbe`/`id=2026-09-24_154224_abc42bfc`（trip-expense-ledger-pm 正在并行排查的"任意 trip 子路由快速导航后 session 不稳定"那条更大的问题）的又一次表现，如实记录同步过去，这轮没有深挖也没有动手修。
+
+**部署**：commit `ca41d35`（工作树只有这三个文件改动，push 到 origin/main 时是干净的 fast-forward，没有撞见并行任务的冲突文件）。`./deploy.sh` 五关全过，Version ID `eea1fbdb-099a-4967-ac6a-501fc30b4759`，`/api/health` 回读 200。**commit message 少了标准的 `Co-Authored-By` 署名行**——提交后才发现漏加，想用 `git commit --amend` 补，被这台机器的权限系统拦下（这个仓库虽然不在 `~/Desktop/Claude` 那套共享工作树规矩里，但 amend 类操作看起来是全机级别拦的），如实记录没有强行绕过。
+
+**关于 session/user_session 清理，这轮做了一个跟以往不同的判断——没有清理，如实说明为什么**：ui-auditor 走查产生了至少 1 条 `user_session` + 对应 `session` 记录。以往几轮的标准做法是按 `created_at` 时间窗口精确核对删除。这轮开始清理前 `claim.py list` 核对时发现，团队看板当时**同一时刻**有另一个独立任务 `id=2026-09-24_154224_abc42bfc`（`agent=trip-expense-ledger-pm`，`stage=in_progress`，15:42 认领）明确写着"派独立 ui-auditor 全路径复测"登录/导航流程，是真实并发、不是假设——D1 里最近几条 `user_session` 记录 user_agent 全部是同一个 Playwright Chrome UA（这个项目所有自动化走查工具用的是同一个浏览器版本，UA 层面完全无法区分"这条是我的还是另一个并发任务的"），时间戳也彼此挨得很近（15:06-15:43 之间多条）。round46 刚记过一次"看起来像测试脏数据、实际是另一个并行任务真实依赖的数据"被误删又要重建的教训——这次判断继续删可能把另一个正在跑的真实排查任务的 session 证据删掉，甚至有更差的可能：删错 Remy 自己真实账号当下的活跃登录（她如果这时候真的在用手机/另一台设备开着 app，也会被同一批时间窗口"看起来像测试数据"的记录覆盖到，没法从 UA/时间戳分辨）。**这轮的判断是宁可留几条测试 session 不清，也不冒这个风险**，如实记录留给下一轮/有更多上下文的人处理，不是忘了这一步。
+
+---
+
 ## 【2026-09-24，第四十七轮，钱包深链冷启动 bug 第 4 次复测——router.refresh() 一致性修复已部署但没解决根因，新发现更严重的"任意 trip 子路由都会丢 session"问题，新 session 开工前必看】
 
 背景：接手 claim `id=2026-09-24_144523_22b45659`。工作树是共享的，开工时发现另一个并行 agent/tab 已经在同一个 claim id 下落地了 round44 那批代码（`my-trips.tsx`/`claim-form.tsx` 的 `router.refresh()` 修复 + `payment-methods-manager.tsx` 的"未建钱包"灰显新功能），commit `d49384a`。这轮的价值不是重复实现，是**先补一份此前从没做过的真实复现证据（部署前），再对部署后的效果做诚实的独立复测（部署后）**——round44 自己的记录也如实写了"没有新的复现证据支撑这次真的修好了"，这轮就是去把这句话坐实或推翻。
