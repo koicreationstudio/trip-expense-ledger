@@ -1,5 +1,47 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-24，第五十轮，deploy.sh 补部署互斥锁——round44 真实撞车教训落地，不是新功能，新 session 开工前必看】
+
+背景：round44（本文件后面第 178 行附近那段）如实记录过一次真实撞车——commit `d49384a` 推上去之后跑 `./deploy.sh`，build 步骤（`opennextjs-cloudflare build`）报 `ENOENT`，排查发现另一个进程同时也在跑 `./deploy.sh`，两边在同一个共享工作目录里同时写 `.open-next/` 互相踩了文件。那轮运气好没把半成品代码带上生产，但如实标了"这个项目的 deploy.sh 目前没有部署互斥锁，建议之后补上"，当时没有顺手做。Remy 看到这条记录后拍板要补，lifeos-pm 登记团队看板 `id=2026-09-24_155932_d709a2ea` 派工。
+
+**这次不是重新设计一套锁，是照抄全机已经验证过的现成机制**：`~/Desktop/Claude/scripts/deploy_mutex_lock.sh`，用 `mkdir` 做原子锁原语（持锁进程写自己 pid，下次 `acquire` 发现持锁 pid 已经不存在就自动判定死锁并清理重试），这套已经接进 10 条部署管线（remy-invest / remy-expense / calculator / gem-deploy / gold-price / bali-app / remy-sui / remy-api / thailand-app / remy-schedule）。跟 gem-deploy 一样，trip-expense-ledger 是独立仓库不在 `~/Desktop/Claude` 底下，所以用绝对路径 `source ~/Desktop/Claude/scripts/deploy_mutex_lock.sh`，不能用相对路径。
+
+**锁的范围比其它项目更宽，这是刻意的**：其它项目大多只在 `wrangler` 那一行前后包一层锁（它们的静态资产打包步骤本身不太会互相踩文件）；但这次真实事故是 build 步骤（会写 `.open-next/`）本身撞车，所以锁从原 deploy.sh 的 ⑤ `opennextjs-cloudflare build` 那行开始，一路包到 ⑦ 回读 `/api/health` 结束才释放。
+
+**改动位置**（`deploy.sh`，commit `db0d6c68`）：
+1. 头部注释块补了一段说明锁的位置和理由，退出码说明也加了"互斥锁没拿到"这条。
+2. 单测（④）通过之后、build（⑤）之前插入两段：
+   - 先跑 `bash ~/Desktop/Claude/scripts/test_deploy_mutex_lock.sh >/dev/null`（全机通用的 mutation 自检，验证锁的并发互斥/释放重取/死锁清理/非空壳），不过就 `exit 1` 不部署——这样每次真实部署都会自动重新验一遍这套机制没被后续改动悄悄削弱，不需要单独排期一个常驻任务，`deploy.sh` 本身跑起来的频率就是最自然的常驻验证点。
+   - `source ~/Desktop/Claude/scripts/deploy_mutex_lock.sh`，`deploy_lock_acquire "trip-expense-ledger"` 拿不到就 `exit 1`；拿到之后立刻 `trap 'deploy_lock_release "trip-expense-ledger"' EXIT`——这个项目 build 之后到脚本结束之间有 4 条不同的 exit 分支（build 失败 exit 1 / wrangler 失败 exit 2 / 没解析到部署 URL 提前 exit 0 / 健康检查失败 exit 3 / 正常结束 exit 0），用 `trap ... EXIT` 保证不管从哪条分支退出锁都会被释放恰好一次，不用在每条分支手动补 release、也不会漏。
+
+**验证过程**（不是空壳，两层）：
+1. 全机通用的 `test_deploy_mutex_lock.sh` 本身已经验证过锁的通用行为，这次没有重新做，但确认了它现在跑仍然全绿（并发互斥/释放重取/死锁清理/mutation 非空壳 4 项全过）。
+2. 额外写了 `scripts/test_deploy_lock.sh`（落盘成项目常驻资产，不是一次性 scratchpad 脚本），专门测 `"trip-expense-ledger"` 这个具体 app 名的锁路径：①两个真实并发子进程都对这个 app 名调 `deploy_lock_acquire`，第二个进程在第一个持锁期间确认拿不到、等超时后正确放弃；②第一个进程模拟被杀（用真实子进程 pid 覆写锁的 pid 文件后 `wait` 到它真正退出，不是假造一个从没存在过的数字），下一次 `acquire` 能侦测到死锁自动清理并成功拿到锁。写这个脚本时踩了一个坑：这台机器的 bash 是 macOS 默认的 3.2，`(...)&` 子 shell 里 `$$` 拿到的还是外层脚本自己的 pid（没有 `$BASHPID` 可用来区分），如果直接用子 shell 里的 `$$` 去模拟"进程死了"，测出来的其实是外层脚本还活着的 pid，构造不出真实死锁场景——改用 `$!`（job control 真实 pid）在子 shell 短暂存活期间覆写 pid 文件解决。另外把 `$VAR` 紧贴中文标点（比如 `$C_JOB_PID，`）的写法改成 `${VAR}` 加花括号，因为这台机器的 locale 下裸 `$VAR` 后面直接跟多字节中文字符会被 bash 当成变量名的一部分解析，报 `unbound variable`。跑了两遍确认结果稳定可复现，都是 exit 0：
+```
+── ① 并发互斥：两个进程都对 app 名 "trip-expense-ledger" 调 deploy_lock_acquire，第二个必须被挡住 ──
+  A: 拿到锁
+❌ 等待 trip-expense-ledger 部署锁超过 3s (另一个 tab 可能卡住了), abort. 检查 /tmp/remy-deploy-trip-expense-ledger.lock.d
+  B: ✓ 正确在 A 持锁期间等待超时放弃，没有并发闯入
+  A: 已释放锁
+✓ ①通过：并发互斥生效，"trip-expense-ledger" 这个具体 app 名的锁路径确实排他
+
+── ② 死锁清理：第一个进程模拟被杀（不调用 release），下一次 acquire 应侦测死锁并自动清理拿到锁 ──
+  C: 拿到锁（真实子进程 pid 91395，用 $! 覆写进 pid 文件），即将退出而不调用 release
+  锁目录还在，记录的持锁 pid=91395（这个 pid 现在应该已经不存在了）
+  ✓ 持锁 pid 确认已不存在，构成真实死锁场景
+⚠️  trip-expense-ledger 部署锁是死锁 (持锁 pid 91395 已不存在, 上次可能被强制中断), 清理重试
+  ✓ D: 下一次 acquire 正确侦测到死锁，自动清理后拿到了锁
+
+✅ trip-expense-ledger 专属锁路径验证全过（并发互斥 + 死锁自动清理）
+```
+额外用一段脚本模拟了 deploy.sh 里那段"拿锁→trap→sleep→正常退出"和"拿锁→trap→非零 exit 分支"两种场景，确认 `trap ... EXIT` 在 `set -uo pipefail` 下、无论正常退出还是 `exit 2` 这种分支都会正确释放锁，没有漏释放的死角。
+
+**这次没做（范围外，如实标注）**：没有真的跑一次完整部署来验证（这次改动不涉及功能代码，不需要为了测试触发一次真实生产部署）。全机横扫发现 team-board / remy-invest-cron / suimuse 三个项目的 deploy.sh 完全没有同款锁，remy-schedule 有两份部署入口（真正在用的 `sync-from-local.sh` 已经有锁，但项目里还留着一份旧的 `deploy-cloud.sh` 完全没锁，不确定是否已废弃），这些已经作为独立发现报给 lifeos-pm 排期，不在这轮范围内，这轮没有碰其它项目的任何文件。
+
+**一个值得记的撞车插曲**：这次改动写好之后，还没来得及自己提交，另一个并行在跑的任务（round 49 之后的结算页净值卡宽度调整那一轮）在自己部署前撞见 `deploy.sh` 工作树是脏的（因为我的锁改动还没提交），主动把这轮的 `deploy.sh`+`scripts/test_deploy_lock.sh` 改动识别成"共享工作树里已经完成、卡住它自己部署的前置阻塞项"，一并提交进了 commit `db0d6c68`（commit message 里写清楚了这不是它自己那轮的功能，引用了这轮的团队看板 id）。核对过 `db0d6c68` 的 diff，内容跟这轮实际写的代码逐字一致，没有被夹带任何跟锁无关的改动，`git diff` 现在对这两个文件也是空的（工作树状态 == 已提交状态）。这是共享工作树多 tab 协作的正常风险场景（另一个进程的脏树检查逼它先处理别人未提交的改动），这次处理方式是干净的，没有造成内容混淆，但提醒下一个读这份文档的人：这个项目共享同一个工作目录，改动落盘和改动提交之间有窗口期，可能会被别的并行任务连带提交走，commit 归属要看 diff 内容不能只看 commit 作者。
+
+**git**：commit `db0d6c68e1d26d848905c4122b9ac68e7593137d`（`deploy.sh` +23/-2，新增 `scripts/test_deploy_lock.sh` 117 行），已推 `origin/main`（`git merge-base --is-ancestor` 确认）。
+
 ## 【2026-09-24，第四十九轮，结算页净值卡改回 Artifact V10 逐人独立胶囊结构——round42"设备缓存"结论被推翻，根因是那次只比对了 CSS 数值没做结构性肉眼比对，新 session 开工前必看】
 
 背景：round42（本文件第 183 行附近那一节）拿"生产环境实测 CSS token 数值 + 独立 ui-auditor 真机截图"作证据，结论是"代码/部署/CSS 全部正确，怀疑是 Remy 设备端旧渲染"。这轮 Remy 把生产截图和设计稿并排肉眼比对，发现问题根本不在 CSS 数值（round42 核对过的 padding/字号/圆角这些值确实都是对的），而在**排版结构**——卡片是不是分开的、链接位置在不在卡外、宽屏有没有限宽。round42 的验证方法（curl 拉 SSR HTML 核对字面 CSS token）天生查不出这类结构性问题，只要 class 名字和数值对了就会判定"没问题"，但没人去看"这些 class 组合出来的 DOM 树形状对不对"。这是 round42 结论被推翻的真实根因，写清楚给下一个读这份文档的人：**核对 CSS 数值和核对排版结构是两件不同的事，只做一件不能替代另一件。**
