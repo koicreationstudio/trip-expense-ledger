@@ -9,6 +9,7 @@ import { resolveHoldCandidates, resolveTargetCandidates, resolveDefaultTarget } 
 import { SelectDropdown, useDismissableOpen } from '@/components/select-dropdown';
 import { Switch } from '@/components/switch';
 import { findBestCardOfferGlobalIndex } from '@/lib/domain/fx-best-offer';
+import { isSameFxComparePreference, type FxComparePreferenceSnapshot } from '@/lib/domain/fx-compare-preference-diff';
 
 /**
  * 汇率比价——2026-09-16 第十八轮，Remy 拍板"要根治"：把原本两张独立卡片
@@ -274,16 +275,26 @@ export function FxCompareCard({
   // 同一张卡再出现（比如点"↻刷新"重新拉取）不再重复默认勾选，尊重用户手动取消过的选择。
   const initializedCardKeysRef = useRef<Set<string>>(new Set());
 
-  // fix(2026-09-24，Remy 明确要求)：这组选项要按"账号×行程"存 D1，刷新页面/
-  // 换设备都要能恢复，不能只是 useState。preferenceLoadedRef 标记"这次挂载
-  // 有没有问过服务器要不要恢复存档"——存档拉取完成前不能触发保存 effect，
-  // 否则会用页面刚打开时那份"计算出来的默认值"覆盖掉真正的存档（见下面两个
-  // effect）。用 setTimeout(0) 而不是直接同步置 true，是为了让"加载存档→
-  // setState→触发保存 effect"这条链路里，紧跟在加载之后的那次保存 effect
-  // 判断仍然读到 false（同一次 commit 的被动 effect 会在 setTimeout 宏任务
-  // 之前跑完），从而跳过"刚恢复完存档又立刻把同样的值原样写回一次"这次多余的
-  // 请求——不是必须的优化，但避免每次打开卡片都有一次没有意义的网络往返。
-  const preferenceLoadedRef = useRef(false);
+  // fix(round66，根治"零交互也 PUT")：原来这里是 `preferenceLoadedRef`+`setTimeout(0)`
+  // 的时序防抖保护，理论依据是"同一次 commit 的被动 effect 会在 setTimeout 宏任务
+  // 之前跑完"——本地用真实浏览器 + opennextjs-cloudflare 运行时（不是 `next dev`）
+  // 实测 6/6 次坐实这个假设不成立：`setTimeout(0)` 稳定地在保存 effect 跑完之前就
+  // 触发，导致"刚从 D1 读回存档→setState→保存 effect"这条链路里，保存 effect 判断到
+  // 的保护 ref 已经是 true，于是把刚读回来的内容原样 PUT 回去一次（round64 观察到的
+  // "每进一次行程主页一次 PUT"、round65 观察到的"内容没变但 updated_at 变了"，都是
+  // 这一条）。改用一个确定性的信号，不再依赖任何 JS 调度时序：`hasUserInteractedRef`
+  // 只在下面四个真实操作入口（我持有下拉/目标币种下拉/自选比较项勾选/兑换金额输入框
+  // 的 onChange）里置 true，组件挂载、载入已存档偏好、"新卡默认勾选"这类派生计算
+  // 一律不会碰它——保存 effect 只看这个 ref，不看"存档有没有问完"。
+  const hasUserInteractedRef = useRef(false);
+  function markUserInteracted() {
+    hasUserInteractedRef.current = true;
+  }
+  // fix(round66)：双保险——即使上面那层交互标记哪里没堵干净，发起 PUT 前还要跟
+  // "已知最新存档内容"比一遍，内容完全相同（`enabledCompareKeys` 按集合比较，不
+  // 按数组顺序，见 `lib/domain/fx-compare-preference-diff.ts`）就不发请求。这个 ref
+  // 在 loadPreference 读到存档时、以及每次成功 PUT 之后更新为"当前已知的真相"。
+  const lastSavedSnapshotRef = useRef<FxComparePreferenceSnapshot | null>(null);
 
   const [cardRecommendations, setCardRecommendations] = useState<FxRecommendationResult[] | null>(null);
   const [cardsLoading, setCardsLoading] = useState(false);
@@ -328,10 +339,23 @@ export function FxCompareCard({
           } | null;
         };
         const saved = data.preference;
-        if (!saved || cancelled) return;
+        if (cancelled) return;
+        // fix(round66)：不管有没有存档，先把"已知最新存档内容"这份真相记下来——
+        // null 就是"确实还没有存档"，后面发 PUT 前的内容比对（第二层双保险）
+        // 要拿这个当基准，不能让它停留在初始的 undefined/未初始化状态。
+        lastSavedSnapshotRef.current = saved
+          ? {
+              holdCurrency: saved.holdCurrency,
+              targetCurrency: saved.targetCurrency,
+              enabledCompareKeys: saved.enabledCompareKeys,
+              amountYuan: saved.amountYuan,
+            }
+          : null;
+        if (!saved) return;
 
         // 优雅降级：存的值如果不在当前候选池里了（比如候选池以后又调整过），
-        // 悄悄忽略、继续用这一刻算出来的默认值，不阻塞渲染也不报错。
+        // 悄悄忽略、继续用这一刻算出来的默认值，不阻塞渲染也不报错。这些
+        // setState 都是"恢复存档"，不是用户操作，不能碰 hasUserInteractedRef。
         if (holdCandidates.includes(saved.holdCurrency)) {
           setHoldCurrency(saved.holdCurrency);
           const savedTargetCandidates = resolveTargetCandidates(saved.holdCurrency);
@@ -355,12 +379,6 @@ export function FxCompareCard({
         }
       } catch {
         // 拉取失败静默走默认值，不阻塞卡片渲染，不打扰用户。
-      } finally {
-        if (!cancelled) {
-          setTimeout(() => {
-            if (!cancelled) preferenceLoadedRef.current = true;
-          }, 0);
-        }
       }
     }
     void loadPreference();
@@ -371,22 +389,33 @@ export function FxCompareCard({
   }, [tripId]);
 
   // 保存 effect：持有币/目标币/自选比较项/金额任一变化都存一次，debounce 600ms
-  // 避免打字/连续切换时每次改动都打一次接口。preferenceLoadedRef 没置 true 之前
-  // （存档还没问完）不保存，避免用"页面刚打开时算出来的默认值"覆盖掉真正的存档。
+  // 避免打字/连续切换时每次改动都打一次接口。
+  // fix(round66)：门槛从"存档有没有问完"（`preferenceLoadedRef`+`setTimeout(0)`，
+  // 本地实测 6/6 次证实这套时序防抖不可靠，见上面 `hasUserInteractedRef` 定义处
+  // 的大注释）换成"用户是不是真的手动改过某个输入"（`hasUserInteractedRef`）——
+  // 组件挂载时的默认值计算、恢复存档、"新卡默认勾选"这类派生计算改的这几个
+  // state，都不会把这个 ref 置 true，天然不会走到这里的 PUT。
   // 存 effectiveHold/effectiveTarget（已经做过候选池兜底校验的值）而不是原始
   // holdCurrency/targetCurrency，保证写进 D1 的值本身永远合法。
   useEffect(() => {
-    if (!preferenceLoadedRef.current) return;
+    if (!hasUserInteractedRef.current) return;
     const timer = setTimeout(() => {
+      const nextSnapshot: FxComparePreferenceSnapshot = {
+        holdCurrency: effectiveHold,
+        targetCurrency: effectiveTarget,
+        enabledCompareKeys: Array.from(enabledCompareKeys),
+        amountYuan: amount,
+      };
+      // fix(round66)：双保险——跟已知最新存档内容完全一样就不发请求，即使上面
+      // "只有用户操作才写"这层哪里有漏网也不会真的打一次多余的 PUT。按集合比较
+      // enabledCompareKeys，不按数组顺序（同样内容不同插入顺序序列化出来的
+      // JSON 字符串不一样，但语义上是同一份偏好，不能被顺序误判成"变了"）。
+      if (isSameFxComparePreference(lastSavedSnapshotRef.current, nextSnapshot)) return;
+      lastSavedSnapshotRef.current = nextSnapshot;
       void fetch(`/api/trips/${tripId}/fx-compare-preference`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          holdCurrency: effectiveHold,
-          targetCurrency: effectiveTarget,
-          enabledCompareKeys: Array.from(enabledCompareKeys),
-          amountYuan: amount,
-        }),
+        body: JSON.stringify(nextSnapshot),
       }).catch(() => {
         // 保存失败不打断记账主流程——这组选项只是体验优化，不是关键记账数据，
         // 静默失败即可，下次任何一个选项再变化会自然再触发一次保存。
@@ -569,6 +598,9 @@ export function FxCompareCard({
   // fix(2026-09-23 第三十三轮，方案二)：改名自 toggleChannel，现在管两种 key
   // （channel:xxx / card:xxx），逻辑本身（勾选/取消勾选同一个 Set）没有变化。
   function toggleCompareKey(key: string) {
+    // fix(round66)：这是四个真实用户操作入口之一（另外三个是我持有/目标币种
+    // 下拉、兑换金额输入框），只有这几处会把 hasUserInteractedRef 置 true。
+    markUserInteracted();
     setEnabledCompareKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -618,7 +650,10 @@ export function FxCompareCard({
                 原样保留，这次只换实现不换外观）。 */}
             <SelectDropdown
               value={effectiveHold}
-              onChange={(v) => setHoldCurrency(v)}
+              onChange={(v) => {
+                markUserInteracted();
+                setHoldCurrency(v);
+              }}
               options={holdCandidates
                 .filter((h) => h !== effectiveTarget)
                 .map((h) => ({ value: h, label: h }))}
@@ -631,7 +666,10 @@ export function FxCompareCard({
             {/* 🎯目标币种 下拉——Artifact `.fchip`/`.fdrop-menu` 规格 */}
             <SelectDropdown
               value={effectiveTarget}
-              onChange={(v) => setTargetCurrency(v)}
+              onChange={(v) => {
+                markUserInteracted();
+                setTargetCurrency(v);
+              }}
               options={targetCandidates.map((c) => ({ value: c, label: TARGET_CURRENCY_LABELS[c] ?? c }))}
               ariaLabel="目标币种"
               triggerClassName="rounded-full bg-neutral-lt px-[9px] py-[5px] text-[10px] font-medium text-neutral-dk"
@@ -772,7 +810,10 @@ export function FxCompareCard({
               min="0"
               step="1"
               value={amountYuan}
-              onChange={(e) => setAmountYuan(e.target.value)}
+              onChange={(e) => {
+                markUserInteracted();
+                setAmountYuan(e.target.value);
+              }}
               onBlur={() => loadCardRecommendations(false)}
               className="field-input w-28 font-serif tabular-nums"
             />
