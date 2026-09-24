@@ -47,8 +47,14 @@ async function check(name, isOpen) {
   console.log(`${open === false ? 'OK  ' : 'LEAK'} ${name} -> stillOpen=${open} url=${page.url().replace(BASE, '')}`);
 }
 const nav = (label) => page.locator('header a', { hasText: label }).first();
+const waitHydrated = () =>
+  page.waitForFunction(() => {
+    const el = document.querySelector('header button');
+    return !!el && Object.keys(el).some((k) => k.startsWith('__reactProps'));
+  }, null, { timeout: 30000 });
 const home = async () => {
   await page.goto(`${BASE}/trips/${TRIP_A}`);
+  await waitHydrated();
   await sleep(1500);
 };
 
