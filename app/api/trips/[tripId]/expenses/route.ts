@@ -111,9 +111,22 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
       })
     : undefined;
 
+  // fix(2026-09-24 第五十轮，"设置当前余额"覆盖式 bug 修复)：钱包一旦做过至少一次
+  // "设置当前余额"（`balanceUpdatedAt` 非空），就切换进 lib/domain/wallet-balance.ts
+  // 的"锚点+推导"模式——这笔新消费不再在这里直接写一次 currentBalance 增量，交给
+  // 读取时的推导公式自动把它算进去（它的 expenseDate/paymentMethodId/currency 会被
+  // 那条 SQL 现查现算，不需要这里预先扣一次）。这样"之后新记的继续扣"这条既有行为
+  // 表面上没变（用户看到的余额确实会正确减少），但底层不再靠这里的一次性写入维护，
+  // 也顺带让"编辑这笔消费的金额/日期/支付方式"或"删除这笔消费"以后不需要专门去这个
+  // 钱包身上做回滚——它们本来就没有回滚代码（这是这次顺带查出来的既有缺口，
+  // 见 PENDING-DECISIONS 这轮记录），推导模式下这个缺口对已锚定钱包自动消失，不需要
+  // 另外补代码。只有还没做过"设置当前余额"的钱包（`balanceUpdatedAt` 仍是 null，
+  // 停留在旧的可变累加字段模式）才继续走原来这条直接写入的路径，这部分行为完全不变。
+  const shouldDebitDirectly = linkedWallet && linkedWallet.balanceUpdatedAt === null;
+
   // D1 的 remote binding 不支持交互式多语句事务，官方推荐用 batch() 做原子
   // 多语句写入，各条语句互不依赖对方的执行结果，符合 batch 的用法。
-  if (linkedWallet) {
+  if (shouldDebitDirectly) {
     const debitWallet = db
       .update(wallets)
       .set({ currentBalance: linkedWallet.currentBalance - body.amount })

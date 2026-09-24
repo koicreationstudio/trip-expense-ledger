@@ -34,16 +34,15 @@ async function loadOwn(db: Db, id: string, tripId: string, participantId: string
  * 发生过"，不需要也没办法去"级联重算"其它交易——那些交易压根没依赖过这笔
  * 换汇留下的中间值。
  *
- * 唯一如实记录、没打算这轮解决的边界：如果这笔换汇之后，钱包又被"设置当前
- * 余额"手动覆盖过一次（那次覆盖的语义是"不管历史，现在就是这个数"），这里的
- * 反向抵消会在那个覆盖值基础上再动一下，理论上可能跟"假如这笔换汇从来没
- * 发生、当时人工输入的覆盖数字会不会不一样"这个反事实对不上——但这是
- * 任何"增量操作 + 绝对覆写"混合记账都有的固有局限，跟这个 app 里"编辑/删除
- * 一笔消费也从不回溯调整钱包余额"是同一类已经存在的简化边界（见
- * app/api/trips/[tripId]/expenses/[expenseId]/route.ts PATCH 那段注释），
- * 不是这次漏想了，是这个 app 目前的余额模型本身就没有维护带时间戳的余额
- * 快照历史，做不到真正的级联重算，选择"反向抵消这笔记录本身的净影响"是
- * 成本最低、也最符合直觉的方案。
+ * fix(2026-09-24 第五十轮，"设置当前余额"覆盖式 bug 修复)：上面这段"唯一没
+ * 打算这轮解决的边界"已经解决——这次把"设置当前余额"之后的钱包切换成
+ * lib/domain/wallet-balance.ts 的"锚点+推导"模式（`balanceUpdatedAt` 非空
+ * 就代表已切换），这类钱包不再需要下面这段"反向抵消"的写入：删掉这条换汇
+ * 记录之后，它本来就不会再被推导公式的 SQL 捞到（行已经不存在了），下次读
+ * 余额自动是对的，不需要额外写一次 UPDATE 去抵消。只有还没设置过"当前余额"
+ * 的钱包（旧的可变累加字段模式）才继续走下面这条反向抵消的写入路径，那部分
+ * 行为跟这次改动之前完全一致，"编辑/删除消费也从不回溯余额"这条旧模式下的
+ * 既有缺口，这次也一并保留（如实记录在 PENDING-DECISIONS，不是没考虑到）。
  */
 export const DELETE = withSession<Context>(async (_request, { params }, identity) => {
   const denied = assertSameTrip(identity, params.tripId);
@@ -65,7 +64,7 @@ export const DELETE = withSession<Context>(async (_request, { params }, identity
   // 混批本来就是 drizzle D1 官方推荐用法，只是 TS 元组类型推不出可变长度混合数组）。
   const statements: unknown[] = [db.delete(exchangeRecords).where(eq(exchangeRecords.id, params.exchangeRecordId))];
 
-  if (toWallet) {
+  if (toWallet && toWallet.balanceUpdatedAt === null) {
     statements.push(
       db
         .update(wallets)
@@ -74,7 +73,7 @@ export const DELETE = withSession<Context>(async (_request, { params }, identity
     );
   }
 
-  if (fromWallet && existing.fromAmount !== null) {
+  if (fromWallet && existing.fromAmount !== null && fromWallet.balanceUpdatedAt === null) {
     statements.push(
       db
         .update(wallets)

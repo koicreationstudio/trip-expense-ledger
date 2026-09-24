@@ -69,22 +69,37 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
     exchangeDate: new Date(body.exchangeDate),
     note: body.note ?? null,
   });
-  const creditToWallet = db
-    .update(wallets)
-    .set({ currentBalance: toWallet.currentBalance + body.toAmount })
-    .where(eq(wallets.id, toWallet.id));
 
-  // 原子写入：一笔换汇记录 + 最多两个钱包余额更新，各条语句互不依赖对方执行结果，
-  // 符合 D1 batch() 的用法（remote binding 不支持交互式事务，CLAUDE.md 已定这条规矩）。
-  if (fromWallet && body.fromAmount !== undefined) {
-    const debitFromWallet = db
-      .update(wallets)
-      .set({ currentBalance: fromWallet.currentBalance - body.fromAmount })
-      .where(eq(wallets.id, fromWallet.id));
-    await db.batch([insertRecord, creditToWallet, debitFromWallet]);
-  } else {
-    await db.batch([insertRecord, creditToWallet]);
+  // fix(2026-09-24 第五十轮，"设置当前余额"覆盖式 bug 修复)：跟 expenses/route.ts
+  // POST 同一条规矩——钱包一旦做过至少一次"设置当前余额"（`balanceUpdatedAt` 非空），
+  // 切换进 lib/domain/wallet-balance.ts 的"锚点+推导"模式，这里就不再直接写一次
+  // currentBalance 增量，交给读取时的推导公式现查现算（这条换汇记录本身的行还在，
+  // exchangeDate/toWalletId/fromWalletId 会被那条 SQL 自动捞到）。只有还没设置过
+  // 的钱包（旧的可变累加字段模式）才继续走原来这条直接写入的路径。
+  const statements: unknown[] = [insertRecord];
+  if (toWallet.balanceUpdatedAt === null) {
+    statements.push(
+      db
+        .update(wallets)
+        .set({ currentBalance: toWallet.currentBalance + body.toAmount })
+        .where(eq(wallets.id, toWallet.id))
+    );
   }
+  if (fromWallet && body.fromAmount !== undefined && fromWallet.balanceUpdatedAt === null) {
+    statements.push(
+      db
+        .update(wallets)
+        .set({ currentBalance: fromWallet.currentBalance - body.fromAmount })
+        .where(eq(wallets.id, fromWallet.id))
+    );
+  }
+
+  // 原子写入：一笔换汇记录 + 最多两个钱包余额更新（已锚定的钱包不需要这条更新
+  // 语句，见上），各条语句互不依赖对方执行结果，符合 D1 batch() 的用法（remote
+  // binding 不支持交互式事务，CLAUDE.md 已定这条规矩）。数组长度视两个钱包各自
+  // 是否已锚定而变化，跟 expenses/[expenseId]/route.ts PATCH 里同款写法一样做
+  // 运行时断言。
+  await db.batch(statements as unknown as Parameters<typeof db.batch>[0]);
 
   const created = await db.query.exchangeRecords.findFirst({ where: eq(exchangeRecords.id, id) });
   return NextResponse.json({ exchangeRecord: toExchangeRecordDto(created!) }, { status: 201 });

@@ -7,6 +7,7 @@ import { toWalletDto } from '@/lib/http/dto';
 import { parseJsonBody } from '@/lib/http/validate';
 import { createWalletSchema } from '@/lib/validation/schemas';
 import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
+import { withDisplayBalance } from '@/lib/domain/wallet-balance';
 
 interface Context {
   params: { tripId: string };
@@ -27,7 +28,11 @@ export const GET = withSession<Context>(async (_request, { params }, identity) =
     .where(and(eq(wallets.tripId, params.tripId), eq(wallets.participantId, identity.participantId)))
     .orderBy(asc(wallets.createdAt));
 
-  return NextResponse.json({ wallets: rows.map(toWalletDto) });
+  // fix(2026-09-24 第五十轮，"设置当前余额"覆盖式 bug 修复)：已锚定的钱包（做过
+  // 至少一次"设置当前余额"）不再直接读 currentBalance 原始存储值，改成现查现算，
+  // 见 computeWalletDisplayBalance 顶部大段注释。
+  const withBalances = await Promise.all(rows.map((row) => withDisplayBalance(db, row)));
+  return NextResponse.json({ wallets: withBalances.map(toWalletDto) });
 });
 
 export const POST = withSession<Context>(async (request, { params }, identity) => {
@@ -102,5 +107,5 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
   });
 
   const created = await db.query.wallets.findFirst({ where: eq(wallets.id, id) });
-  return NextResponse.json({ wallet: toWalletDto(created!) }, { status: 201 });
+  return NextResponse.json({ wallet: toWalletDto(await withDisplayBalance(db, created!)) }, { status: 201 });
 });

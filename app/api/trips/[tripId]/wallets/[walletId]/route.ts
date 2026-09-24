@@ -7,6 +7,7 @@ import { toWalletDto } from '@/lib/http/dto';
 import { parseJsonBody } from '@/lib/http/validate';
 import { updateWalletSchema } from '@/lib/validation/schemas';
 import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
+import { withDisplayBalance } from '@/lib/domain/wallet-balance';
 
 interface Context {
   params: { tripId: string; walletId: string };
@@ -37,6 +38,17 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
     if (!owns) return NextResponse.json({ error: 'invalid_payment_method' }, { status: 400 });
   }
 
+  // fix(2026-09-24 第五十轮，"设置当前余额"覆盖式 bug 修复)：HKD 钱包 8120@09-15
+  // 覆盖掉历史回溯 -246 这个真实事故，根因是这里直接绝对覆写 currentBalance，完全
+  // 不管记录日期当天及以后系统里已经存在哪些相关消费/换汇。这次改成"锚点 + 推导"
+  // 架构（见 lib/domain/wallet-balance.ts 顶部大段注释，这是这次评估过"全推导式 vs
+  // 只修 PATCH 这一点"两个方案后选定的架构）：这里写入的 `currentBalance` 不再是
+  // "最终显示值"，是"记录日期当天那一刻的锚点原始值"——用户在这个面板里输入的数字
+  // 原样存进去，不在写入这一刻做任何减法。真正显示给用户看的余额，改成每次读的时候
+  // 用 computeWalletDisplayBalance 现查现算（会自动把记录日期当天及以后、系统里
+  // 已经存在的相关消费/换汇一并扣掉/加上）——这一步不需要写在这里，交给下面
+  // `withDisplayBalance` 在组装响应的时候做，也交给 GET /wallets 等其它读取点各自
+  // 调用同一个函数，不是只有这个 PATCH 响应显示得对，别的地方还是老的数字。
   await db
     .update(wallets)
     .set({
@@ -45,7 +57,12 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
       paymentMethodId: body.paymentMethodId === undefined ? existing.paymentMethodId : body.paymentMethodId,
       currentBalance: body.currentBalance ?? existing.currentBalance,
       // 只有这次请求真的带了 currentBalance（= 这是一次「设置当前余额」动作）才更新
-      // balanceUpdatedAt；单纯改名字/绑支付方式不该悄悄刷新这个时间戳。
+      // balanceUpdatedAt；单纯改名字/绑支付方式不该悄悄刷新这个时间戳。这个字段现在
+      // 身兼两职：①「记录日期」这个用户可见语义 ②这个钱包是否已经从"旧的可变累加
+      // 字段"模式切换进"锚点+推导"模式的开关——非 null 就代表已经切换，往后这个钱包
+      // 的显示余额一律走推导公式，不再吃 expenses/exchange-records 那几个路由里
+      // 任何直接写 currentBalance 的增量更新（那几处已经改成先判断这个字段再决定
+      // 要不要写，见对应文件注释）。
       balanceUpdatedAt:
         body.currentBalance !== undefined
           ? body.balanceUpdatedAt
@@ -56,7 +73,7 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
     .where(eq(wallets.id, params.walletId));
 
   const updated = await db.query.wallets.findFirst({ where: eq(wallets.id, params.walletId) });
-  return NextResponse.json({ wallet: toWalletDto(updated!) });
+  return NextResponse.json({ wallet: toWalletDto(await withDisplayBalance(db, updated!)) });
 });
 
 /**

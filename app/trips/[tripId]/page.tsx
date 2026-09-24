@@ -13,6 +13,7 @@ import { WalletCard } from './wallet-card';
 import { ExchangeRecordList } from './exchange-record-list';
 import { FxCompareCard } from './fx-compare-card';
 import { loadEnabledPaymentMethodIds, paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
+import { computeWalletDisplayBalances } from '@/lib/domain/wallet-balance';
 
 export default async function TripPage({ params }: { params: { tripId: string } }) {
   const identity = await getCurrentIdentity();
@@ -97,6 +98,13 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     .orderBy(desc(exchangeRecords.exchangeDate));
 
   const walletById = new Map(myWallets.map((w) => [w.id, w]));
+
+  // fix(2026-09-24 第五十轮，"设置当前余额"覆盖式 bug 修复)：行程主页「我的钱包」
+  // 这里是直接查 DB 拿 `w.currentBalance` 原始存储值，不经过 wallets/route.ts 那个
+  // API 路由，所以那边的推导修复不会自动覆盖到这里——两处都要各自调
+  // computeWalletDisplayBalance，不然会出现"支付方式页显示对了、行程主页还是
+  // 旧数字"这种两处不一致的回归（见 lib/domain/wallet-balance.ts 顶部大段注释）。
+  const walletDisplayBalances = await computeWalletDisplayBalances(db, myWallets);
 
   // 钱包卡片上要能显示「绑了哪个支付方式」+ 建钱包时要能选支付方式，两处都需要
   // 这份清单。payment_method 跟人走不跟行程走，按 participant_id 查，不用管 tripId。
@@ -218,7 +226,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
           label: w.label,
           currency: w.currency,
           emoji: w.emoji,
-          currentBalance: w.currentBalance,
+          currentBalance: walletDisplayBalances.get(w.id) ?? w.currentBalance,
           paymentMethodId: w.paymentMethodId,
           linkedPaymentMethodLabel: w.paymentMethodId ? paymentMethodLabelById.get(w.paymentMethodId) ?? null : null,
         }))}
