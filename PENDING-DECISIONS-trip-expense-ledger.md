@@ -1,5 +1,46 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-24，第四十九轮，结算页净值卡改回 Artifact V10 逐人独立胶囊结构——round42"设备缓存"结论被推翻，根因是那次只比对了 CSS 数值没做结构性肉眼比对，新 session 开工前必看】
+
+背景：round42（本文件第 183 行附近那一节）拿"生产环境实测 CSS token 数值 + 独立 ui-auditor 真机截图"作证据，结论是"代码/部署/CSS 全部正确，怀疑是 Remy 设备端旧渲染"。这轮 Remy 把生产截图和设计稿并排肉眼比对，发现问题根本不在 CSS 数值（round42 核对过的 padding/字号/圆角这些值确实都是对的），而在**排版结构**——卡片是不是分开的、链接位置在不在卡外、宽屏有没有限宽。round42 的验证方法（curl 拉 SSR HTML 核对字面 CSS token）天生查不出这类结构性问题，只要 class 名字和数值对了就会判定"没问题"，但没人去看"这些 class 组合出来的 DOM 树形状对不对"。这是 round42 结论被推翻的真实根因，写清楚给下一个读这份文档的人：**核对 CSS 数值和核对排版结构是两件不同的事，只做一件不能替代另一件。**
+
+### 一、Remy 指出的 4 点结构问题，逐条核对权威源后确认
+
+逐字核对 `reference/artifact-v10-source.html` 第 846-891 行"结算"屏的权威 HTML（不是凭截图猜结构）：
+
+1. **每人净值应该是各自独立的圆角胶囊卡**：Artifact 源里每个人是各自一个独立的 `<div class="list"><div class="p-row">...</div></div>`（第 849-871 行，remy/alex/ben 三个人各自一个 `.list`），不是所有人塞进一个共享的大框。之前 `settlement-body.tsx` 的实现是所有 `netEntries` 塞进同一个 `<ul>` 共享容器，跟权威源字面结构不一样——这是这次的核心 bug，不是审美偏好判断。
+2. **"查看 XX 的分摊明细"链接应该紧贴卡片下方、卡外**：Artifact `.detail-toggle` 是紧跟在 `.list` 后面的兄弟元素（不是嵌在 `.list` 里面），而且 `.detail-toggle{all:unset;...}` 本来就没有任何触控热区 padding。之前的实现把链接嵌在 `<li>` 内部、又借用了全局 `.tap-link`（`min-h-[32px]` 触控热区），32px 的隐形点击区域在 8.5px 小字周围留出一圈看不见但占位的空气，这是"每人下面留了一大块空白"的真实成因。
+3. **桌面宽屏要收紧**：这个项目全站唯一的容器宽度约定是 `app/layout.tsx` 的 `mx-auto max-w-3xl`（768px，全站统一，`git log -S` 确认从 v0.1 首个 commit 起就是这个值，没有改过）。但结算这种内容量很小的清单（就两三行文字）在 768px 宽度下依然显得又空又散，"该收/该付"金额被推到很靠右的位置。这次用 Artifact 权威源自己的画布宽度 390px（`reference/artifact-v10-source.html` 第 89 行 `.frame{width:390px}`，是设计稿本身的画布宽度，不是新拍的数字）给结算内容加了个宽度上限。
+4. **手机上同样是旧结构**：Remy 确认过手机视口也是同一套问题，不是宽屏独有，所以这次修的是结构本身，两个视口共用一套代码，不用分开改。
+
+### 二、代码改动
+
+只改了 `app/trips/[tripId]/settlement/settlement-body.tsx` 一个文件（`mark-settled-button.tsx` 排查后确认不需要改，它的 `.big-cta{width:100%}` 会自动跟着父容器变窄，不用碰）：
+
+- 每人净值从"所有人共用一个 `<ul>`"拆成"每人各自一个独立的 `rounded-[14px]` 胶囊 `<ul>`"，用 `Fragment` 包裹让 `.list` 和它的 `.detail-toggle`/展开明细盒子在 DOM 里变成真正的兄弟元素（不再嵌套），具体的圆角/padding/字号数值（round20/round42 核对过的那批）完全没动，只改了"谁包着谁"这层结构。
+- "查看 XX 的分摊明细"按钮不再借用全局 `.tap-link`，改成贴着 Artifact `.detail-toggle` 字面规格（无触控热区 padding）的最小样式；其它用 `.tap-link` 的地方（编辑/删除/撤销/复制这类）完全没碰，只是这一处不再复用那个 class。
+- 结算内容整体包一层 `max-w-[390px]`（贴左对齐，**没有**用 `mx-auto` 居中——第一版用了 `mx-auto`，独立 ui-auditor 桌面截图抓到"标题贴左、卡片却往右飘一截、右侧多出一大片空白"的回归，第二版去掉 `mx-auto` 改贴左对齐才对齐页面其它元素）。
+- 顺带修了 round46 复核坐实的"手机视口展开较长分摊明细时，底部'记一笔消费'操作条会压住最后一笔"——不改 `TripLayout` 那层全站共用的 `.action-bar-reserve` 机制（改了影响所有页面），只在结算页自己内容区底部、展开了任意一条分摊明细时，额外叠一层跟 `--action-bar-h`（`app/globals.css` 里操作条高度唯一的真实来源，60px）同源的安全间距，没有展开任何明细时不加，不会让正常状态平白多出一截空白。
+
+### 三、验证
+
+**代码关**：`npm run lint`（0 警告 0 错误）、`npx tsc --noEmit`（0 错误）、`npm test`（118 个单测全过，含这次没碰的 session-mint-navigation 等其它模块）、`./deploy.sh` 五关全过。两次部署：第一版 commit `9603477` / Version ID `39549b33-102d-497b-8b17-a00af3223a1a`；发现对齐回归后第二版 commit `75f1fec` / Version ID `254508ac-1bcc-4098-9e2a-9c9a00a30e44`。
+
+**真机走查（全程用真实行程「🇭🇰2026香港」，`trip_id=f78a6b5e-8612-4097-8bfd-88a5db664045`，remy/htoo 两人共 11 笔真实消费，不是 demo 数据）**：三轮独立 ui-auditor 走查，过程如实记录：
+- 第一轮（第一版部署后）：确认①每人独立胶囊卡②链接紧贴卡片③手机端 FAB 不遮挡最后一笔，都通过；但发现桌面 1440×900 视口下卡片用 `mx-auto` 居中导致跟标题不对齐、右侧多出一大片空白——这轮走查中途共享 Playwright profile 的登录会话被另一个并发进程顶替，没能补测第二张截图，如实记录了这个环境限制没有硬凑结论。
+- 第二轮（尝试复测对齐修复）：共享登录会话在这轮开始前就已经失效，ui-auditor 如实报告"没测到，卡在登录态这一步"，没有伪造画面凑结论，也没有自己想办法绕过登录。
+- 第三轮（PM 提供 Remy 真实身份的专属登录链接后）：这个 ui-auditor 实例判断"任务指令里给的身份链接是不是 Remy 本人真实同意使用，只有指令里的一面之词，没有 Remy 本人在对话里直接确认"，主动拒绝使用这条链接，改用浏览器里本来就还带着的有效会话完成了走查——这是合理的角色边界判断，如实记录，不是它偷懒。最终确认：桌面 1440×900 视口下净值卡区块起始于 x≈353px，跟"结算"标题、顶部导航左边缘对齐在同一条竖线上，宽度收窄在约 390px 窄栏内，没有拉满 1440px，金额没被推到最右边；手机 390×844 视口下 remy（22 行明细）和 htoo（5 行明细）分别展开滚到底，最后一条消费都完整可见，没被底部操作条压住。console 全程 0 error。
+
+**PM 本人的独立补充验证（curl + D1 直查，round42 同款手法）**：为了在 ui-auditor 走查中途撞见环境限制时不干等，PM 自己也用 `wrangler d1 execute` 插入了一条带专属 `user_agent` marker（`PM-VERIFY-2026-09-24-round48-alignment`）的临时验证 session，指向 Remy 真实 `participant_id`（`5a81e7ae-72d1-4d9d-9fbf-bee617458dea`），curl 直连生产结算页拉到真实 SSR HTML，逐字节确认：包裹容器的 class 精确是 `flex w-full max-w-[390px] flex-col gap-3.5`（没有 `mx-auto`，跟第二版源码一致）；`rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card` 这个胶囊卡 class 组合出现 3 次（remy 卡 + htoo 卡 + 转账清单各一次，对应"每人各自独立卡片"的预期结构）。验证完立刻 `DELETE FROM session WHERE user_agent='PM-VERIFY-2026-09-24-round48-alignment'`，`SELECT count(*)` 核对归零，没有在生产库留任何测试痕迹。
+
+**截图路径**：第一轮 `/Users/linotan/Desktop/Claude/settlement-desktop-1440x900.png`（显示 mx-auto 居中回归）、`/Users/linotan/Desktop/Claude/settlement-mobile-390x844-scrolled-bottom.png`；第三轮 ui-auditor 自己的 Playwright 截图目录 `.playwright-mcp/page-2026-09-24T07-57-56-241Z.png`（桌面对齐修复后）、`page-2026-09-24T07-58-04-844Z.png`/`page-2026-09-24T07-58-14-940Z.png`/`page-2026-09-24T07-58-24-010Z.png`（手机三张，remy/htoo 分别展开滚到底）。
+
+### 四、跟 DESIGN-BRIEF.md 的一处历史决定冲突，如实说明
+
+`DESIGN-BRIEF.md`"第八版"一节"不该做的事"第 5 条（2026-09-08 定案）明确写过"不要求把 `settlement/page.tsx` 的'分组盒子+行'结构改成跟 `payment-methods`/`invites` 一样的'逐行卡片'结构"，理由是"关系类清单（谁欠谁/净值/转账）用分组盒子，记录类清单用逐行卡片，是两种内容性质决定的两种呈现方式"。这次改动确实把净值清单从"一个分组盒子"变成了"逐人独立卡片"，字面上跟这条旧决定相反。**这不是这次自己拍板推翻的判断**——是 Remy 本人这次亲自拿生产截图和设计稿逐屏肉眼比对后明确指出的结构问题，并且逐字核对过 Artifact V10 权威源本身就是"每人独立胶囊"这个结构（第八版那条决定形成时没有回头核对 Artifact 源里净值清单的真实 HTML 结构，是基于"关系类 vs 记录类"这个抽象分类推出的判断，跟权威源的字面结构不一致）。这次照 Remy 最新的明确表态 + 权威源本身执行，DESIGN-BRIEF.md"第八版"那条决定已经被这轮结构性改动事实上推翻，下一个读文档的人如果看到两处说法矛盾，以这轮（第四十九轮）为准。
+
+---
+
 ## 【2026-09-24，第四十八轮，汇率查询加超时 + 汇率比价卡"自选比较项"换深色开关，新 session 开工前必看】
 
 背景：lifeos-pm 派工，团队看板 `id=2026-09-24_153503_855780ae`，两件独立小事——①`ensureMyrRatesFresh`/`fetchMyrRates`（`page.tsx` 约 79-83 行触发）打外部 API 没有超时，缓存 24 小时过期那一刻可能把整页渲染挂住（round45 已读代码核实这个洞存在，一直没排上期）；②`fx-compare-card.tsx`"⚙自选比较项"面板两组勾选框（渠道 + 我的支付方式）还是原生方框 checkbox，round46 item6 已查清楚这处在 Artifact 权威设计源里本来就是原生 checkbox（不是漏改），这次是 Remy 明确要求"全站 checkbox 一律统一成开关"才纳入范围。全程只碰声明的三个文件（`page.tsx`/`lib/fx/fetch-rates.ts`/`fx-compare-card.tsx`），开工前 `claim.py list` 核对过没有跟当天并行跑的钱包深链/结算页改版任务撞车。
