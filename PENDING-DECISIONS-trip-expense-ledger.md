@@ -1,6 +1,6 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
-## 【2026-09-25，第六十六轮，根治汇率比价卡"零交互也 PUT fx_compare_preference"（round64/65 遗留），claim id=2026-09-25_003154_9119dcee，commit `8a7bd2a`，Version ID `73092143-3582-4afd-a581-3e8890fcc309`】
+## 【2026-09-25，第六十六轮，根治汇率比价卡"零交互也 PUT fx_compare_preference"（round64/65 遗留）+ 顺带修基准换算卡片网格排列不对称（Bug G），claim id=2026-09-25_003154_9119dcee（主任务）+ 2026-09-25_003315_ac3f9760（Bug G），commit `8a7bd2a`+`380695a`，Version ID `73092143-3582-4afd-a581-3e8890fcc309`（主任务）+ `1c5d56fd-a9a7-444a-83b2-bb97314d737c`（Bug G）】
 
 背景：跟第六十四/六十五轮（钱包深链冷启动+展开残留，commit `9fb5061`+`571d0ad`；钱包卡间距/收据按钮瘦身/渠道组收起，commit `dcdf9bc`+`3156c82`）同一批交付的收尾，复用同一个 worktree（`trip-expense-ledger-worktrees/wallet-deeplink-and-form-reset`，分支 `fix/wallet-deeplink-and-form-reset`）。round64/65 都发现"汇率比价卡只要打开行程主页就会 PUT 一次 `fx-compare-preference`，零交互"，两轮各自只是猜测根因（round64 猜"新卡默认勾选"、round65 猜"`setTimeout(0)` 防抖没生效"），都没有坐实，这轮要求先用证据确认根因再动手。
 
@@ -75,7 +75,32 @@ t=77.8  save-effect fired  preferenceLoadedRef=true！←就是这次触发的 P
 
 本地：`npm run lint`（0 警告 0 错误）、`npx tsc --noEmit`（0 错误）、`npm test`（183/183）。`git fetch` 确认无新并行提交后 `safe_commit.py` 提交（commit `8a7bd2a`）、`git push origin HEAD:main` fast-forward 成功、`./deploy.sh` 五关全过，Version ID `73092143-3582-4afd-a581-3e8890fcc309`，`/api/health` 回读 200。
 
-活动板 `2026-09-25_003154_9119dcee` 标 done。**没有处理**同一批登记的另一条 claim（`2026-09-25_003315_ac3f9760`，"汇率比价卡顶部基准换算网格 4 张时最后一张不对称占满整行"）——这轮任务书没有交代这条，如实留给下一轮，不是漏做。
+活动板 `2026-09-25_003154_9119dcee` 标 done。原本"没有处理"的另一条 claim（`2026-09-25_003315_ac3f9760`，基准换算网格排列不对称）同一批交付里接着修了，见下面第八节。
+
+### 八、Bug G：汇率比价卡顶部「基准换算小卡」网格排列不对称，claim id=2026-09-25_003315_ac3f9760，commit `380695a`，Version ID `1c5d56fd-a9a7-444a-83b2-bb97314d737c`
+
+`app/trips/[tripId]/fx-compare-card.tsx`。顶部那排"1 MYR = 8.164 ฿"基准换算小卡，原来的容器是 `flex flex-wrap gap-[6px]`，每张卡 `flex min-w-[90px] flex-1 ...`（`flex-1` 自动撑满剩余空间）。正常情况下 `QUICK_BASE_CARD_CURRENCIES` 固定 4 个候选（MYR/USD/HKD/CNY），只要行程的基准换算表（实时汇率或离线兜底表）能查到这 4 个币种对目标币种的汇率——实测确认这两份表都覆盖全部 8 个支持币种，几乎永远查得到——就永远会渲染出 4 张卡，手机窄屏一行放不下 4 张时第 4 张会换到第二行、被 `flex-1` 拉伸成占满整行，跟上面几张明显不对称，这正是 Remy 截图报的问题。
+
+**改法**：容器换成 CSS Grid（`quickBaseGridClassName`，拆到新文件 `lib/domain/quick-base-grid.ts` 方便单独写单测，不用挂组件渲染才能测）——同一个 grid 的列宽由"总列数"决定，不受某一行实际放了几张卡影响，天然不会出现"这一行只有一张就把它撑满"的问题。列数按实际会渲染出几张卡（不是候选池固定长度，`deriveMidRate` 理论上查不到数据时会被过滤掉，虽然实测这个分支几乎走不到）动态选：1 张/2 张/3 张各自几列一排，4 张手机 `grid-cols-2`（2×2）、桌面 `sm:grid-cols-4`（4 列一排），5 张以上用 `grid-cols-[repeat(auto-fill,minmax(90px,1fr))]`（`auto-fill` 不是 `auto-fit`——最后一行没坐满的空位留白，不会被已有卡片拉伸去补满）。卡片本身的圆角/字号/内容一个字没动，`min-w-[90px]` 和 `flex-1` 都从卡片自身的 className 里删掉了（改由 grid 列宽决定宽度）。
+
+**关于"2/3/5 种币种"测试场景，如实说明做不到什么**：任务书原本要求在测试行程里构造 2/3/4/5 种币种的情况各截一次图。查代码确认 `QUICK_BASE_CARD_CURRENCIES` 是硬编码的固定 4 项数组，跟"我持有"/"目标币种"下拉选什么组合、这趟行程 `enabledCurrencies` 配置了几种币种完全无关（这是第三十七轮就故意做的解耦，见文件里的注释"这排卡片是补两张基准卡的快速参考展示，不该跟着下拉选项数量一起涨到 8 张"）；`deriveMidRate` 又几乎总能查到数据（离线兜底表和实时汇率表都覆盖 8 个支持币种）。也就是说**正常使用这个功能，实际能出现的卡片数量几乎永远是 4，2/3/5 张在当前真实产品里构造不出来**，除非直接改代码把 `QUICK_BASE_CARD_CURRENCIES` 这个常量本身改长/改短——那已经不是"切换测试行程选项"能做到的事，也超出这次"只改排列方式"的范围。针对这个诚实的差距，补了两层自动化测试来覆盖任务书想验证的东西：
+1. `lib/domain/quick-base-grid.test.ts`——6 条纯函数测试，直接传 0/1/2/3/4/5/6 这些数字进 `quickBaseGridClassName`，断言对应返回的 grid class（4 张必须是 `grid-cols-2 ... sm:grid-cols-4` 且不含 `flex-1`；5/6 张必须是 `auto-fill` 不是 `auto-fit`）——这条测试就是覆盖了任务书想看到的"2/3/4/5 张分别排成什么样"这几个数字本身的网格规则，只是没有对应到真实能构造出来的产品数据场景。
+2. `app/trips/[tripId]/fx-compare-card.test.tsx` 新增 1 条组件级测试，真的渲染组件、断言"4 张卡"这个唯一真实能出现的场景下容器 class 是 `grid-cols` 系列不是 `flex-wrap`/`flex-1`。**Mutation 验证**：把容器临时改回 `flex-wrap` + 每张卡 `flex-1`，这条新测试如期失败（`expected 'flex flex-wrap gap-[6px]' to contain 'grid-cols-2'`），改回来后全绿——证明测试真的在守这条规则。
+
+**生产真机验收（两段，一段独立 ui-auditor + 一段 PM 本人补测）**：
+
+1. 独立 `ui-auditor` 用专属测试账号/测试行程（`https://trip-expense-ledger.remybali.workers.dev/id/W4GBt5wr8Jyyoae9EEDKlJvVDQ2-xMBsDRBmtU46Yv8`，行程「UI走查测试行程-勿删」`trip_id=960bf738-22af-406b-bacf-74192817e918`，本位币 MYR，启用币种 MYR/USD/HKD/CNY，0 笔消费）走查：手机 390px 4 张卡 2 行 2 列、桌面 1280px 4 张卡一行排开，两个视口卡片宽度肉眼看都一致，没有复现旧的"最后一张单独占满整行"，console 0 报错。截图：`/Users/linotan/Desktop/Claude/.playwright-mcp/mobile_rate_card.png`/`desktop_rate_card.png`。
+2. ui-auditor 没有 Remy 真实身份链接，访问她的真实行程 URL 时被静默重定向回自己建的测试行程（cookie 认领机制正常工作，不是这次改动的问题），如实报告没测成这一步，由 PM 本人补测：仿照 round64/66 的做法，往 D1 `session` 表插一条临时会话（`id=b4225edb-229e-4d99-974e-e56cb9590112`，`user_agent='PM-VERIFY-round66-bugG-check'`，绑定 Remy 真实 owner participant `5a81e7ae-72d1-4d9d-9fbf-bee617458dea`，token 明文只留在本地一次性脚本变量里，没写进任何文件），用 Playwright 直接带 cookie 打开 `https://trip-expense-ledger.remybali.workers.dev/trips/f78a6b5e-8612-4097-8bfd-88a5db664045`，全程**零点击**（组件 `expanded` 状态默认就是 `true`，汇率比价卡本来就是展开状态，不用点任何东西就能看到基准换算卡片）。用 Playwright `boundingBox()` 精确量了每张卡的像素：手机 390px 下 4 张卡 2 行 2 列，每张 **159×50.25px**，位置 `(33,836.5)/(198,836.5)/(33,892.75)/(198,892.75)`，宽度完全一致；桌面 1280px 下 4 张卡一行排开，每张 **171×50.25px**，位置均匀分布，宽度完全一致。console 0 报错。截图：`/Users/linotan/Desktop/Claude/G-fx-base-grid-real-trip-mobile.png`/`G-fx-base-grid-real-trip-desktop.png`。
+
+**D1 核对（PM 补测这一步涉及真实行程，前后核对没有污染数据）**：验证前后 `expense`（11）/`wallet`（3）/`trip_payment_method_enabled`（3）三个数量跟 round66 记录的基线完全一致；`fx_compare_preference.updated_at` 仍是 `1790266709619`，跟 round66 验证完的值逐字节相同——零交互没有再次触发那个已经在这轮上半部分根治过的"零交互也 PUT"问题，两处修复（PUT 根治 + 网格排列）互不干扰。临时 `session` 用完立即 `DELETE`，`SELECT COUNT(*) WHERE user_agent='PM-VERIFY-round66-bugG-check'` 回读为 0。
+
+**测试数据清理**：ui-auditor 建的测试账号/测试行程（`trip_id=960bf738-22af-406b-bacf-74192817e918`，0 笔消费/0 张支付方式/0 个钱包，footprint 很小）由 PM 本人逐表精确 `DELETE`（`session`/`user_session`/`participant`/`trip`/`user`，payment_method/wallet/trip_payment_method_enabled/fx_compare_preference/invite 查证本来就是 0 条不用删），删完 `SELECT COUNT(*)` 五张表一次性核对全部归零。
+
+**ui-auditor 顺带指出的两处（不在这次改动范围内，没有现场改）**：①兑换金额输入框默认预填"1000"，没有千分位格式化，纯数字裸输入框；②「先去 支付方式设置 加几张卡/现金」这行提示文字在手机 390px 下换行断句位置比较随意。两条都很轻微，留作观察记录，不是这轮任务范围。
+
+本地：`npm run lint`（0 警告 0 错误）、`npx tsc --noEmit`（0 错误）、`npm test`（190/190，改动前 183，新增 7：`quick-base-grid.test.ts` 6 条 + 组件测试 1 条）。`git fetch` 确认无新并行提交后 `safe_commit.py` 提交（commit `380695a`）、`git push origin HEAD:main` fast-forward 成功、`./deploy.sh` 五关全过，Version ID `1c5d56fd-a9a7-444a-83b2-bb97314d737c`，`/api/health` 回读 200。
+
+活动板 `2026-09-25_003315_ac3f9760` 标 done。
 
 ## 【2026-09-25，第六十五轮，追加 UI 三处小修复：钱包卡说明文字空白/收据按钮瘦身/汇率比价渠道组默认收起+徽章归属，claim id=2026-09-24_235347_53dad9c3(C)+2026-09-24_235350_fe88a023(D)+2026-09-24_235353_7ec2b0e9(E)，Version ID `1c261b50-6e4f-4fc0-b021-3bb3f1312709`】
 
