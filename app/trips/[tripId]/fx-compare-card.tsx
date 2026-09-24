@@ -8,7 +8,7 @@ import { deriveMidRate } from '@/lib/fx/derive-mid-rate';
 import { resolveHoldCandidates, resolveTargetCandidates, resolveDefaultTarget } from '@/lib/fx/fx-compare-defaults';
 import { SelectDropdown, useDismissableOpen } from '@/components/select-dropdown';
 import { Switch } from '@/components/switch';
-import { findBestOfferIndex } from '@/lib/domain/fx-best-offer';
+import { findBestCardOfferGlobalIndex } from '@/lib/domain/fx-best-offer';
 
 /**
  * 汇率比价——2026-09-16 第十八轮，Remy 拍板"要根治"：把原本两张独立卡片
@@ -236,6 +236,16 @@ export function FxCompareCard({
   // 第二份 `mousedown`/`keydown` 监听器。
   const [channelOpen, setChannelOpen] = useState(false);
   const channelContainerRef = useDismissableOpen(channelOpen, () => setChannelOpen(false));
+
+  // fix(第六十五轮，Remy 明确要求)："渠道换汇"参考价这组默认收起，列表底部一行小字
+  // 链接点开才展开——纯前端展示态，刻意**不**接进 fx-compare-preference 那个 D1
+  // 存档（第五十七/五十八轮踩过的坑：把"这次交互随手点开了什么"也当成要长期记住
+  // 的偏好写回 D1，结果污染了真实数据）。这个 state 只决定"渠道换汇"那组卡片
+  // 要不要渲染，跟 `enabledCompareKeys`（真正决定"要不要参与比较/排序计算"的那组
+  // 勾选状态，一直都存 D1）完全是两件事——渠道 key 就算继续勾选在 `enabledCompareKeys`
+  // 里（存量真实用户数据可能还留着），这里也只是不渲染那个分组，不碰、不清空
+  // 那份已存的偏好。
+  const [channelGroupExpanded, setChannelGroupExpanded] = useState(false);
 
   const holdCandidates = resolveHoldCandidates(enabledCurrencies);
   // 默认"我持有"优先选这趟行程的本位币（这样默认就能同时看到渠道+我的卡两组数据，
@@ -531,18 +541,30 @@ export function FxCompareCard({
     .sort((a, b) => (b.effectiveRate ?? 0) - (a.effectiveRate ?? 0));
 
   // fix(2026-09-24 第五十八轮，Remy 报真 bug"同币种不该拿最划算徽章")：
-  // "✓最划算"必须是全局比较（哪一行数字最划算就该在哪一行显示），不能因为下面
-  // 改成分组渲染就变成"每组各自的最划算"——`firstEligibleIndex` 在拆分成两组
-  // 之前、按 `allRows` 这个全局排序算好，下面渲染时每一行各自记住自己在 `allRows`
-  // 里的原始位置（`globalIndex`），用这个位置去跟 `firstEligibleIndex` 比对，
-  // 不受分组视觉拆分影响。
-  const firstEligibleIndex = findBestOfferIndex(allRows);
+  // 每一行各自记住自己在 `allRows`（全局排序后）里的原始位置（`globalIndex`），
+  // 渲染时用这个位置去跟"该拿徽章的那一行"比对，不受分组视觉拆分影响。
+  // fix(第六十五轮，Remy 明确要求)："✓最划算"这次进一步收窄——只在「我的支付
+  // 方式」内部比，不跟「渠道换汇」参考价掺在一起比（渠道那组是固定点差表估算，
+  // 不是 Remy 手上真有的付款方式），改用 `findBestCardOfferGlobalIndex` 这个
+  // 专门收窄到 kind==='card' 子集里找的 chokepoint，不再是全局 `findBestOfferIndex`。
   const indexedRows = allRows.map((row, globalIndex) => ({ ...row, globalIndex }));
+  const firstEligibleIndex = findBestCardOfferGlobalIndex(indexedRows);
   // fix(2026-09-24 第五十八轮，Remy 报"渠道换汇/我的支付方式两组数字排在一起容易
   // 看串"）：从一个扁平列表改成两个视觉上明显分开的分组，各自一个小标题，顺序
   // 按 Remy 截图里出现的先后——渠道在前、我的支付方式在后。
   const channelGroupRows = indexedRows.filter((r) => r.kind === 'channel');
   const cardGroupRows = indexedRows.filter((r) => r.kind === 'card');
+  // fix(第六十五轮，Remy 明确要求)："渠道换汇"这组默认收起（`channelGroupExpanded`
+  // 初始 false），只有展开时才算进"可见分组"列表。`visibleGroups` 只用来决定要不要
+  // 渲染组标题——只剩一组可见时（最常见的默认态：只有"我的支付方式"）标题是多余的，
+  // 两组都可见（用户点开"看换汇渠道参考价"之后）才各自需要标题区分。
+  const groups: { key: string; title: string; rows: typeof indexedRows }[] = [
+    ...(channelGroupExpanded && channelGroupRows.length > 0
+      ? [{ key: 'channel', title: '渠道换汇', rows: channelGroupRows }]
+      : []),
+    ...(cardGroupRows.length > 0 ? [{ key: 'card', title: '我的支付方式', rows: cardGroupRows }] : []),
+  ];
+  const showGroupTitles = groups.length > 1;
 
   // fix(2026-09-23 第三十三轮，方案二)：改名自 toggleChannel，现在管两种 key
   // （channel:xxx / card:xxx），逻辑本身（勾选/取消勾选同一个 Set）没有变化。
@@ -797,43 +819,54 @@ export function FxCompareCard({
             // font-medium tracking-[0.08em] text-neutral-dk">` 规格，不新发明字号）。
             // 分组标题本身已经足够清楚"这行是渠道还是我的方式"，原来那个行内来源
             // 徽章判断为冗余，这次去掉，换取每行少一点视觉噪音（这是这次做的取舍，
-            // 不是必然正确答案）。任一组没有内容时只渲染有内容的那组，不渲染空标题。
+            // 不是必然正确答案）。
+            // fix(第六十五轮，Remy 明确要求"渠道换汇默认收起，列表底部一行小字链接
+            // 展开")：`groups` 已经在上面按 `channelGroupExpanded` 过滤好了——默认
+            // 只剩"我的支付方式"这一组，`showGroupTitles` 为 false（只有一组，标题
+            // 是多余的）；点开链接后 `groups` 变成渠道+卡片两组，`showGroupTitles`
+            // 变 true，两组各自要标题区分。展开/收起链接摆在整个列表最下面（渠道/
+            // 卡片两组下方，脚注说明文字上方）。
             <div className="flex flex-col gap-3">
-              {[
-                { title: '渠道换汇', rows: channelGroupRows },
-                { title: '我的支付方式', rows: cardGroupRows },
-              ].map(
-                (group) =>
-                  group.rows.length > 0 && (
-                    <div key={group.title} className="flex flex-col gap-[7px]">
-                      <h3 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">{group.title}</h3>
-                      <ul className="flex flex-col gap-[7px]">
-                        {group.rows.map((row) => (
-                          <li
-                            key={row.key}
-                            className="rounded-[14px] border border-sand bg-white px-[10px] py-[8px] text-[11px]"
-                          >
-                            <div className="flex items-center justify-between gap-[6px] font-semibold">
-                              <span>
-                                {row.label}
-                                {row.globalIndex === firstEligibleIndex && (
-                                  <span className="ml-1.5 inline-flex items-center rounded-full bg-ok px-[7px] py-[2px] align-middle text-[9px] font-bold text-white">
-                                    ✓最划算
-                                  </span>
-                                )}
+              {groups.map((group) => (
+                <div key={group.key} className="flex flex-col gap-[7px]">
+                  {showGroupTitles && (
+                    <h3 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">{group.title}</h3>
+                  )}
+                  <ul className="flex flex-col gap-[7px]">
+                    {group.rows.map((row) => (
+                      <li
+                        key={row.key}
+                        className="rounded-[14px] border border-sand bg-white px-[10px] py-[8px] text-[11px]"
+                      >
+                        <div className="flex items-center justify-between gap-[6px] font-semibold">
+                          <span>
+                            {row.label}
+                            {row.globalIndex === firstEligibleIndex && (
+                              <span className="ml-1.5 inline-flex items-center rounded-full bg-ok px-[7px] py-[2px] align-middle text-[9px] font-bold text-white">
+                                ✓最划算
                               </span>
-                              <span className="font-serif tabular-nums">
-                                {row.amountInTarget !== null
-                                  ? `${FX_SYMBOLS[effectiveTarget] ?? ''}${row.amountInTarget.toFixed(2)}`
-                                  : '缺汇率'}
-                              </span>
-                            </div>
-                            <div className="mt-[3px] text-[9.5px] text-neutral-dk">{row.note}</div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ),
+                            )}
+                          </span>
+                          <span className="font-serif tabular-nums">
+                            {row.amountInTarget !== null
+                              ? `${FX_SYMBOLS[effectiveTarget] ?? ''}${row.amountInTarget.toFixed(2)}`
+                              : '缺汇率'}
+                          </span>
+                        </div>
+                        <div className="mt-[3px] text-[9.5px] text-neutral-dk">{row.note}</div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+              {channelGroupRows.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setChannelGroupExpanded((v) => !v)}
+                  className="self-start text-[9.5px] text-neutral-dk underline underline-offset-2"
+                >
+                  {channelGroupExpanded ? '收起换汇渠道参考价 ▲' : '看换汇渠道参考价 ▾'}
+                </button>
               )}
             </div>
           )}

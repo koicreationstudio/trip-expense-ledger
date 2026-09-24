@@ -30,3 +30,25 @@ export interface BestOfferCandidate {
 export function findBestOfferIndex<T extends BestOfferCandidate>(rows: T[]): number {
   return rows.findIndex((r) => !r.unavailable && r.requiresConversion);
 }
+
+/**
+ * fx-compare-card.tsx 专用（第六十五轮，Remy 明确要求）：「✓最划算」徽章只在
+ * 「我的支付方式」（kind==='card'）内部比较，不跟「渠道换汇」（kind==='channel'）
+ * 参考价掺在一起比——渠道那组数字是固定点差表估算的参考值，不是 Remy 手上真有的
+ * 付款方式，拿渠道去跟她真实的卡比"划算"没有意义。
+ *
+ * 传入完整的、已经按 effectiveRate 全局排好序、带 `globalIndex` 的混合行列表
+ * （channel+card），这里先按 `kind` 过滤出卡片子集，在这个子集里复用
+ * `findBestOfferIndex` 同一套资格判断（跳过 unavailable/同币种不需要换汇的行），
+ * 再把子集内的下标换算回原始的 `globalIndex`（不是子集自己的下标）返回，调用方
+ * 直接 `row.globalIndex === 返回值` 判断要不要显示徽章——channel 行的 globalIndex
+ * 永远不可能等于一个来自 card 子集的值，天然不会命中。一张卡都没有资格（包括
+ * 完全没有卡）时返回 -1，跟 `findBestOfferIndex` 的"找不到"语义一致。
+ */
+export function findBestCardOfferGlobalIndex<
+  T extends BestOfferCandidate & { kind: 'channel' | 'card'; globalIndex: number },
+>(rows: T[]): number {
+  const cardRows = rows.filter((r) => r.kind === 'card');
+  const posWithinCards = findBestOfferIndex(cardRows);
+  return posWithinCards >= 0 ? cardRows[posWithinCards]!.globalIndex : -1;
+}

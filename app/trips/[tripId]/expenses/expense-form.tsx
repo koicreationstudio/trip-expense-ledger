@@ -518,15 +518,29 @@ export function ExpenseForm({
           原生 <input type=file> 在不同浏览器/系统上长得完全不一样（灰色系统按钮+"未选择任何
           文件"这类英文/系统语言文案），是全站唯一没被自定义样式覆盖的表单控件。改成常见的
           "隐藏原生 input + label 当触发按钮"包装：input 本身还在（accept/onChange 逻辑完全
-          没动，屏幕阅读器/键盘操作走的还是原生 input，只是视觉上用 sr-only 隐藏），套一个
-          `.btn-secondary` 样式的 label 当"选择文件"按钮（跟这个表单其它次要按钮同一套规格，
-          不是新发明一套），旁边用现有 `.field-label` 同档文字显示已选文件名/未选状态。 */}
+          没动，屏幕阅读器/键盘操作走的还是原生 input，只是视觉上用 sr-only 隐藏）。
+          fix(第六十五轮，Remy 真实反馈"这颗按钮太粗太胖，再细一些")：原本直接套全站共用
+          `.btn-secondary`（`min-h-[32px]` + `rounded-full` 大圆角胶囊 + `text-[11px]
+          font-medium`）——`.btn-secondary` 是 10 个文件共用的 chokepoint class（移除/比价/
+          平均分摊这类真正的操作按钮都在用），量出来实际高度是 32px（不是原描述估的
+          44px，那是隔着截图目测），"看起来胖"的根因不是真的高，是满圆角胶囊形状+
+          11px 加粗字号，跟旁边 10.5px 常规字重的"未选择文件"文字反差太大。改成这里
+          专属的紧凑样式（不改全局 `.btn-secondary`，不影响其它 9 处调用点）：
+          圆角从 `rounded-full`(9999px) 收到 `rounded-lg`(8px)，字号从 11px/font-medium
+          收到 10.5px/font-normal（跟旁边"未选择文件"文字完全同档），描边颜色不变但视觉上
+          随方角变细。**触控高度 `min-h-[32px]` 刻意没有再往下降**——这已经是这个 app
+          "次级操作"类按钮（`.tap-link`/`.btn-secondary`）用了很多轮、写进 globals.css
+          注释的既定地板值，砍到 32px 以下会破坏跟全站其它次级按钮的触控一致性，也可能
+          点不中，两害相权，选择用形状/字重而不是高度来做"细"这件事。 */}
       <div className="flex flex-col gap-[4px]">
         <label className="field-label" htmlFor="receipt">
           收据（可选{isEdit && initialExpense.hasReceipt ? '，已有收据，上传新文件会替换' : ''}）
         </label>
         <div className="flex items-center gap-2">
-          <label htmlFor="receipt" className="btn-secondary cursor-pointer">
+          <label
+            htmlFor="receipt"
+            className="inline-flex min-h-[32px] shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-lg border border-sand bg-white px-[8px] text-[10.5px] font-normal text-ink transition-colors hover:bg-slate-50"
+          >
             📎 选择文件
           </label>
           <span className="min-w-0 flex-1 truncate text-[10.5px] text-muted">

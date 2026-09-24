@@ -469,6 +469,14 @@ export function WalletGrid({
         <p className={`text-[9px] ${isDark ? 'text-hero-label' : 'text-muted'}`}>
           建钱包时如果直接绑了支付方式，绑定前的同支付方式+同币种历史消费会一次性补进余额；之后新记的消费持续自动扣。
           {' '}
+          {/* fix(第六十五轮，Remy 真实反馈"说明文字跟下面按钮之间空白过大")：这个 Link
+              之前用全局 `.tap-link`（`inline-flex min-h-[32px]`）——跟上面第 224-236 行
+              那处"已有支付方式"快捷 chip 完全同一个 bug class：塞进 9px 小字号段落的
+              inline 链接，`min-h-[32px]` 会把它所在那一行的行框强行撑到 32px，视觉上
+              像是文字下面多出一大块空白，跟这个卡片其它 8px 间距（section 的
+              `gap-[8px]`，实测这段本身没问题）不协调。改成跟那处一样的处理：去掉
+              `tap-link`，纯下划线文字跟随段落自然行高，不强制触控热区——这是段落里的
+              行内说明链接，不是独立按钮，不需要 32px 触控热区。 */}
           {/* fix(2026-09-24 第三十九轮，第四版，真正抓到根因——前三版全部猜错方向)：
               用 Playwright 在生产环境实机插桩（给 `Element.prototype.scrollIntoView`
               打点记录每次调用时的 `getBoundingClientRect` + 调用前后 `scrollY`），逐毫秒
@@ -493,7 +501,11 @@ export function WalletGrid({
               目标元素占用一次浏览器的"要不要滚"判定，干脆继续关掉，交给下面那个已经证明
               有效的自定义 `useEffect` 全权处理），并去掉已经证明没用的 `#set-balance`
               hash（滚动这次改成完全不依赖浏览器的原生 hash 定位）。 */}
-          <Link href={`/trips/${tripId}/payment-methods?openBalance=1`} scroll={false} className="tap-link">
+          <Link
+            href={`/trips/${tripId}/payment-methods?openBalance=1`}
+            scroll={false}
+            className="underline underline-offset-2"
+          >
             去&ldquo;支付方式&rdquo;手动设置余额 →
           </Link>
         </p>
