@@ -39,7 +39,12 @@ export function SetPinForm({ hasPinSet: initialHasPinSet }: { hasPinSet: boolean
       setHasPinSet(true);
       setPin('');
       setConfirmPin('');
+      // fix(2026-09-24 第五十八轮，Remy 截图反馈)：成功提示原本一直挂在按钮上方不消失，
+      // 位置孤立看不出跟"刚才点了那下"有关系。这轮改成跟 AccountIdentityLink 的
+      // copied 状态同款——挪到按钮正下方 + 2 秒后自动消失，让它看起来是"这次点击
+      // 的短暂反馈"而不是长期挂着的静态文字。
       setSuccess(hasPinSet ? '已更新' : '已设置');
+      setTimeout(() => setSuccess(null), 2000);
     } finally {
       setSaving(false);
     }
@@ -56,6 +61,7 @@ export function SetPinForm({ hasPinSet: initialHasPinSet }: { hasPinSet: boolean
     }
     setHasPinSet(false);
     setSuccess('已清除');
+    setTimeout(() => setSuccess(null), 2000);
   }
 
   return (
@@ -81,6 +87,10 @@ export function SetPinForm({ hasPinSet: initialHasPinSet }: { hasPinSet: boolean
             setError(null);
           }}
         />
+        {/* fix(2026-09-24 第五十八轮)：只加引导文案，不改 MIN_PIN_LENGTH=4 这个最短长度
+            限制——4 位数字全库比对只有 1 万种组合，改最短长度会影响已经设过 4 位 PIN
+            的人，是否要强制升级是产品决策不是这轮范围，留给 Remy 定。 */}
+        <p className="text-[10px] text-muted">建议设 6 位以上数字，或者用一串好记的短密码，比 4 位数字更安全。</p>
         <label htmlFor="set-pin-confirm-input" className="field-label">
           再输一次确认
         </label>
@@ -98,10 +108,21 @@ export function SetPinForm({ hasPinSet: initialHasPinSet }: { hasPinSet: boolean
         />
       </div>
       {error && <p className="text-[10px] text-coral">{error}</p>}
-      {success && <p className="text-[10px] text-muted">{success}</p>}
-      <button type="button" onClick={handleSave} disabled={saving || !pin} className="btn-secondary">
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={saving || !pin}
+        className="btn-secondary disabled:cursor-not-allowed"
+      >
         {saving ? '保存中…' : hasPinSet ? '更新密码/PIN' : '设置密码/PIN'}
       </button>
+      {/* fix(2026-09-24 第五十八轮)：跟按钮直接挂钩的短暂反馈，2 秒后自动消失（见
+          handleSave/handleClear 里的 setTimeout），不再是长期挂着的静态文字。 */}
+      {success && (
+        <p className="text-[10px] font-medium text-ok" role="status">
+          ✓ {success}
+        </p>
+      )}
       {hasPinSet && (
         <button type="button" onClick={() => setConfirmingClear(true)} className="self-start text-[10px] text-coral">
           清除已设置的密码/PIN

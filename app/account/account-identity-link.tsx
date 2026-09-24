@@ -11,6 +11,14 @@ export function AccountIdentityLink({ url }: { url: string }) {
   // 对称。
   const [copyFailed, setCopyFailed] = useState(false);
 
+  // fix(2026-09-24 第五十八轮，Remy 截图反馈)：完整身份链接原本直接摊开显示，
+  // 谁截个图都会把这条能免密登录她账号的链接带出去。这轮改成默认收起、点开
+  // 才展开——折叠态的"点开才展开"视觉规格照搬 invites-manager.tsx 里"直接添加
+  // 参与者"那个已经在用的 tap-link 文字链接模式（这个项目里唯一已有的同类
+  // 折叠交互先例，DESIGN-BRIEF.md 没单独定过这页的规格，不新造样式）。
+  // PIN 找回（SetPinForm）现在是本页主要找回方式，身份链接降级成备用说明。
+  const [expanded, setExpanded] = useState(false);
+
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(url);
@@ -20,6 +28,18 @@ export function AccountIdentityLink({ url }: { url: string }) {
     } catch {
       setCopyFailed(true);
     }
+  }
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="tap-link self-start text-left text-[10.5px] text-muted underline underline-offset-2"
+      >
+        备用：身份链接 ▸
+      </button>
+    );
   }
 
   return (
@@ -32,8 +52,16 @@ export function AccountIdentityLink({ url }: { url: string }) {
     // Artifact demo 里的 URL 是手动截断成"...”的假数据，不是"必须单行"的规格，
     // 这版保留换行显示（不做单行省略），只是把底色/文字色对齐 spec 的 neutral-lt/neutral-dk。
     <section className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => setExpanded(false)}
+        className="tap-link self-start text-left text-[10.5px] text-muted underline underline-offset-2"
+      >
+        备用：身份链接 ▾
+      </button>
       <p className="text-[10px] text-muted">
-        这条链接可以随时用来重新登录这个账号，没有邮箱密码。换设备、清了浏览器数据时，打开这条链接就能回来（下面还可以多设一个密码/PIN 当备用）。
+        没有邮箱密码，这条链接是找回账号的备用方式——上面已经设了密码/PIN 就优先用 PIN 找回（新建行程页面也有
+        “我设过密码/PIN，直接找回”的入口）。换设备、清了浏览器数据又没设 PIN 时，靠这条链接也能回来，注意别把它截图分享出去。
       </p>
       <code className="break-all rounded-xl bg-neutral-lt px-[9px] py-2 font-mono text-[9.5px] text-neutral-dk">
         {url}
