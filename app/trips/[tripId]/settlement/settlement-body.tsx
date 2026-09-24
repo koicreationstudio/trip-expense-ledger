@@ -117,7 +117,13 @@ export function SettlementBody({
     // reference/artifact-v10-source.html 第89行 `.frame{width:390px}`，不是这次
     // 新拍的数字，是设计稿本身的画布宽度）作为结算内容的上限，宽屏时收紧、手机视口
     // 因为可用宽度本来就小于 390px 所以这条上限不生效，两个视口都不用分开改。
-    <div className="mx-auto flex w-full max-w-[390px] flex-col gap-3.5">
+    // fix(2026-09-24，独立 ui-auditor 真机截图抓到的回归)：第一版这里用了 mx-auto
+    // 居中，桌面 1440px 视口下截图看，"结算"标题/顶部导航都是页面既有的贴左对齐
+    // 惯例（继承自 app/layout.tsx 的 736px 内容区，没有再居中过），只有这个净值卡
+    // 区块自己居中，导致卡片看起来凭空往右飘一截、跟上面的标题对不齐，右侧还多出
+    // 一大片空白，比"拉满"还别扭。去掉 mx-auto，贴左对齐，跟页面其它元素维持同一条
+    // 基准线，只收紧宽度不改变对齐方式。
+    <div className="flex w-full max-w-[390px] flex-col gap-3.5">
       {/* fix(2026-09-16 round14 地毯式核对)：Artifact 把这颗按钮放在两份清单最后面，
           当成"看完净值+转账清单再确认"的最后一步 CTA；这里之前放在最顶上，先于两份
           清单出现，进页面第一眼就看到一个"标记已结算"按钮，还没看数字就先看到确认
