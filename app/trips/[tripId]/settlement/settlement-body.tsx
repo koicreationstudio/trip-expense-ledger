@@ -3,6 +3,7 @@
 import { Fragment, useState } from 'react';
 import { formatMoney } from '@/lib/money';
 import { Avatar } from '@/components/avatar';
+import { Switch } from '@/components/switch';
 import { MarkSettledButton } from './mark-settled-button';
 
 export interface SettlementDetailEntryDto {
@@ -108,22 +109,21 @@ export function SettlementBody({
     // fix(2026-09-24，结算页结构性重做，逐字核对 reference/artifact-v10-source.html
     // 第846-891行"权威 Artifact 源"，不是凭截图猜结构)：Remy 拿生产截图跟设计稿逐屏
     // 肉眼比对（不是比 CSS 数值——round42 那次只核对了 CSS token 数值，查不出这类
-    // 结构问题，这是那次假阳性的根因），确认了两处结构性偏差 + 一处桌面宽屏观感问题：
-    // ①每人净值本该是各自独立的胶囊卡（Artifact 每人各自一个 <div class="list">），
-    // 这次之前误合并成一个共享大框，这次改回逐人独立卡片；②宽屏（≈768px 页面容器
-    // 打满，视觉上又空又散）需要收紧——这个项目全站唯一的容器宽度约定就是
-    // app/layout.tsx 的 `mx-auto max-w-3xl`（768px），但结算这种内容量很小的清单在
-    // 这个宽度下依然显得松散；改用 Artifact 权威源自己的画布宽度 390px（
-    // reference/artifact-v10-source.html 第89行 `.frame{width:390px}`，不是这次
-    // 新拍的数字，是设计稿本身的画布宽度）作为结算内容的上限，宽屏时收紧、手机视口
-    // 因为可用宽度本来就小于 390px 所以这条上限不生效，两个视口都不用分开改。
-    // fix(2026-09-24，独立 ui-auditor 真机截图抓到的回归)：第一版这里用了 mx-auto
-    // 居中，桌面 1440px 视口下截图看，"结算"标题/顶部导航都是页面既有的贴左对齐
-    // 惯例（继承自 app/layout.tsx 的 736px 内容区，没有再居中过），只有这个净值卡
-    // 区块自己居中，导致卡片看起来凭空往右飘一截、跟上面的标题对不齐，右侧还多出
-    // 一大片空白，比"拉满"还别扭。去掉 mx-auto，贴左对齐，跟页面其它元素维持同一条
-    // 基准线，只收紧宽度不改变对齐方式。
-    <div className="flex w-full max-w-[390px] flex-col gap-3.5">
+    // 结构问题，这是那次假阳性的根因），确认了一处结构性偏差：每人净值本该是各自
+    // 独立的胶囊卡（Artifact 每人各自一个 <div class="list">），之前误合并成一个
+    // 共享大框，这次改回逐人独立卡片。
+    // fix(2026-09-24 第五十轮，Remy 追加更精确的反馈，推翻本节上一版的宽度判断)：
+    // 上一版这里自己另定了 max-w-[390px]（取自 Artifact 设计稿画布尺寸），理由是
+    // "结算内容量小，768px 下显得松散"。Remy 之后明确说宽度要跟这个 app 其它页面
+    // （行程主页 page.tsx 的 <main>、支付方式页 payment-methods-manager.tsx 的根
+    // 容器）用同一个容器宽度约定，去代码里找现成的 max-width 复用，不要另定一个数。
+    // 查过这两处页面的根节点，两边都没有再叠加任何 max-w class，宽度完全交给
+    // app/layout.tsx 唯一的 `mx-auto max-w-3xl`（768px）容器决定——所以这里去掉
+    // 自定义的 390px 上限，不再额外收窄，让净值/转账区的左边缘和宽度真的跟"结算"
+    // 标题、顶部 tab、以及行程主页/支付方式页对齐在同一条基准线上。"768px 下内容
+    // 量小、金额被推得靠右显得松散"这个观感判断本身可能还是真的，但这不是这次自己
+    // 该再拍一次板的地方——如实报给 PM，由她转达 Remy 定，不在这里静默覆盖。
+    <div className="flex w-full flex-col gap-3.5">
       {/* fix(2026-09-16 round14 地毯式核对)：Artifact 把这颗按钮放在两份清单最后面，
           当成"看完净值+转账清单再确认"的最后一步 CTA；这里之前放在最顶上，先于两份
           清单出现，进页面第一眼就看到一个"标记已结算"按钮，还没看数字就先看到确认
@@ -264,17 +264,28 @@ export function SettlementBody({
                     </span>
                     {/* fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 每一行
                         checkbox 旁边都有个可见的"已收款"文字标签（`<span class="hint">已收款</span>`），
-                        之前只写了 aria-label，屏幕上看不到任何文字说明这个勾选框是干嘛的。 */}
-                    <label className={`ml-auto flex items-center gap-[5px] ${canToggle ? 'cursor-pointer' : ''}`}>
-                      <input
-                        type="checkbox"
+                        之前只写了 aria-label，屏幕上看不到任何文字说明这个勾选框是干嘛的。
+                        fix(2026-09-24 第五十轮)：原生方框 checkbox 换成全站统一的深色开关
+                        `components/switch.tsx`（round39 从 expense-form.tsx 抽出来的共用组件，
+                        payment-methods-manager.tsx"本行程启用的支付方式"那批也是调用同一个
+                        组件），不新写样式。DOM 结构照抄那边的写法——Switch 和 <label htmlFor>
+                        同级摆放，不是 label 包 input，保证行为/可访问性一致。勾选逻辑
+                        （toggleConfirm/canToggle/pendingKey）完全没动，只换视觉。 */}
+                    <span className="ml-auto flex items-center gap-[5px]">
+                      <Switch
+                        id={`settle-confirm-${key}`}
                         checked={isConfirmed}
                         disabled={!canToggle || pendingKey === key}
                         onChange={() => toggleConfirm(t)}
-                        aria-label={`${t.fromName} 转给 ${t.toName} 已收款`}
+                        ariaLabel={`${t.fromName} 转给 ${t.toName} 已收款`}
                       />
-                      <span className="text-[9.5px] text-muted">已收款</span>
-                    </label>
+                      <label
+                        htmlFor={`settle-confirm-${key}`}
+                        className={`text-[9.5px] text-muted ${canToggle ? 'cursor-pointer' : ''}`}
+                      >
+                        已收款
+                      </label>
+                    </span>
                     <span className="font-serif text-[9.5px] tabular-nums">
                       {formatMoney(t.amountBaseCurrency, baseCurrency)}
                     </span>
