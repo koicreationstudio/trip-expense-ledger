@@ -98,6 +98,23 @@ export const fxRecommendationSchema = z.object({
   forceRefresh: z.boolean().optional(),
 });
 
+// fix(2026-09-24，Remy 明确要求)：汇率比价卡片"我持有/目标币种/自选比较项/
+// 兑换金额"这组选项按用户×行程存 D1（见 fx-compare-preference 路由）。币种
+// 是否真的在候选池里、自选比较项的 key 对不对得上当前渠道/卡片，这层只做
+// 格式校验，业务层面"存的值是不是还有效"由路由再校验一层 + 前端优雅降级
+// （值失效不阻塞渲染，见 fx-compare-card.tsx）。
+export const fxComparePreferenceSchema = z.object({
+  holdCurrency: currencyCode,
+  targetCurrency: currencyCode,
+  // channel:<key> / card:<paymentMethodId> 统一命名空间，跟 fx-compare-card.tsx
+  // 的 enabledCompareKeys 这个 Set 的元素形状一致。
+  enabledCompareKeys: z.array(z.string().trim().min(1).max(120)).max(100),
+  // "元"（跟页面 amountYuan 输入框同单位），不是分——转换只发生在这个 API
+  // 内部，跟 fx-recommendation 那边"提交给 API 前才转最小货币单位"的既有
+  // 约定一致。
+  amountYuan: z.number().finite().nonnegative().max(1_000_000_000),
+});
+
 const email = z
   .string()
   .trim()

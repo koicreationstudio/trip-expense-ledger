@@ -489,6 +489,48 @@ export const exchangeRateCache = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// fx_compare_preference：汇率比价卡片（fx-compare-card.tsx）"我持有/目标币种/
+// 自选比较项/兑换金额"这组选项，之前只活在组件的纯 useState 里，刷新页面就丢——
+// 2026-09-24 Remy 明确要求"按账号×行程记住，换设备也要能恢复"，本地存储只能做
+// 即时响应的乐观更新，真相源必须落 D1 才能手机电脑同步。owner 归属沿用
+// payment_method 同一套双轨模式（见 payment-method-scope.ts 顶部注释）：有账号
+// 挂 user_id，没账号的访客退回 participant_id，只在这趟行程内有效——这张表存的
+// 就是"这个人在这趟行程下"的偏好，天然带 trip_id，不需要跨行程共用。
+// ---------------------------------------------------------------------------
+export const fxComparePreferences = sqliteTable(
+  'fx_compare_preference',
+  {
+    id: id(),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    participantId: text('participant_id').references(() => participants.id, { onDelete: 'cascade' }),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    holdCurrency: text('hold_currency').notNull(),
+    targetCurrency: text('target_currency').notNull(),
+    // channel:<key> / card:<paymentMethodId> 统一命名空间，跟 fx-compare-card.tsx
+    // 里 `enabledCompareKeys` 这个 Set 的元素形状完全一致，JSON 字符串数组存储。
+    // 值失效（渠道下架/卡被删）时前端渲染本来就会自然过滤掉，不需要这张表自己
+    // 做级联清理。
+    enabledCompareKeys: text('enabled_compare_keys', { mode: 'json' }).notNull().$type<string[]>(),
+    amountCents: integer('amount_cents').notNull(), // 最小货币单位，holdCurrency 下的金额
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch('subsec') * 1000)`),
+  },
+  (table) => ({
+    // 两个 unique index 分别只约束各自那一栏非空的行——SQLite 里 NULL 在 unique
+    // index 里互相不算重复，所以"有账号"和"访客"两条轨道不会互相打架，跟
+    // payment_method 那边默契一致，不需要额外的 partial index 语法。
+    userTripIdx: uniqueIndex('fx_compare_preference_user_trip_idx').on(table.userId, table.tripId),
+    participantTripIdx: uniqueIndex('fx_compare_preference_participant_trip_idx').on(
+      table.participantId,
+      table.tripId
+    ),
+  })
+);
+
+// ---------------------------------------------------------------------------
 // relations：只用来支持 db.query.*.findFirst({ with: {...} }) 这类关联查询的
 // 便利写法，不改变上面任何一张表的实际列/约束。
 // ---------------------------------------------------------------------------

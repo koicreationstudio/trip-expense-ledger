@@ -4,6 +4,9 @@ import { getDb } from '@/lib/db/client';
 import { participants, paymentMethods, trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadEnabledPaymentMethodIds, paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
+// fix(2026-09-24，Remy 真实反馈的真 bug，见 payment-method-label.ts 顶部注释)：
+// "现金"HKD/USD 同名支付方式在这个下拉里也分不清，不只是汇率比价卡片那一处。
+import { disambiguatePaymentMethodLabels } from '@/lib/domain/payment-method-label';
 import { ExpenseForm } from '../expense-form';
 
 export default async function NewExpensePage({ params }: { params: { tripId: string } }) {
@@ -29,6 +32,7 @@ export default async function NewExpensePage({ params }: { params: { tripId: str
   // 「本行程启用的支付方式」区块。
   const enabledIds = await loadEnabledPaymentMethodIds(db, params.tripId, identity);
   const enabledPaymentMethods = myPaymentMethods.filter((m) => enabledIds.has(m.id));
+  const displayLabels = disambiguatePaymentMethodLabels(enabledPaymentMethods);
 
   return (
     // fix(2026-09-16 第十七轮)：标题字号跟 gap 同一批漂移，理由跟 invites/page.tsx 那条一样。
@@ -41,7 +45,7 @@ export default async function NewExpensePage({ params }: { params: { tripId: str
         baseCurrency={trip.baseCurrency}
         myParticipantId={identity.participantId}
         participants={tripParticipants.map((p) => ({ id: p.id, displayName: p.displayName }))}
-        paymentMethods={enabledPaymentMethods.map((m) => ({ id: m.id, label: m.label }))}
+        paymentMethods={enabledPaymentMethods.map((m) => ({ id: m.id, label: displayLabels.get(m.id) ?? m.label }))}
       />
     </main>
   );

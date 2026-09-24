@@ -9,6 +9,11 @@
 export interface FxPaymentMethodInput {
   id: string;
   label: string;
+  // fix(2026-09-24，Remy 真实反馈的真 bug)：卡片渲染那边（fx-compare-card.tsx）
+  // 一直没有区分"现金支付"跟"刷卡支付"，硬编码文案统一写死"刷卡支付"——连
+  // 现金也被这么标。这里把 kind 原样带进结果，UI 层自己决定文案，不在这个纯
+  // 领域函数里判断怎么显示（这个函数不管展示，只管算钱）。
+  kind: 'card' | 'cash';
   settlementCurrency: string;
   fxMarkupPercent: number;
   foreignTxnFeePercent: number;
@@ -22,6 +27,7 @@ export type FxRateLookup = (from: string, to: string) => number | null;
 export interface FxRecommendationResult {
   paymentMethodId: string;
   label: string;
+  kind: 'card' | 'cash';
   /** compareCurrency 下的等值成本（最小货币单位），unavailable 时为 null */
   costInCompareCurrency: number | null;
   effectiveRate: number | null;
@@ -52,6 +58,7 @@ export function recommendPaymentMethods(params: {
         return {
           paymentMethodId: method.id,
           label: method.label,
+          kind: method.kind,
           costInCompareCurrency: null,
           effectiveRate: null,
           requiresConversion,
@@ -74,6 +81,7 @@ export function recommendPaymentMethods(params: {
         return {
           paymentMethodId: method.id,
           label: method.label,
+          kind: method.kind,
           costInCompareCurrency: null,
           effectiveRate,
           requiresConversion,
@@ -86,6 +94,7 @@ export function recommendPaymentMethods(params: {
     return {
       paymentMethodId: method.id,
       label: method.label,
+      kind: method.kind,
       costInCompareCurrency: Math.round(costInCompareCurrency),
       effectiveRate,
       requiresConversion,
