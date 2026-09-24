@@ -1,5 +1,91 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-24，第五十七轮，汇率比价卡片：选项按账号×行程存 D1 记忆化 + 3 个真实 bug（同名现金分不清/现金显示"刷卡支付"/换汇结果三者一样），claim id=2026-09-24_164334_4529a1b7，新 session 从这里读起】
+
+背景：Remy 贴了汇率比价卡片截图（行程主页，标题"我持有 HKD / 目标币种 / 自选比较项 / 刷新"，兑换金额 1000 HKD，下面支付宝/现金/Wise/HSBC 比价列表）报了 4 件事——①这组选项刷新页面就丢，要按账号×行程存起来，换设备也要能恢复 ②"现金"出现两行分不清 HKD 还是 USD ③现金也显示"刷卡支付" ④支付宝、现金 HKD、现金 USD 三者算出来的数字完全一样，怀疑换汇计算没按各自结算币种分别算。lifeos-pm 派工时明确要求跟同一天并行跑的"冷启动/快速导航 session 不稳定"排查（round56、claim id=2026-09-24_154224_abc42bfc）不要撞车，文件清单没有交集，改动前也核对过 `claim.py list`，确认干净。
+
+用独立 git worktree（`trip-expense-ledger-worktrees/fx-compare-memo`，真实 `npm install`，不是软链接，按 favicon 那轮的教训）隔离开发。
+
+### 一、选项按账号×行程存 D1（真正的问题定位过程见下，不是照抄任务描述）
+
+先查了项目里有没有现成的"用户偏好"表——`grep preference/UserPreference` 零命中，确认没有，参照 `payment_method` 的双轨归属模式（有账号挂 `user_id`，访客退回 `participant_id`，见 `lib/domain/payment-method-scope.ts`）新建 `fx_compare_preference` 表：
+
+```
+id / user_id(可空) / participant_id(可空) / trip_id / hold_currency / target_currency /
+enabled_compare_keys(JSON数组) / amount_cents / updated_at
+```
+
+两个 unique index 分别约束 `(user_id, trip_id)` 和 `(participant_id, trip_id)`——SQLite 里 NULL 在 unique index 互相不算重复，有账号和访客两条轨道不会打架，不需要额外的 partial index 语法。
+
+- migration：`lib/db/migrations/0011_tearful_captain_cross.sql`（`npm run db:generate` 生成，不是手写 SQL），走 `scripts/migrate-remote.sh` 安全脚本上生产（裸 `wrangler d1 migrations` 已被 deny 锁死，没有想办法绕过），✅ 应用成功。
+- API：新增 `app/api/trips/[tripId]/fx-compare-preference/route.ts`（GET/PUT，`withSession`+`assertSameTrip` 权限模型，跟 `fx-recommendation` 路由同一套），PUT 前服务端再校验一遍持有/目标币种确实在候选池里（`HOLD_CURRENCY_CANDIDATES`/`resolveTargetCandidates`），不合法直接 400 不落库；upsert 用 `onConflictDoUpdate`，target 根据 `identity.userId` 有没有值动态选 `[userId,tripId]` 还是 `[participantId,tripId]`。
+- 前端（`fx-compare-card.tsx`）：挂载时 GET 一次存档（跟"展开/收起"无关，收起状态卡片标题也要显示正确的目标币种），存的值失效（候选池变了/币种不在里面）优雅降级成当前默认值，不阻塞渲染不报错；持有币/目标币/自选比较项/金额任一变化 debounce 600ms 后 PUT 一次；用 `preferenceLoadedRef` + `setTimeout(0)` 避免"加载存档触发的 setState"又立刻反手保存一次同样的值（省一次多余的网络往返，不是必须但没坏处）。
+- **本地 storage 的定位**：这次没有加 localStorage 兜底当"真相源"——只做了服务端 GET/PUT，CLAUDE.md 允许 localStorage 做"即时响应的乐观更新"，但这次组件切换选项时本来就是同步 setState 立刻反映在 UI 上，不需要额外一层本地缓存来提升响应速度，所以没加，避免"两个真相源可能不同步"这类新坑。
+- **已知的设计取舍，没有隐瞒**：`enabledCompareKeys` 存档里只记录"当时启用的 key"，不记录"这张卡我曾经见过但主动关掉"这份历史。如果 Remy 之前手动取消勾选过某张具体支付方示的卡（不是固定的 5 个渠道，是"我的支付方式"里那几张真实卡），刷新/换设备恢复后，这张卡有极小概率被"新卡默认勾选"这条既有规则重新勾上（因为系统区分不了"这张卡是全新出现的"还是"这张卡我以前关过但存档没提到它"）。固定的 5 个渠道 + 兑换金额 + 持有/目标币种这三样 100% 精确记住，不受这条限制。这是有意的简化，不是漏做——如果 Remy 想要更精确，需要额外存一份"曾经决定过的卡 id 全集"，这次没做，留着问她要不要加。
+
+### 二、三个真实 bug
+
+**1. "现金"HKD/USD 同名分不清——真 bug，已修，chokepoint 一次性覆盖两处 UI**
+
+D1 查证 Remy 真实账号（`a54c9824-c44d-45f7-94b9-5bf3f8fcacc8`）名下确实有两个 `label='现金'` 的支付方式，`id=a31f5c30...` 结算 HKD、`id=ef1158c4...` 结算 USD。全项目查了所有渲染"一组支付方式列表"的地方（`grep from(paymentMethods)`，6 处：`app/api/payment-methods/route.ts`、`fx-recommendation/route.ts`、`app/api/trips/[tripId]/payment-methods/route.ts`、`trips/[tripId]/page.tsx`、`expenses/new/page.tsx`、`expenses/[expenseId]/edit/page.tsx`），逐个核实：
+- `payment-methods-manager.tsx`（支付方式设置页本身）已经自带 `{label}（{kind}·{settlementCurrency}）` 格式，不存在这个歧义，不需要改（也没碰这个文件，本来就跟这轮"读支付方式数据"的约定一致）。
+- `trips/[tripId]/page.tsx` 这轮明确不碰（另一条并行任务在用）。
+- 真正需要修的两处：①`fx-recommendation` 路由（`fx-compare-card.tsx` 的比价列表就吃这个接口）②`expenses/new`、`expenses/[expenseId]/edit` 两个 page.tsx（"记一笔消费"表单的支付方式下拉，直接查库拼 label，没走 fx-recommendation）。
+
+新建 chokepoint `lib/domain/payment-method-label.ts` 的 `disambiguatePaymentMethodLabels()`——给一组 `{id,label,settlementCurrency}`，只有"这一组里 label 确实重复"的才追加 `（币种）` 后缀，label 本来就唯一的（"Wise"/"HSBC 大马 Visa Signature"）保持原样不加噪音。在上面两处调用点统一接入（不是各写各的判断）。5 条单测 + mutation 验证过非空壳（临时改成"永远不消歧义"，2 个测试如期失败）。
+
+生产实测（curl，见下"验证方式"）：`fx-recommendation` 接口现在吐出 `"现金（HKD）"`/`"现金（USD）"`，不再是两行一样的"现金"。
+
+**2. 现金显示"刷卡支付"——真 bug，已修**
+
+`FxRecommendationResult` 新增 `kind: 'card'|'cash'` 字段，从 `payment_method.kind` 原样透传（纯领域函数 `recommendPaymentMethods` 不判断怎么展示，只把数据带出去，UI 层自己决定文案）。`fx-compare-card.tsx` 原来硬编码 `刷卡支付 · 折合花 X` 这行文案（398 行），改成按 `kind` 分——现金显示"现金支付"，卡片才显示"刷卡支付"；同时把一直被丢弃的 `requiresConversion` 字段接进来：结算币种正好等于消费币种（比如"现金 USD"付一笔 USD 计价的东西）不需要经过任何换汇步骤，文案明确写"同币种无需换汇"，不是又套一遍"折合花 X"的话术。
+
+生产实测：支付宝行是"刷卡支付 · 折合花 999.97 HKD"，现金（HKD）行是"现金支付 · 折合花 999.97 HKD"，现金（USD）行是"现金支付 · 同币种无需换汇，花 999.97 HKD"。
+
+**3. 支付宝/现金HKD/现金USD 三者数字一样——查清楚了，不是算法 bug，是数据现状，如实汇报，没有伪造差异**
+
+查了 Remy 真实这三个支付方式当时的配置（D1）：`fx_markup_percent`/`foreign_txn_fee_percent`/`fixed_fee`/`cashback_percent` **全部是 0%**。拿真实 `exchange_rate_cache`（同一时刻 MYR 基准汇率）手算了一遍：`recommendPaymentMethods` 的跨币种换算（借 MYR 桥接）在零费率条件下，无论结算币种是 CNY 还是 HKD 还是 USD，数学上都会收敛到同一个等值数字（HKD 结算走"USD→HKD 直接桥接"，CNY 结算走"USD→CNY→HKD 两次桥接"，两条路径里 CNY 这一环会精确约掉，不是巧合），手算结果 999.97 HKD 跟生产接口实测输出完全一致，Wise（0.4% 手续费）/HSBC（1% 加点）两个非零费率的支付方式确实分别算出不同数字（1003.97/1009.97），证明区分计算能力本身是好的。
+
+**结论**：这不是"没按各自结算币种分别算"的 bug——settlementCurrency 确实各自独立参与了计算（已逐行核对 `route.ts`/`fx-recommendation.ts` 代码，也用真实数据反证过）。三个数字一样，是因为 Remy 目前给这三个支付方式配的费率都是 0%。**这次没有替她编造费率数字去"看起来修好了"**——如果她想要这三个支付方式的比价数字体现真实差异（比如支付宝换汇实际有点差、现金换汇店通常也有点差），需要自己去"支付方式"页面给对应的卡/现金账户填真实的 `汇率加点`/`境外手续费` 百分比，这是一个需要 Remy 自己判断"这几个真实费率具体是多少"的产品/数据问题，不是代码判断的事，留给她自己填。
+
+补了 3 条单测锁死这个结论（`lib/domain/fx-recommendation.test.ts` 新增 `describe('真实场景：支付宝(CNY结算)/现金(HKD结算)/现金(USD结算)三种支付方式比价')`，用的是 Remy 真实汇率数据）：①零费率三者收敛同一个数字 ②kind/requiresConversion 字段正确透传 ③只要任一方式配了非零费率，数字就会分开——防止以后有人不小心把 getMarketRate 参数传错或者某个 settlementCurrency 被忽略，这组测试会先炸。
+
+### 三、验证方式（真实数据，不是 demo）
+
+**真实行程**：全程用 Remy 真实「🇭🇰2026香港」（`trip_id=f78a6b5e-8612-4097-8bfd-88a5db664045`），身份直连链接 `/id/aNhfVNPU7ZGosHWFmdLfp5WtUxB_QGBqjNldoMGqaWA` 登录，Remy 真实账号 `a54c9824-c44d-45f7-94b9-5bf3f8fcacc8`。
+
+**代码关**：`npm run lint`（0 警告 0 错误）、`npm run typecheck`（0 错误）、`npm test`（**25 个测试文件，139 个测试全过**，比改动前的 118+ 新增 21 个：`payment-method-label.test.ts` 5 个、`fx-recommendation.test.ts` 新增 3 个真实场景测试、新路由 `fx-compare-preference/route.test.ts` 6 个）。`disambiguatePaymentMethodLabels` 单独跑过 mutation 验证（改成空壳后测试如期失败）。
+
+**D1 迁移**：`bash scripts/migrate-remote.sh`，✅ `0011_tearful_captain_cross.sql` 应用成功。
+
+**部署**：`./deploy.sh`（部署前后 `ps aux` 确认没有别的 `deploy.sh` 并行在跑），五关全过，**Version ID `489fb7a8-0f13-4b66-8c16-593fb7e88d0f`**，`/api/health` 回读 200。
+
+**API 层真实数据验证（PM 本人用临时验证 session，curl 直连生产）**：
+- `POST /api/trips/{tripId}/fx-recommendation`（`amount=12749,expenseCurrency=USD`）实测返回 5 条，`现金（HKD）`/`现金（USD）` label 正确区分、`kind` 字段正确（支付宝/Wise/HSBC=card，两个现金=cash）、`requiresConversion` 正确（现金USD=false，其余=true）、三个零费率方式 `costInCompareCurrency` 全部 99997（跟手算一致），Wise/HSBC 分别是 100397/100997（跟手算一致）。
+- `GET/PUT /api/trips/{tripId}/fx-compare-preference`：PUT 存一份后 GET 能原样读回；**关键验证——用第二个完全独立生成的 session token（curl 场景，零 cookie/localStorage 共享，比浏览器新开隐身窗口更彻底地排除了"其实是本地缓存撑住"的可能）GET 同一份偏好，返回值完全一致**，证明这组选项确实是按账号（`user_id`）落在服务端，不是靠浏览器本地状态撑场面。
+- 测试用的两条临时 `session` 记录（`user_agent LIKE 'PM-VERIFY-2026-09-24-fx-compare-memo%'`）+ 1 条 `fx_compare_preference` 测试记录，全部在验证完成后立刻 `DELETE`，`SELECT count(*)` 核对**归零**（`pref_count=0, session_count=0`），Remy 真实账号的偏好数据没有被这次测试污染，回到"从没设置过"的初始状态。
+
+**独立 ui-auditor 生产真机走查**（不知道我这边算出的任何期望值，客观报告实际看到的画面，全程真实行程「🇭🇰2026香港」，身份直连链接登录，只读操作，没提交任何记账/建钱包/设余额表单）：
+1. 登录+进入行程 — ✅ 通过
+2. 卡片初始状态 — ✅ 通过（附带一个跟这轮改动无关的历史遗留小观察：目标币种下拉按钮本身文案固定显示"🎯 目标币种"，没有像"我持有"那颗按钮一样把当前选中值回显到按钮文字上，只能从卡片标题"→ USD"间接看出——不影响功能，纯文案细节，留给以后顺手改）
+3. "⚙自选比较项"下拉里"现金（HKD）"/"现金（USD）"清楚区分 — ✅ 通过
+4. 三行文案实测——支付宝"刷卡支付·折合花999.97HKD"、现金（HKD）"现金支付·折合花999.97HKD"、现金（USD）"现金支付·同币种无需换汇，花999.97HKD" — ✅ 通过，包含"无需换汇"这个预期细节
+5. 同浏览器刷新记忆化（改持有/目标/勾选/金额→刷新→数值原样保留） — ✅ 通过
+6. 模拟换设备（退出登录+用身份链接重新登录→数值仍是刚才设的那些，不是默认值） — ✅ 通过，但如实标注一个方法论局限：这次用的 Playwright MCP 工具没有"独立浏览器上下文/隐身模式"能力，走的是"退出登录+重新登录"这条替代路径，不是 100% 严格意义上的换设备（不能完全排除同浏览器 localStorage 撑住的可能）。**这条局限已经被上面"API 层用完全独立 curl session 验证"补齐**——curl 场景零共享状态，结论比 ui-auditor 能做到的更硬，两者互相印证，整体结论可信。
+7. Console 检查 — 全程 0 error，26 条 warning 全部是跟这轮改动无关的字体预加载历史警告（站点级已有）。
+
+截图：`~/Desktop/Claude/01_after_click.png` / `02_fx_card_initial.png` / `03c_dropdown_tall.png` / `04_before_refresh.png` / `05_after_refresh.png` / `06_after_relogin.png`。
+
+### 四、git
+
+Worktree 里提交（commit `b131eaf`，15 个文件，含新表 schema/migration/两个新路由/一个新 chokepoint/6 处调用点改动/3 个测试文件），rebase 检查确认 worktree HEAD 建立时 `origin/main` 没有被别的并行任务推进过（无冲突），fast-forward 推送 `git push origin fix/fx-compare-memo-and-bugs:main`，无需 merge。
+
+### 五、留给 Remy 的悬案（这次没有替她拍板）
+
+1. **支付宝/现金HKD/现金USD 目前费率都是 0%**——如果想让比价数字体现真实差异，需要自己去"支付方式"页面填真实的汇率加点/手续费（上面第二节③已详细说明），这次没有替她编数字。
+2. **"我的支付方式"里单张卡的"曾经手动关掉"这份历史目前不记忆**（上面第一节已说明，固定渠道+金额+持有/目标币种不受影响）——如果她想要更精确，需要再加一轮存储改动，这次先把主要三样存上，多问她一句要不要做全。
+3. **目标币种下拉按钮不回显当前选中值**——ui-auditor 顺手发现的历史遗留小问题，跟这轮改动无关，纯 UI 文案细节，没有在这轮范围内顺手改（范围外改动容易制造新的复核负担），留作以后一个小任务。
+
 ## 【2026-09-24，第五十六轮，冷启动/快速导航 session 不稳定第 7 次排查——两个现象都用可证伪的方法重新查了一遍，结论：目前没有证据支持这是 app 代码缺陷，最贴近证据的解释是测试方法论本身造成的混淆，没有做任何代码改动，claim id=2026-09-24_153655_4ba1adbe / 2026-09-24_154224_abc42bfc】
 
 背景：接手 round53 留下的两个未查清现象——现象 A"无操作几秒后自动跳到别的子页面"、现象 B"服务端判定没登录 identity=null，伴随 about:blank"。这次是同一条排查线的第 7 轮，lifeos-pm 给了具体、可执行的排查方法（不是泛泛"继续查"），要求先做到能证伪的程度，而不是猜一个"可能是 xxx"就收工。全程用 Remy 真实行程「🇭🇰2026香港」（`trip_id=f78a6b5e-8612-4097-8bfd-88a5db664045`）。
