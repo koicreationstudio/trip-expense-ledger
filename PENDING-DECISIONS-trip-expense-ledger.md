@@ -1,5 +1,82 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-25，第六十六轮，根治汇率比价卡"零交互也 PUT fx_compare_preference"（round64/65 遗留），claim id=2026-09-25_003154_9119dcee，commit `8a7bd2a`，Version ID `73092143-3582-4afd-a581-3e8890fcc309`】
+
+背景：跟第六十四/六十五轮（钱包深链冷启动+展开残留，commit `9fb5061`+`571d0ad`；钱包卡间距/收据按钮瘦身/渠道组收起，commit `dcdf9bc`+`3156c82`）同一批交付的收尾，复用同一个 worktree（`trip-expense-ledger-worktrees/wallet-deeplink-and-form-reset`，分支 `fix/wallet-deeplink-and-form-reset`）。round64/65 都发现"汇率比价卡只要打开行程主页就会 PUT 一次 `fx-compare-preference`，零交互"，两轮各自只是猜测根因（round64 猜"新卡默认勾选"、round65 猜"`setTimeout(0)` 防抖没生效"），都没有坐实，这轮要求先用证据确认根因再动手。
+
+### 一、根因（本地真实浏览器实测坐实，不是猜测）
+
+用 Playwright 起真实 Chromium，起本地服务用 `npm run cf:preview`（opennextjs-cloudflare 本地 Workers 运行时 + 本机 D1，不是 `next dev`——`next dev` 的 React StrictMode 会双调用 effect，掩盖真实时序），在 `fx-compare-card.tsx` 的两个相关 `useEffect` 里临时插入带时间戳的 `console.log`（验证完已移除，最终代码零残留），跑一个自建的测试行程（1 张支付方式），观察"挂载→载入已存档偏好→零交互"这个场景的真实执行顺序，连续跑 6 次（1 次首访 + 5 次刷新）：
+
+```
+t=65.8  loadPreference START
+t=66.5  save-effect fired  preferenceLoadedRef=false（首次挂载渲染，正确跳过）
+t=77.2  loadPreference GET resolved（读到已存档偏好）
+t=77.5  loadPreference finally，调用 setTimeout(fn, 0)
+t=77.6  preferenceLoadedRef=true（setTimeout(0) 回调触发）
+t=77.8  save-effect fired  preferenceLoadedRef=true！←就是这次触发的 PUT
+```
+
+`preferenceLoadedRef=true` 在 t=77.6 就已经生效，比"载入存档那次 setState 触发的保存 effect"（t=77.8）还早——原设计假设"`setTimeout(0)` 这个宏任务一定排在同一次 commit 的被动 effect 之后"，在这个真实运行环境（真实浏览器 + opennextjs-cloudflare Workers 运行时）里**不成立**，6/6 次全部复现，不是偶发 race。于是保存 effect 把刚从 D1 读回来的内容原样 PUT 回去一次——这正是 round64 观察到的"每进一次行程主页一次 PUT"、round65 观察到的"内容没变但 `updated_at` 变了"。
+
+另外还确认了一个次要触发点：首次访问（D1 里还没有任何存档）时，"新卡默认勾选"（`loadCardRecommendations` 里那段把新出现的支付方式默认勾进 `enabledCompareKeys`）如果在 `preferenceLoadedRef` 变 true 之后才 resolve（POST `/fx-recommendation` 通常比 GET `/fx-compare-preference` 慢，这很常见），也会触发一次写入——这是纯默认计算，不是用户操作，同样违反"只有真实操作才写"的要求。
+
+### 二、修法（两层，跟要求逐条对应）
+
+1. **主修复——把判断依据从"计时器时序"换成"用户是不是真的动过某个输入"**：新增 `hasUserInteractedRef`（`useRef`），只在四个真实操作入口置 true——「我持有」下拉 `onChange`、「目标币种」下拉 `onChange`、`toggleCompareKey`（自选比较项勾选，渠道+我的支付方式共用这一个函数）、「兑换金额」输入框 `onChange`。组件挂载、`loadPreference` 恢复存档的那几个 `setState`、`loadCardRecommendations` 的"新卡默认勾选"，这几处一律不碰这个 ref。保存 effect 的门槛从 `if (!preferenceLoadedRef.current) return;` 换成 `if (!hasUserInteractedRef.current) return;`，不再依赖任何 JS 调度时序。
+2. **双保险——内容比对**：新增 `lib/domain/fx-compare-preference-diff.ts` 导出 `isSameFxComparePreference(a, b)`，`enabledCompareKeys` 按**集合**比较（不按数组顺序——Set 转数组时同样内容不同插入顺序会序列化出不同字符串，按顺序比会把"语义相同"误判成"变了"，这条双保险自己先踩一遍这个坑就失去意义了）。保存 effect 发 PUT 前先跟 `lastSavedSnapshotRef`（记录"已知最新存档内容"，`loadPreference` 读到存档时、以及每次成功 PUT 之后都会更新）比一遍，完全相同就不发请求——即使①那层交互标记哪里没堵干净，这层还能拦一次。
+
+### 三、修前 → 修后 PUT 次数（本地实测，opennextjs-cloudflare 运行时）
+
+| 场景 | 修前 | 修后 |
+|---|---|---|
+| 首次访问（无存档，触发默认计算）| 1 次 PUT | 0 次 |
+| 已有存档，零交互刷新 ×5 | 每次 1 次 PUT（5/5）| 0 次（5/5）|
+| 用户真实切换目标币种 1 次 | （未单独测，已知会写）| 恰好 1 次 PUT，内容正确 |
+
+### 四、测试 + mutation 验证
+
+- `lib/domain/fx-compare-preference-diff.test.ts`：10 条纯函数测试（相同顺序/不同顺序相同内容/四个字段各自变化/两边 null/一边 null/重复项去重）。
+- `app/trips/[tripId]/fx-compare-card.test.tsx`：**这个项目第一个组件级测试**（之前全部是 `.test.ts` 纯函数测试，`vitest.config.ts` 环境固定 `node`）。这类 bug 本质是 React effect 调度时序问题，结构上只有真的挂载组件走一遍真实 effect 才测得出来，提炼成纯函数测的只是双保险那一层，测不到"要不要发起 PUT 这个决定本身"。基础设施改动：`package.json` 新增 `jsdom`+`@testing-library/react` devDependencies；`vitest.config.ts` 的 `include` 加 `**/*.test.tsx`（用单文件 `// @vitest-environment jsdom` 注释局部覆盖，其余 `.test.ts` 仍用更快的 `node` 环境）+ `esbuild.jsx='automatic'`（vitest 走 vite/esbuild 编译 `.tsx`，不像 Next 的 SWC 会自动注入 JSX runtime，不加这个连业务源文件本身都会因为 `React is not defined` 渲染失败）。锁住两个场景：①挂载→载入存档→新卡默认勾选之后 0 次 PUT ②用户切目标币种后恰好 1 次 PUT。
+- **Mutation 验证（3 处，全部先改坏确认测试真的会失败，再改回来）**：①去掉交互门槛判断（`if (false && !hasUserInteractedRef.current) return;`）→ 两个组件测试都失败（含 PUT 调用的完整 payload 打印）②去掉目标币种 `onChange` 里的 `markUserInteracted()`→"恰好 1 次 PUT"那条测试失败（超时等不到 PUT）③把内容比对函数改回按数组顺序（`JSON.stringify` 比较）而不是按集合→纯函数测试里"不同顺序相同内容"和"含重复项"两条如期失败（10 条里 2 条）。三处改坏后都已改回。
+- 全量：`npm test` 183/183 全过（改动前 171，新增 12：diff 10 条 + 组件测试 2 条）、`npm run lint` 0 警告 0 错误、`npx tsc --noEmit` 0 错误。
+
+### 五、生产验证
+
+**测试行程（专属测试账号，生产环境）**：连续访问 4 次，`page.on('request')` 监听 `PUT .../fx-compare-preference`，**0/4 次触发**。
+
+**Remy 真实「🇭🇰2026香港」行程（trip_id=`f78a6b5e-8612-4097-8bfd-88a5db664045`）——只打开页面看网络请求，零交互**：插一条临时 `session`（`user_agent='PM-VERIFY-round66-fx-preference-check'`，绑定她真实的 owner participant，token 明文只留在本地一次性脚本变量里、没写进任何文件），Playwright 打开行程主页静置 5 秒（不点展开链接、不碰下拉/勾选/金额框），监听全部非 GET 请求：**只有 1 条 `POST /fx-recommendation`**（汇率比价卡挂载时的既有只读比价查询，本来就有，不写库）；**`PUT /fx-compare-preference` 出现 0 次**。
+
+**D1 前后对照（这次连 `updated_at` 都没变，不是"内容一样但时间戳变了"）**：
+
+| 字段 | 验证前 | 验证后 |
+|---|---|---|
+| hold_currency | MYR | MYR |
+| target_currency | THB | THB |
+| amount_cents | 100000 | 100000 |
+| enabled_compare_keys | `[5个渠道+5张卡id]`（wise/tng/atm/moneychanger/alipay + 5 张 card id） | 逐字节相同 |
+| **updated_at** | **1790266709619** | **1790266709619（完全没变）** |
+
+其它表核对：`expense`/`wallet`（3，跟 round65 一致）/`trip_payment_method_enabled`（3）没有变化；`session` 总数 34→35，多的这 1 条是 Remy 自己在 round65 之后正常使用产生的（全局按 `user_agent LIKE '%round66%' OR '%PM-VERIFY%'` 搜索命中 0 条，确认不是这轮验证造成的），不是数据污染。
+
+**测试数据清理**：①验证测试行程（trip/participant/payment_method/trip_payment_method_enabled/session/user/user_session 逐表精确 `DELETE`，`SELECT COUNT(*)` 核对全部归零）②真实行程那条临时 `session` 单独 `DELETE`，回读为 0。
+
+### 六、ui-auditor 真机走查——补齐第六十四轮欠下的那一项 + 这轮重构的功能回归
+
+**背景**：round64 交付时执行环境没有 Agent 工具，Bug A（钱包深链冷启动）/Bug B（展开状态跨页残留）只做了 PM 自己写的 Playwright 脚本验证，没走过独立 `ui-auditor` 真机走查；round65 部署时虽然叫过 `ui-auditor`，但焦点是另外三处小修复（C/D/E），不确定有没有覆盖 A/B 具体场景。这轮用专属测试账号（trip_id=`404e88e1-fe7a-491e-ad4a-d8a82ac975d7`，走查完已清理）补齐：
+
+- **Bug A 钱包深链冷启动**：跑 7 轮（每轮都重新退出登录+走身份链接+行程列表+点深链完整路径），7/7 落地页正确、7/7 面板自动展开，前 3 轮截图确认精确滚动到视口顶部，console 0 errors。
+- **Bug B 展开残留**：新建钱包弹层（现在是真正的阻塞式 modal，开着时头部导航被遮罩物理挡住点不到，这个交互形态下"切走再切回还开着"已经结构性不可能发生）、取款/换汇面板、设置余额面板、切换行程下拉，四种展开态切 tab 后全部正确收起。
+- **本轮重构的功能回归**（fx-compare-card.tsx 内部重构，交互本身没有变化，需要真机确认没手滑改坏）：「我持有」/「目标币种」下拉、「⚙自选比较项」开关、「兑换金额」输入框、卡片展开收起，逐项点过，行为符合预期，console 0 errors。
+
+两项均判定通过，没有发现回归。走查产生的测试数据（trip/participant/payment_method/wallet/fx_compare_preference/session/user/user_session）已逐表精确删除并核对归零。
+
+### 七、部署 + claim
+
+本地：`npm run lint`（0 警告 0 错误）、`npx tsc --noEmit`（0 错误）、`npm test`（183/183）。`git fetch` 确认无新并行提交后 `safe_commit.py` 提交（commit `8a7bd2a`）、`git push origin HEAD:main` fast-forward 成功、`./deploy.sh` 五关全过，Version ID `73092143-3582-4afd-a581-3e8890fcc309`，`/api/health` 回读 200。
+
+活动板 `2026-09-25_003154_9119dcee` 标 done。**没有处理**同一批登记的另一条 claim（`2026-09-25_003315_ac3f9760`，"汇率比价卡顶部基准换算网格 4 张时最后一张不对称占满整行"）——这轮任务书没有交代这条，如实留给下一轮，不是漏做。
+
 ## 【2026-09-25，第六十五轮，追加 UI 三处小修复：钱包卡说明文字空白/收据按钮瘦身/汇率比价渠道组默认收起+徽章归属，claim id=2026-09-24_235347_53dad9c3(C)+2026-09-24_235350_fe88a023(D)+2026-09-24_235353_7ec2b0e9(E)，Version ID `1c261b50-6e4f-4fc0-b021-3bb3f1312709`】
 
 背景：跟第六十四轮（Bug A 钱包深链冷启动失败 + Bug B 展开状态跨页残留，commit `9fb5061`+`571d0ad`）同一批交付，复用同一个 worktree（`trip-expense-ledger-worktrees/wallet-deeplink-and-form-reset`，分支 `fix/wallet-deeplink-and-form-reset`），开工前确认过 worktree 干净、跟 origin/main 同步在 `571d0ad`。三处都是 Remy 追加反馈的小问题，不是新一轮 Artifact 方案变更。
