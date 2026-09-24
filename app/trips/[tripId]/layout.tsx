@@ -23,6 +23,12 @@ export default async function TripLayout({
   params: { tripId: string };
 }) {
   const identity = await getCurrentIdentity();
+  // round48 临时诊断：跟 wrangler tail 对表，确认"看起来跳错页/弹回未登录"的
+  // 那一刻服务端到底有没有真的收到这次请求（没收到=纯客户端缓存渲染的假象，
+  // 不是这里的鉴权逻辑判定失败的）。排查结束后删除。
+  console.log(
+    `[diag-server] TripLayout tripId=${params.tripId} identity=${identity ? `${identity.tripId}/${identity.participantId}` : 'null'}`
+  );
   if (!identity || identity.tripId !== params.tripId) {
     redirect('/');
   }

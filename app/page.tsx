@@ -11,12 +11,15 @@ import { MyTrips } from './my-trips';
 export default async function HomePage({ searchParams }: { searchParams?: { identity_invalid?: string } }) {
   // ① tel_session 有效 → 跟今天一样直接跳进那个 trip，guest 零摩擦流程原样保留。
   const identity = await getCurrentIdentity();
+  // round48 临时诊断：排查结束后删除，理由同 app/trips/[tripId]/layout.tsx 那条。
+  console.log(`[diag-server] HomePage identity=${identity ? `${identity.tripId}/${identity.participantId}` : 'null'}`);
   if (identity) {
     redirect(`/trips/${identity.tripId}`);
   }
 
   // ② 否则查 tel_user_session，有效就查这个账号建过/认领过的行程，画"我的行程"列表。
   const user = await getCurrentUser();
+  console.log(`[diag-server] HomePage user=${user ? user.userId : 'null'}`);
   if (user) {
     const db = await getDb();
     // 余额优先原则延伸到列表页：每张行程卡片顺手标一下当前用户在这个行程里的净额，
