@@ -101,6 +101,15 @@ export default async function HomePage({ searchParams }: { searchParams?: { iden
       >
         创建新行程
       </Link>
+      {/* fix(2026-09-24)：之前只有「创建新行程」→「先确认一下」绕一圈才能点到 PIN
+          找回，Remy 要求首页直接给这条入口。视觉上排在主 CTA 和下面两行纯文字提示
+          中间：不抢「创建新行程」的主按钮地位（沿用 .btn-secondary 而非 .big-cta），
+          但也比两行提示文字更显眼（是个有边框的按钮，不是纯文字链接）。跳
+          /trips/new?step=pin-recover 直接落到 ProvisionGate 的 pin-recover 步骤，
+          复用现成的找回逻辑，这里不重新实现。 */}
+      <Link href="/trips/new?step=pin-recover" className="btn-secondary">
+        用密码/PIN 登录
+      </Link>
       <p className="text-[10px] text-muted">已经有专属身份链接？直接打开那条链接就能回到你的账号。</p>
       <p className="text-[10px] text-muted">已经有同行人分享给你的邀请链接？直接打开那个链接就能认领身份。</p>
     </main>

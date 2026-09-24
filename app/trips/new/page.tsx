@@ -8,11 +8,16 @@ import { ProvisionGate } from './provision-gate';
  * 2026-09-09 第十六轮登录系统换血：不再跳转到 /login，改成没有账号时先渲染
  * ProvisionGate 自动开号（展示专属身份链接要求确认保存），开完号
  * router.refresh() 回来这个 Server Component 会重新查到 user，正常渲染表单。
+ *
+ * 2026-09-24：首页「用密码/PIN 登录」直接入口跳这里带 `?step=pin-recover`，
+ * 让 ProvisionGate 挂载时就停在找回 PIN 那一屏，不用先经过「先确认一下」
+ * 中间步骤。白名单只认这一个值，其它/缺省一律走原本的 'ask' 起点。
  */
-export default async function NewTripPage() {
+export default async function NewTripPage({ searchParams }: { searchParams?: { step?: string } }) {
   const user = await getCurrentUser();
   if (!user) {
-    return <ProvisionGate />;
+    const initialStep = searchParams?.step === 'pin-recover' ? 'pin-recover' : undefined;
+    return <ProvisionGate initialStep={initialStep} />;
   }
 
   // fix(2026-09-12 死路走查)：已有账号时这页直接进 NewTripForm，原本填到一半

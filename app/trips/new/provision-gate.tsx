@@ -32,9 +32,19 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
  */
 type Step = 'ask' | 'recover' | 'pin-recover' | 'result';
 
-export function ProvisionGate() {
+/**
+ * 2026-09-24：首页未登录分支新增「用密码/PIN 登录」直接入口
+ * （/trips/new?step=pin-recover），不用再绕「创建新行程」→「先确认一下」
+ * 这一圈才点到 PIN 找回。initialStep 只由路由入口决定，跟组件内部
+ * 自己切换 step 的逻辑完全分开。
+ */
+export function ProvisionGate({ initialStep }: { initialStep?: Step } = {}) {
   const router = useRouter();
-  const [step, setStep] = useState<Step>('ask');
+  const [step, setStep] = useState<Step>(initialStep ?? 'ask');
+  // 记一下这次是不是从直接入口跳进来的：这种情况下用户根本没经过
+  // 'ask' 这个中间步骤，pin-recover 屏的「返回」不该退回一个他没见过的
+  // 步骤，应该退回首页。只在挂载时判一次，不随 step 后续变化重新计算。
+  const [enteredDirectly] = useState(initialStep === 'pin-recover');
   const [identityUrl, setIdentityUrl] = useState<string | null>(null);
   const [provisioning, setProvisioning] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -229,7 +239,11 @@ export function ProvisionGate() {
         >
           {pinRecovering ? '找回中…' : '用这个密码/PIN 登录'}
         </button>
-        <button type="button" onClick={() => setStep('ask')} className="btn-secondary">
+        <button
+          type="button"
+          onClick={() => (enteredDirectly ? router.push('/') : setStep('ask'))}
+          className="btn-secondary"
+        >
           返回
         </button>
       </main>
