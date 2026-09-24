@@ -1,5 +1,76 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-24，第五十五轮，修「设置当前余额」覆盖式 bug——钱包余额架构从"可变累加字段"改成"锚点+推导"，claim id=2026-09-24_160558_07cebca5】
+
+背景：Remy 给香港行程现金 HKD 钱包（`id=872246bc-7f4f-46b6-9795-cd7acbbeb29c`）填了 8120、记录日期 2026-09-15，行程主页「我的钱包」一直显示 HK$8,120.00，没有扣掉 09-15 及以后已经存在的现金消费（taxi 50、酒店tax 42、云吞面 86、雪糕 26、咖啡 42，合计 HK$246，正是 round39/round46 验证过的历史回溯结果）。期望值 HK$7,874。lifeos-pm 已经读代码定位到根因并写清楚背景派工，这轮接手复核+落地+验收。
+
+### 一、根因复核（照 lifeos-pm 给的起点自己重新验证过一遍，不是照抄结论收工）
+
+`app/api/trips/[tripId]/wallets/[walletId]/route.ts` PATCH 这条"设置当前余额"接口，改动前是 `currentBalance: body.currentBalance ?? existing.currentBalance` 直接绝对覆写，`balanceUpdatedAt` 只是存下来当"记录日期"，从来没被读取参与任何计算。这个 app 的 `wallet.currentBalance` 是一个被 4 条路径各自独立写的可变累加字段：①建钱包时历史回溯（`wallets/route.ts` POST，用 `createdAt` 分界）②记账自动扣（`expenses/route.ts` POST，实时扣，不管 `expenseDate`）③换汇增减（`exchange-records/route.ts` POST/DELETE）④这次要修的 PATCH。
+
+**复核时顺带查出一个 lifeos-pm 派工时提醒要看但没细读的既有缺口**：`expenses/[expenseId]/route.ts` 的 PATCH（编辑消费）和 DELETE（删除消费）**从来没有任何代码去回滚/重算钱包余额**——PATCH 里有段现成注释写得很直白："编辑时改支付方式只更新这个标记字段本身，不会回溯调整钱包余额——钱包扣减只在创建那一刻发生一次，这是 v1 明确的简化边界"；DELETE 更是完全没碰 wallet 表。这是从 v1 就有的、独立于这次报的 bug 的既有缺口，但因为 Remy 要求的测试场景（编辑金额/编辑日期跨锚点/编辑支付方式/删除）直接踩中这个缺口，所以这次的架构决定必须把它一起考虑进去，不能只补 PATCH 一处就交差。
+
+### 二、架构决定：选了"锚点+推导"，不是"只修 PATCH 这一点"
+
+lifeos-pm 给了两个选项自己评估。评估过程和理由：
+
+如果只补 PATCH（backfill 式重算，照抄 round39 建钱包那段的模式），能让"这次报的 bug 场景"过关，但完全补不了"编辑/删除消费不回滚余额"这个缺口——因为这个缺口从设计上就没有任何字段记录"这笔消费有没有被算进某个钱包的余额里"，backfill 式重算只在 PATCH 那一刻算一次，之后任何编辑/删除都不会触发重算。要让 Remy 明确要求的测试场景（编辑消费日期跨过锚点，改支付方式换入换出）全部正确，必须要么维护一套复杂的"每笔消费是否已被计入"状态位，要么干脆改成读的时候现算。
+
+最终选择：**新增 `lib/domain/wallet-balance.ts`，钱包一旦做过至少一次"设置当前余额"（`balanceUpdatedAt` 非空）就切换进"锚点+推导"模式**——`currentBalance` 存的不再是最终显示值，是"记录日期当天那一刻的锚点原始值"（PATCH 写入时就是用户输入的原始数字，不做任何计算）；真正显示给用户的余额，每次读的时候现查现算：
+
+```
+锚点值 − Σ(记录日期当天及以后、匹配这个钱包的消费金额) + Σ(同期换汇净额)
+```
+
+"匹配"口径跟既有的②记账自动扣完全一致（`enteredByParticipantId` + `paymentMethodId` + `currency` 三者都对得上）。"记录日期当天及以后"用 `expenseDate`/`exchangeDate`（消费/换汇的真实日期字段，不是 `createdAt` 系统写入时间）跟 `balanceUpdatedAt` 比较，边界 `>=`（当天算在内，Remy 明确拍板的语义）。日期比较沿用项目里已经在用的既有惯例（`new Date(dateStr).toISOString()`，`expenseDate`/`balanceUpdatedAt` 两边都是这么构造的，不是这次新发明的时区处理）。
+
+这个架构的直接好处：钱包一旦进入这个模式，**新增/编辑金额/编辑日期跨过锚点/编辑支付方式/删除消费，全部不需要在对应的 API 路由里额外写"回滚/重算"代码**——下次读这个钱包余额时，SQL 会自动把最新状态算出来，不需要维护任何"这笔消费算过没有"的隐藏状态位。这顺带把上面查出来的既有缺口也补上了（对已锚定钱包）。
+
+**没有走全站统一的推导式**（即没有把还没用过"设置当前余额"的钱包也改成同一套推导逻辑）——`wallets/route.ts` POST（历史回溯，用 `createdAt` 分界）、`expenses/route.ts` POST（记账自动扣）保持完全不变，只在钱包已锚定时跳过这两处的直接写入。原因：wallet 创建时的历史回溯用的是"系统写入时间"分界，"设置当前余额"用的是"用户选择的日历日期"分界，两者方向语义不同（一个是"这个钱包诞生前系统里已经存在哪些消费"，一个是"这一天当时余额是多少"），把它们强行统一成同一个维度需要改动 mechanism①这条production-verified 多年的既有逻辑（round39/46 D1 实测过 -HK$246 这个结果），风险和收益不成比例，这次没有做。**代价是如实记录的**：还没做过"设置当前余额"的钱包，编辑/删除消费依然不会回滚余额，这是修复前就存在的缺口，这次没有扩大范围去修，属于残留待办。
+
+### 三、代码改动
+
+- 新增 `lib/domain/wallet-balance.ts`：`computeWalletDisplayBalance`/`computeWalletDisplayBalances`/`withDisplayBalance` 三个函数，顶部大段注释写清楚两种模式的判断逻辑和理由。
+- `app/api/trips/[tripId]/wallets/[walletId]/route.ts` PATCH：写入逻辑本身不变（依然是把 `body.currentBalance` 原样存进 `currentBalance`），只是响应改成调 `withDisplayBalance` 返回推导后的值，注释补充说明这个字段现在身兼"记录日期"+"是否已切换进锚点模式"两职。
+- `app/api/trips/[tripId]/wallets/route.ts` GET/POST：响应统一改用推导后的余额。
+- `app/api/trips/[tripId]/expenses/route.ts` POST（记账自动扣）：改成先判断 `linkedWallet.balanceUpdatedAt === null` 才直接写入，已锚定的钱包跳过这次写入（交给推导公式处理）。
+- `app/api/trips/[tripId]/exchange-records/route.ts` POST、`.../[exchangeRecordId]/route.ts` DELETE：同样改成按 `wallet.balanceUpdatedAt === null` 判断要不要写入/反向抵消。
+- `app/trips/[tripId]/page.tsx`：行程主页是直连 DB 查询（不经过 `wallets/route.ts` 这个 API 路由），单独接了 `computeWalletDisplayBalances` 批量计算，不然会出现"支付方式页对了、行程主页还是旧数字"这种两处不一致的回归。
+- `app/api/trips/[tripId]/expenses/[expenseId]/route.ts`（编辑/删除消费）：**零改动**——这是推导架构的直接收益，已锚定钱包的编辑/删除场景全部靠读时推导自动正确，不需要写任何回滚代码。
+
+### 四、测试
+
+**单测**：新增 `app/api/trips/[tripId]/wallets/[walletId]/route.test.ts`，7 个用例覆盖 Remy 要求的全部场景——①设置锚点时已有消费会被扣（这次的 bug 场景，含边界测试：当天算在内，锚点前一天不算）②锚点之后新增消费会扣，倒填成锚点前的新消费不扣③编辑消费金额实时反映④删除消费加回余额⑤编辑消费日期跨过锚点（双向）⑥编辑消费支付方式换出/换入⑦锚点日期起的换汇净额（含删除换汇记录自动撤销）。7 个全过，跟既有 118 个测试一起跑（共 125 个）全绿。`npm run lint`、`npx tsc --noEmit` 全过。
+
+**Mutation 验证测试真的有效**：临时把 `wallet-balance.ts` 里 `gte(expenses.expenseDate, anchor)` 这个日期过滤条件删掉（模拟"忘记做日期过滤，变回旧 bug 那种不分日期一律扣"的错误实现），跑测试，7 个里 3 个如期失败（"设置锚点时已有消费"、"倒填不扣"、"编辑日期跨锚点"三个用例精确抓到），确认不是空壳测试。改完立刻用备份还原，重新跑一遍确认恢复绿色。
+
+**生产真机验证（D1 直查 + curl 真实 session + 独立 ui-auditor，三重交叉核对，没有只信一种证据）**：
+1. D1 直查确认：修复前，`wallet` 表 `current_balance=812000`（Remy 原始输入 8120 元，未被程序改动过）、`balance_updated_at=1789430400000`（2026-09-15 00:00 UTC）；匹配的 5 笔历史消费（taxi/酒店tax/雪糕/云吞面/咖啡）合计 24600 分（HK$246），跟 Remy 截图描述完全对上；这条钱包没有关联任何换汇记录。**全库只有这一个钱包用过"设置当前余额"**（`SELECT * FROM wallet WHERE balance_updated_at IS NOT NULL` 只返回这一行），也是**全库唯一存在的钱包**——横扫结论：没有其它钱包/行程需要同类修复或复核，这次事故本身就是这个功能唯一一次被使用过。
+2. 用临时插入的验证 session（`user_agent='PM-VERIFY-2026-09-24-round50-balance'`，指向 Remy 真实 `participant_id=5a81e7ae-72d1-4d9d-9fbf-bee617458dea`）curl 生产 `/api/trips/.../wallets`，返回 `currentBalance: 787400`（HK$7,874.00），跟同一份 curl 拉到的行程主页 SSR HTML 里 `HK$7,874.00` 字样完全一致。验证完立刻 `DELETE FROM session WHERE user_agent=...`，`SELECT count(*)` 核对归零，**没有修改 Remy 的任何原始数据**（`current_balance`/`balance_updated_at` 两个字段从头到尾都是她自己输入的 812000/09-15，程序只是换了一种读法）。
+3. **独立 ui-auditor 生产真机走查**（全新 Agent 调用，不知道我这边算出的预期数字 7874，只被要求客观报告看到的数字，不能"凑答案"）：用 Remy 真实行程「🇭🇰2026香港」（`f78a6b5e-8612-4097-8bfd-88a5db664045`），身份直连链接登录，视口截图（非 fullPage，遵守 round38 记过的坑）。结果：行程主页「我的钱包」显示 **HK$7,874.00**，支付方式页「设置当前余额」面板显示 **HK$7,874.00**，两处完全一致；console 全程 0 error；页面加载无明显卡顿（这次改动给余额显示加了几条额外的 DB 查询）；整体排版无回归，唯一提到的一点视觉差异（💵 emoji 渲染风格）判断是 headless 浏览器字体渲染问题，不是真实 bug。截图：`/Users/linotan/Desktop/Claude/.playwright-mcp/trip-home-wallet.png`、`/Users/linotan/Desktop/Claude/.playwright-mcp/payment-methods-balance.png`。ui-auditor 如实标注了自己的边界："只能确认两处数字一致，不能替 Remy 判断 7874 这个数字本身对不对"——这个数字对不对，PM 已经用 D1 原始交易记录独立算过一遍（812000 − 24600 = 787400），三条证据链互相印证。
+
+### 五、第 5 点"未建钱包→建钱包"新流程要不要统一锚点日期语义——查清楚后确认不需要处理
+
+读 `app/trips/[tripId]/wallet-grid.tsx` 的"建立钱包"表单（`handleCreate`）确认：round13（"Artifact Version 10 落地第四轮拍板"）就已经把"起始余额"整个字段从这个表单拿掉了——新钱包一律从 0 起步，`initialBalance` 只在 API/schema 层保留（可选默认 0，供测试/历史行为兼容），表单本身不再填它，"设置余额"这件事完全交给"设置当前余额"面板统一承担。`payment-methods-manager.tsx` 的"建钱包"按钮（round44 新增）用的是同一个 POST 端点，建完直接跳进"设置当前余额"编辑态（`startEditBalance`），也是走同一条已修复的 PATCH。**结论：不需要额外处理**——这条创建流程从产品设计上就没有"直接带初始余额+日期"这回事，凡是要设余额都会落到这次已经修好的 PATCH 上，两条路径已经天然统一，不存在需要判断"照哪个语义"的分叉。
+
+### 六、第 7 点回报：未标支付方式的消费目前怎么处理，附建议
+
+D1 查证：香港行程有 6 笔消费 `payment_method_id IS NULL`（点心 32500 分、庙街小食 21200 分、拜神 8000 分、餐饮 12100 分、咖啡 8000 分、蛋挞咖啡 7900 分），跟 Remy 截图提到的"点心/庙街小食/09-16咖啡/餐饮/拜神"逐一对得上。**确认 lifeos-pm 的判断成立**：这次的推导公式（以及原本就存在的②记账自动扣）匹配条件都要求 `paymentMethodId` 精确相等，`null` 在 SQL 里不会等于任何值，也在代码层面显式 `if (wallet.paymentMethodId)` 判断过，所以这 6 笔消费完全不进入任何钱包的余额计算，既不算支出也不影响余额——这是一直以来的既有行为，这次没有改动这块逻辑。
+
+**建议（只列出来，没有动手改）**：`app/trips/[tripId]/expense-list.tsx` 第 268 行 `if (e.paymentMethodLabel) metaParts.push(e.paymentMethodLabel);`——没有支付方式时这一项直接被省略，活动流那一行看不出"这笔没标支付方式"，容易让人误以为已经被记进某个钱包。这个文件第 118 行的下拉筛选器本身已经有"未指定"这个文案惯例（`e.paymentMethodLabel ?? '未指定'`），建议活动流那一行也照这个既有措辞加一个灰色小 tag（比如"未标支付方式"），提醒 Remy 这笔钱没有被任何钱包追踪到；或者在记账表单里给"支付方式"加一层轻量引导（不是强制校验，避免破坏"可以先不选、以后再补"的既有弹性）。这是产品判断，留给 Remy 或下一轮定夺，没有擅自实现。
+
+### 七、部署
+
+commit `18abe46`（parent `420d728`，`safe_commit.py` 隔离 index 提交，只含这轮改动的 8 个文件，没有卷入同时段并行的其它任务）。`./deploy.sh` 五关全过，Version ID `7219ccbd-7d4b-4354-b6bd-999a8b8d04ef`，`/api/health` 回读 200。部署前 `pgrep` 确认没有别的 `deploy.sh`/`opennextjs-cloudflare` 进程在跑（只有一个本地 `wrangler pages dev` 开发服务器和一个 `wrangler tail` 日志尾随，都不是部署）。
+
+### 八、如实交代：这轮没做/留给以后的
+
+- **未锚定钱包的"编辑/删除消费不回滚余额"缺口没有修**（第二节已展开说明为什么不做全站统一），这是 v1 就有的既有问题，这次只对已经用过"设置当前余额"的钱包生效。
+- **第 7 点的 UI 提示建议没有实现**，只是列出来给 Remy/下一轮参考。
+- claim `id=2026-09-24_160558_07cebca5` 已 `claim.py done`。
+
+---
+
 ## 【2026-09-24，第五十四轮，支付方式页「设置当前余额」按钮紧凑化第二轮——从全宽 CTA 改成真正的次级小按钮，claim id=2026-09-24_161425_bf88a1e8】
 
 背景：紧接紧凑化第一轮之后的追加拍板。第一轮把「⚙ 设置当前余额」的 padding/字号补齐了 Artifact `#scr-payment .big-cta` 这条一直没被套用过的 scoped 覆盖（6px/10.5px），但按钮形状本身还是全宽（`.big-cta`）+ 深色背景（`#6E6E6C`），字面上跟"添加支付方式"黑色主按钮同一档视觉分量，只是颜色深浅不同。Remy 看过第一轮真实截图后明确拍板：要改成真正的次级小按钮，不占满整行，主次要一眼分明，字号不用再调。第一轮收尾时已经如实标注过"如果 Remy 看过这版还是觉得该收成非全宽小按钮，是一次新的方案偏离判断，留给她确认"——这轮就是她确认后的执行，**跟 Artifact V10 字面设计稿（`reference/artifact-v10-source.html:931`，这颗按钮本来就是 `class="big-cta" style="background:var(--neutral-dk)"`）不完全一致，但这次是照 Remy 本人看真实截图后的明确指示执行，不是自行推翻方案**，如实记录这个偏离，供下一个读文档的人核对。
