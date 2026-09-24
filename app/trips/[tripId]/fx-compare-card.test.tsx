@@ -132,3 +132,33 @@ describe('FxCompareCard — round66 零交互不写 D1', () => {
     expect(parsed.targetCurrency).not.toBe('THB'); // 确实换成了别的目标币种
   });
 });
+
+describe('FxCompareCard — round66 bug G：基准换算卡片网格不拉伸', () => {
+  it('4 张基准卡（MYR/USD/HKD/CNY 全部有离线兜底汇率）用 grid-cols，不再是 flex-1 拉伸写法', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy));
+
+    const { container } = render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB']} />
+    );
+
+    await waitFor(() => expect(screen.getByText('DIAG测试卡')).toBeTruthy());
+
+    const grid = container.querySelector('[data-testid="quick-base-grid"]');
+    if (!grid) throw new Error('没找到基准换算卡片网格容器');
+
+    // 离线兜底表（FX_RATES_FALLBACK）对 MYR/USD/HKD/CNY 四个基准都查得到目标币种
+    // THB 的汇率，四张卡都会渲染——这是 bug G 真实发生的场景（Remy 截图报的"4 张
+    // 最后一张单独占满一整行"）。
+    expect(grid.children.length).toBe(4);
+    // 回归锁点：容器必须用 grid-cols 系列，不能再是旧的 flex-wrap + flex-1（那
+    // 正是最后一张被拉伸撑满整行的根因）。
+    expect(grid.className).toContain('grid-cols-2');
+    expect(grid.className).toContain('sm:grid-cols-4');
+    expect(grid.className).not.toContain('flex-wrap');
+    // 每张卡片本身不再带 flex-1（会撑满 grid 分配到的那一格，等同又变相拉伸）。
+    for (const card of Array.from(grid.children)) {
+      expect((card as HTMLElement).className).not.toContain('flex-1');
+    }
+  });
+});

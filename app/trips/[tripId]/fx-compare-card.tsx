@@ -10,6 +10,7 @@ import { SelectDropdown, useDismissableOpen } from '@/components/select-dropdown
 import { Switch } from '@/components/switch';
 import { findBestCardOfferGlobalIndex } from '@/lib/domain/fx-best-offer';
 import { isSameFxComparePreference, type FxComparePreferenceSnapshot } from '@/lib/domain/fx-compare-preference-diff';
+import { quickBaseGridClassName } from '@/lib/domain/quick-base-grid';
 
 /**
  * 汇率比价——2026-09-16 第十八轮，Remy 拍板"要根治"：把原本两张独立卡片
@@ -201,6 +202,14 @@ function formatFetchedAt(iso: string): string {
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
+
+// fix(第六十六轮，Remy 报真 bug G"基准换算卡片网格排列不对称")：原来容器是
+// `flex flex-wrap` + 每张卡 `flex-1`（撑满剩余空间），4 张卡挤不进一整行时，
+// 换行后单独落在第二行的最后一张会被 `flex-1` 拉伸成占满整行宽度，跟上面几张
+// 明显不对称。改成 CSS Grid（`quickBaseGridClassName`，拆到
+// `lib/domain/quick-base-grid.ts` 方便单独写单测）——同一个 grid 的列宽由
+// "总列数"决定，不受某一行实际放了几张卡影响，天然不会出现"这一行只有一张就
+// 把它撑满"的问题。
 
 interface CompareRow {
   key: string;
@@ -595,6 +604,15 @@ export function FxCompareCard({
   ];
   const showGroupTitles = groups.length > 1;
 
+  // fix(第六十六轮，bug G)：基准换算卡片实际会渲染出几张，取决于
+  // `deriveMidRate` 有没有查得到数据，不能假设永远是 QUICK_BASE_CARD_CURRENCIES
+  // 的全部 4 项。这里先算出真实要渲染的列表（含每项的汇率），网格列数
+  // （`quickBaseGridClassName`）按这个真实长度选，不是按候选池固定长度选。
+  const quickBaseCards = QUICK_BASE_CARD_CURRENCIES.map((h) => {
+    const rate = effectiveTarget ? deriveMidRate(activeRates, h, effectiveTarget) : undefined;
+    return rate === undefined ? null : { h: h as string, rate };
+  }).filter((entry): entry is { h: string; rate: number } => entry !== null);
+
   // fix(2026-09-23 第三十三轮，方案二)：改名自 toggleChannel，现在管两种 key
   // （channel:xxx / card:xxx），逻辑本身（勾选/取消勾选同一个 Set）没有变化。
   function toggleCompareKey(key: string) {
@@ -775,23 +793,23 @@ export function FxCompareCard({
           {/* 基准换算卡片 + 「我持有」tab——Artifact `.fx-base-row` + `.navtabs`。
               故意用 QUICK_BASE_CARD_CURRENCIES（固定 4 个）不用 holdCandidates
               （下拉候选池，2026-09-23 扩到 8 个）——这排卡片是"补两张基准卡"的
-              快速参考展示，不该跟着下拉选项数量一起涨到 8 张。 */}
-          <div className="flex flex-wrap gap-[6px]">
-            {QUICK_BASE_CARD_CURRENCIES.map((h) => {
-              const rate = effectiveTarget ? deriveMidRate(activeRates, h, effectiveTarget) : undefined;
-              if (rate === undefined) return null;
-              return (
-                <div
-                  key={h}
-                  className="flex min-w-[90px] flex-1 flex-col items-center gap-0.5 rounded-[14px] border border-sand bg-white px-[8px] py-[7px] shadow-card"
-                >
-                  <span className="text-[9px] text-neutral-dk">1 {h}</span>
-                  <span className="font-serif text-[12.5px] font-semibold tabular-nums text-ink">
-                    = {rate.toFixed(3)} {FX_SYMBOLS[effectiveTarget] ?? ''}
-                  </span>
-                </div>
-              );
-            })}
+              快速参考展示，不该跟着下拉选项数量一起涨到 8 张。
+              fix(第六十六轮，bug G)：先把实际能渲染出来的几张卡算出来
+              （`deriveMidRate` 缺数据的会被过滤掉，不是永远都是 4 张），拿这个
+              真实数量去选网格列数——只改排列方式，卡片本身宽度/圆角/字号都
+              没有变。 */}
+          <div data-testid="quick-base-grid" className={quickBaseGridClassName(quickBaseCards.length)}>
+            {quickBaseCards.map(({ h, rate }) => (
+              <div
+                key={h}
+                className="flex flex-col items-center gap-0.5 rounded-[14px] border border-sand bg-white px-[8px] py-[7px] shadow-card"
+              >
+                <span className="text-[9px] text-neutral-dk">1 {h}</span>
+                <span className="font-serif text-[12.5px] font-semibold tabular-nums text-ink">
+                  = {rate.toFixed(3)} {FX_SYMBOLS[effectiveTarget] ?? ''}
+                </span>
+              </div>
+            ))}
           </div>
 
           {/* fix(2026-09-17 第二十轮)：原本这里还有一排"我持有→目标"的写死胶囊 tab，
