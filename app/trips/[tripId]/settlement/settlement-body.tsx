@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { formatMoney } from '@/lib/money';
 import { Avatar } from '@/components/avatar';
 import { MarkSettledButton } from './mark-settled-button';
@@ -105,7 +105,19 @@ export function SettlementBody({
   const allConfirmed = totalTransfers === 0 || confirmedCount === totalTransfers;
 
   return (
-    <>
+    // fix(2026-09-24，结算页结构性重做，逐字核对 reference/artifact-v10-source.html
+    // 第846-891行"权威 Artifact 源"，不是凭截图猜结构)：Remy 拿生产截图跟设计稿逐屏
+    // 肉眼比对（不是比 CSS 数值——round42 那次只核对了 CSS token 数值，查不出这类
+    // 结构问题，这是那次假阳性的根因），确认了两处结构性偏差 + 一处桌面宽屏观感问题：
+    // ①每人净值本该是各自独立的胶囊卡（Artifact 每人各自一个 <div class="list">），
+    // 这次之前误合并成一个共享大框，这次改回逐人独立卡片；②宽屏（≈768px 页面容器
+    // 打满，视觉上又空又散）需要收紧——这个项目全站唯一的容器宽度约定就是
+    // app/layout.tsx 的 `mx-auto max-w-3xl`（768px），但结算这种内容量很小的清单在
+    // 这个宽度下依然显得松散；改用 Artifact 权威源自己的画布宽度 390px（
+    // reference/artifact-v10-source.html 第89行 `.frame{width:390px}`，不是这次
+    // 新拍的数字，是设计稿本身的画布宽度）作为结算内容的上限，宽屏时收紧、手机视口
+    // 因为可用宽度本来就小于 390px 所以这条上限不生效，两个视口都不用分开改。
+    <div className="mx-auto flex w-full max-w-[390px] flex-col gap-3.5">
       {/* fix(2026-09-16 round14 地毯式核对)：Artifact 把这颗按钮放在两份清单最后面，
           当成"看完净值+转账清单再确认"的最后一步 CTA；这里之前放在最顶上，先于两份
           清单出现，进页面第一眼就看到一个"标记已结算"按钮，还没看数字就先看到确认
@@ -120,17 +132,18 @@ export function SettlementBody({
             链接/直接添加参与者/现有邀请链接/参与者认领状态），统一改成这套值，不是
             只改这一处。 */}
         <h2 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">每人净值</h2>
-        {/* fix(2026-09-17 第二十轮，Remy 要求逐 CSS token 核对结算屏)：`.list`
-            的字面规格是 border-radius:14px（之前是 Tailwind `rounded-xl`=12px，
-            差 2px 肉眼其实能看出来）+ gap:2px（之前 `gap-1`=4px，多了整整一倍）；
-            `.p-row` 的 gap 是 5px（之前 `gap-2`=8px）。padding 3px/5px 之前就是
-            对的，这次连带核对了一遍确认没漂。 */}
-        <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
-          {netEntries.map((entry) => {
-            const isExpanded = expandedId === entry.participantId;
-            return (
-              <li key={entry.participantId} className="flex flex-col">
-                <div className="flex items-center gap-[5px] py-[2px]">
+        {netEntries.map((entry) => {
+          const isExpanded = expandedId === entry.participantId;
+          return (
+            <Fragment key={entry.participantId}>
+              {/* fix(2026-09-24)：之前所有人共用一个 <ul> 大框（一个 border+底色的
+                  盒子把 Remy/htoo 都装进去），跟 Artifact 字面结构（每人各自一个
+                  独立的 .list 胶囊：`<div class="list"><div class="p-row">...`）
+                  不一样——这次改成每人各自一个独立的 rounded-[14px] 胶囊 <ul>，
+                  规格（border-radius:14px、padding 3px 5px）跟之前核对过的值完全
+                  没动，只是从"共享大框"拆成"逐人独立卡"。 */}
+              <ul className="flex flex-col rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
+                <li className="flex items-center gap-[5px] py-[2px]">
                   <Avatar name={entry.name} size={18} />
                   <span className="flex-1 text-[10.5px]">{entry.name}</span>
                   <span className={`text-[9.5px] ${entry.amount >= 0 ? 'text-positive' : 'text-negative'}`}>
@@ -139,70 +152,77 @@ export function SettlementBody({
                       {formatMoney(Math.abs(entry.amount), baseCurrency)}
                     </span>
                   </span>
-                </div>
-                {entry.detail.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(isExpanded ? null : entry.participantId)}
-                    // Artifact `.detail-toggle{margin:0 0 4px 25px}`——之前用
-                    // pl-[26px] 凑近似值，这次改成字面一致的 ml-[25px]+mb-1(4px)。
-                    className="tap-link self-start ml-[25px] mb-1 text-[8.5px] text-muted"
-                  >
-                    查看 {entry.name} 的分摊明细 {isExpanded ? '▲' : '▾'}
-                  </button>
-                )}
-                {isExpanded && (
-                  // fix(2026-09-17 第二十轮)：之前这里是"左边一条竖线缩进"的列表
-                  // （border-l + pl-2），跟 Artifact `.settle-detail` 的真实规格
-                  // （浅底色圆角盒子、盒内用 border-top 分隔行，不是竖线缩进）完全
-                  // 是两套不同的视觉语言。改成字面对齐：bg rgba(164,163,160,.14)
-                  // + border sand + radius 14px + padding 2px 7px + margin-bottom
-                  // 7px，每行 padding 4px 0、gap 7px、字号 10px，meta（垫付/分摊·
-                  // 日期）9px、金额 10px 半粗体——分类/日期/角色/不计分摊标签这些
-                  // 字段方案demo没有全部对应（demo 不区分"垫付/分摊"角色），这是
-                  // 真实需要的信息，塞进 meta 小字里，不因为对齐方案就把真信息丢了。
-                  <div className="ml-[25px] mb-[7px] flex flex-col rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[7px] py-[2px]">
-                    {entry.detail.map((d, i) => {
-                      // fix(2026-09-18)：商家名优先显示（跟活动流 expense-list.tsx
-                      // 的 primaryName 同一条规则），没填商家名的历史/手动记录退回
-                      // 显示分类——分类信息不会凭空消失，填了商家名时挪去 meta 行。
-                      const merchantName = d.merchant?.trim();
-                      const primaryName = merchantName || d.category;
-                      const metaParts = [d.role === 'paid' ? '垫付' : '分摊', new Date(d.expenseDate).toLocaleDateString()];
-                      if (merchantName) metaParts.push(d.category);
-                      return (
-                      <div
-                        key={`${d.expenseId}-${i}`}
-                        className={`flex items-center gap-[7px] py-1 text-[10px] ${i > 0 ? 'border-t border-sand' : ''}`}
+                </li>
+              </ul>
+              {entry.detail.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setExpandedId(isExpanded ? null : entry.participantId)}
+                  // fix(2026-09-24)：之前借用全局 .tap-link（min-h-[32px] 触控热区），
+                  // 32px 的隐形点击区域在 8.5px 小字周围留出一圈看不见但占位的空气，
+                  // 是 Remy 反馈"每人下面留了一大块空白，链接位置不对"的真实成因之一。
+                  // Artifact `.detail-toggle{all:unset;...}` 本来就没有任何触控热区
+                  // padding，这次改成贴着这个规格来的最小样式，不再借用 .tap-link——
+                  // 其它用 .tap-link 的地方（编辑/删除/撤销/复制这类）不受影响，只是
+                  // 这一处不再复用那个 class。现在这颗按钮是紧跟着上面胶囊卡的兄弟
+                  // 元素（不再嵌在卡片内部），跟 section 的 gap-2(8px) 一起，链接紧贴
+                  // 卡片下方，不再留出一大块空白。
+                  className="self-start ml-[25px] text-[8.5px] text-muted underline underline-offset-2"
+                >
+                  查看 {entry.name} 的分摊明细 {isExpanded ? '▲' : '▾'}
+                </button>
+              )}
+              {isExpanded && (
+                // fix(2026-09-17 第二十轮)：之前这里是"左边一条竖线缩进"的列表
+                // （border-l + pl-2），跟 Artifact `.settle-detail` 的真实规格
+                // （浅底色圆角盒子、盒内用 border-top 分隔行，不是竖线缩进）完全
+                // 是两套不同的视觉语言。改成字面对齐：bg rgba(164,163,160,.14)
+                // + border sand + radius 14px + padding 2px 7px + margin-bottom
+                // 7px，每行 padding 4px 0、gap 7px、字号 10px，meta（垫付/分摊·
+                // 日期）9px、金额 10px 半粗体——分类/日期/角色/不计分摊标签这些
+                // 字段方案demo没有全部对应（demo 不区分"垫付/分摊"角色），这是
+                // 真实需要的信息，塞进 meta 小字里，不因为对齐方案就把真信息丢了。
+                <div className="ml-[25px] mb-[7px] flex flex-col rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[7px] py-[2px]">
+                  {entry.detail.map((d, i) => {
+                    // fix(2026-09-18)：商家名优先显示（跟活动流 expense-list.tsx
+                    // 的 primaryName 同一条规则），没填商家名的历史/手动记录退回
+                    // 显示分类——分类信息不会凭空消失，填了商家名时挪去 meta 行。
+                    const merchantName = d.merchant?.trim();
+                    const primaryName = merchantName || d.category;
+                    const metaParts = [d.role === 'paid' ? '垫付' : '分摊', new Date(d.expenseDate).toLocaleDateString()];
+                    if (merchantName) metaParts.push(d.category);
+                    return (
+                    <div
+                      key={`${d.expenseId}-${i}`}
+                      className={`flex items-center gap-[7px] py-1 text-[10px] ${i > 0 ? 'border-t border-sand' : ''}`}
+                    >
+                      <span className="min-w-0 flex-1 truncate font-medium">
+                        {primaryName}
+                        {d.excludeFromSplit && (
+                          <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.3)] px-[5px] py-[1px] align-middle text-[8px] font-normal text-muted">
+                            不计分摊
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-[9px] text-muted">
+                        {metaParts.join(' · ')}
+                      </span>
+                      <span
+                        className={`ml-auto shrink-0 font-serif text-[10px] font-semibold tabular-nums ${
+                          d.amountBaseCurrency >= 0 ? 'text-positive' : 'text-negative'
+                        }`}
                       >
-                        <span className="min-w-0 flex-1 truncate font-medium">
-                          {primaryName}
-                          {d.excludeFromSplit && (
-                            <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.3)] px-[5px] py-[1px] align-middle text-[8px] font-normal text-muted">
-                              不计分摊
-                            </span>
-                          )}
-                        </span>
-                        <span className="shrink-0 text-[9px] text-muted">
-                          {metaParts.join(' · ')}
-                        </span>
-                        <span
-                          className={`ml-auto shrink-0 font-serif text-[10px] font-semibold tabular-nums ${
-                            d.amountBaseCurrency >= 0 ? 'text-positive' : 'text-negative'
-                          }`}
-                        >
-                          {d.amountBaseCurrency >= 0 ? '+' : '-'}
-                          {formatMoney(Math.abs(d.amountBaseCurrency), baseCurrency)}
-                        </span>
-                      </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                        {d.amountBaseCurrency >= 0 ? '+' : '-'}
+                        {formatMoney(Math.abs(d.amountBaseCurrency), baseCurrency)}
+                      </span>
+                    </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Fragment>
+          );
+        })}
       </section>
 
       <section className="flex flex-col gap-2">
@@ -273,6 +293,16 @@ export function SettlementBody({
           内容跟上面「转账清单」区块已经出现过的"转账进度：X/Y笔已确认收款"重复了两遍。
           这次拿掉 disabledReason，"没收齐"这个状态改成按钮自己的文案，不再重复。 */}
       {!alreadySettled && isOwner && <MarkSettledButton tripId={tripId} disabled={!allConfirmed} />}
-    </>
+      {/* fix(2026-09-24，round46 顺带修复"手机视口展开较长分摊明细时 FAB 压住最后一笔"）：
+          底部常驻"记一笔消费"操作条（.action-bar，高度是 app/globals.css 里唯一的真实
+          来源 --action-bar-h，量出来是 60px）在 TripLayout 那一层已经有 .action-bar-reserve
+          统一预留同高度的底部空白——但那份预留是按"整个页面的最终高度"算的，round46 独立
+          ui-auditor 用真实滚动到位截图（非 fullPage）在手机视口展开 17 行分摊明细后，仍然
+          复现了操作条压住最后一笔的问题。这里不改 TripLayout（那是全站共用的机制，改了
+          影响所有页面），只在结算页内容区自己的底部，展开了任意一条分摊明细时，额外再叠
+          一层跟 --action-bar-h 同源（不是另外拍一个数字，取的是操作条自己唯一的高度来源）
+          的安全间距，双保险；没有展开任何明细时不加，不会让正常状态平白多出一截空白。 */}
+      {expandedId && <div aria-hidden="true" style={{ height: 'var(--action-bar-h)' }} />}
+    </div>
   );
 }
