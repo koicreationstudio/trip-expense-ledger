@@ -56,7 +56,7 @@
 
 ### 六、部署与活动板
 
-**这轮没有改动任何应用代码**，纯诊断性质，没有触发 `./deploy.sh`（没有东西需要部署）。新增文件：`REMY-TEST-STEPS-2026-09-24.md`（仓库根目录，给 Remy 的手机测试步骤）。commit：[[COMMIT_HASH]]（只含 `PENDING-DECISIONS-trip-expense-ledger.md` 这次新增的记录 + `REMY-TEST-STEPS-2026-09-24.md`）。
+**这轮没有改动任何应用代码**，纯诊断性质，没有触发 `./deploy.sh`（没有东西需要部署）。新增文件：`REMY-TEST-STEPS-2026-09-24.md`（仓库根目录，给 Remy 的手机测试步骤）。commit：`285923f`（只含 `PENDING-DECISIONS-trip-expense-ledger.md` 这次新增的记录 + `REMY-TEST-STEPS-2026-09-24.md`）。
 
 D1 测试痕迹：这轮插入的临时验证 session（`user_agent='PM-VERIFY-2026-09-24-round54-navprobe'`）已经删除并用 `SELECT count(*)` 核对归零，没有留在 Remy 真实数据里。**顺手查证时撞见两条更早的、UA 是裸 `curl/8.7.1`（没有任何 PM-VERIFY 标记）的遗留测试 session**（创建于 2026-09-23 14:13、2026-09-24 07:51），推测是更早某一轮验证时忘了带标记，这轮没有删除它们（沿用 round48/round53 记过的同一条保守原则：没有专属标记，没法安全判断这是不是别的并行任务留下的，删错的风险比留着的风险大），如实记录留给以后有更完整上下文的人处理。
 
