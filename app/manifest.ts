@@ -10,8 +10,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: '出差消费记录：记账 + 同行人代垫结清 + 汇率比对最省钱支付方式推荐',
     start_url: '/',
     display: 'standalone',
-    background_color: '#FEFCF7',
-    theme_color: '#23232E',
+    background_color: '#F7F7F6',
+    theme_color: '#373736',
     icons: [
       { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
       { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },

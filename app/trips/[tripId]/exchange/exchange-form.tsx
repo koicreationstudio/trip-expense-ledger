@@ -393,7 +393,7 @@ export function ExchangeForm({
       </label>
 
       {splitEnabled && (
-        <div className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(184,158,97,.14)] p-2">
+        <div className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] p-2">
           <div className="flex flex-col gap-1">
             <span className="field-label">另一个目标钱包</span>
             <div className="flex flex-wrap gap-1.5">

@@ -1114,3 +1114,70 @@ round37 commit（`6962d73`）的 commit message 写的是这份文档"原样保�
 
 - D1 真实数据核对：`wallet`/`payment_method`/`expense` 三张表按 `trip_id`/`payment_method_id` 查证，确认钱包绑定关系和历史消费时间线（见上面「三」）。
 - 真机走查：见 `ui-auditor` 这一轮的走查报告（截图路径/结论附在 lifeos-pm 收到的汇报里），覆盖色板呈现、结算页 FAB 多种展开状态下的可见性、钱包卡新增提示文字 + 深链跳转到"设置当前余额"面板并正确展开+滚动。
+
+# 第四十轮：色板第三次反转，暖色 → 灰阶（2026-09-24，这次是最终定案）
+
+## 背景：色板方向反复的完整时间线
+
+这是色板方向第三次拍板，如实记录清楚，不含糊：
+
+1. **09-16 之前**：暖色系。
+2. **09-中**：漂移成灰阶（候选D时期，非 Remy 主动要求，是过程中自然漂移出来的）。
+3. **09-23 第三十八轮**：creative-director 系统性体检后，认定灰阶是"漂移"，判断依据是 DESIGN-BRIEF.md「色彩强度柔和化（2026-09-08）」/「第六版」/「第七版」三节里已经过 WCAG 对比度实算的暖色论证，改回了暖色，并把这三节此前被 round37 误删的内容补了回来当权威依据。**这次判断全程没有拿一张真实生产截图跟 Remy 心里想要的效果逐值核对过**，是纯文字论证下的判断。
+4. **09-24（这一轮）**：Remy 亲眼拿两张真实截图对比——线上暖色版「2026香港」行程主页 vs 她心里的目标灰阶版「2026曼谷出差」行程主页——明确推翻第三十八轮的结论，通过 AskUserQuestion 明确选择"完全按灰阶截图重做，要推翻 DESIGN-BRIEF.md 里暖色论证那两节"。这不是又一次空泛的审美反复：Remy 给的理由很直接——方向不对，以灰阶参照图（`design-references/2026-09-24-image8-target-grayscale-bangkok.png`，"2026曼谷出差"行程）为准。这轮除此之外没有更具体的理由，不替她编造，之后如果她补充说明会另外记录。
+
+## 这次的方法：像素级取色，不是凭印象判断
+
+`design-references/2026-09-24-image7-current-warm-hongkong.png`（当前线上暖色版，桌面，1603×1781）和 `design-references/2026-09-24-image8-target-grayscale-bangkok.png`（目标灰阶版，手机，835×1659）——两张图都用 Python PIL 做了像素级取色（逐区域采样众数，排除文字反锯齿噪点），不是肉眼估读，也派了 `creative-director` 独立做一遍同样的像素采样交叉核对，两边结果基本吻合。
+
+**关键发现**：取色结果几乎逐值匹配 candidate D 落地时期（2026-09-11～2026-09-12，即第三十八轮改回暖色之前）`tailwind.config.ts` 最后一版的定案值——不是"凭印象觉得像"，是精确到个位数的匹配（比如 `ink` 采样 RGB(55,55,54) 对应 candidate D 定案 `#373736`=(55,55,54)，`paper` 采样 RGB(247,247,246) 对应 `#F7F7F6`=(247,247,246)，`sand`/边框采样 RGB(219,218,215) 对应 `#DBDAD6`=(219,218,214)，仅 1 个单位的四舍五入误差）。`app/apple-icon.png` 这份文件不在第三十八轮的改动文件清单里，全程没被改回暖色，它的实际像素（背景 RGB(247,247,246)、图标 RGB(55,55,54)）独立印证了这批灰阶值确实是 candidate D 时期真实上线过的颜色，不是这次重新发明的。
+
+**这不是"偷懒直接回退候选D"**——上面「四十轮」标题下达成的判断是"验证后发现两者高度吻合，所以采用"，不是不验证就抄旧值。而且确实发现并修正了一处历史遗留的不一致：`gold-lt` 在 candidate D 时期 `tailwind.config.ts` 用公式 `color-mix(in srgb, #A4A3A0 30%, white)` 算出 `#E4E3E2`，但 `reference/artifact-v10-source.html` 的 `:root` 一直写的是字面值 `#EDECE9`，两个文件本来就不一致。这次拿 image8 里顶部导航 tab 轨道底色实测像素采样，结果是 `#EDECE9`，公式算出来的 `#E4E3E2` 偏暗了一档、跟实际不符——这次统一两个文件都用验证过的字面值 `#EDECE9`，公式那处算是顺手修正的一个历史小 bug。
+
+**WCAG 对比度复核（历史教训：第三十八轮的 gold-dk 暖色方案就是因为 `negative-dk` 在渐变亮段对比度只有 2.93:1 翻车，这次必须重新核一遍，不能凭"这次是灰阶应该没事"就跳过）**：
+
+| 检查项 | 前景 | 背景 | 对比度 | 结果 |
+|---|---|---|---|---|
+| `negative-dk` 在深卡片平坦区 | `#E6B1A8` | `#2C2C2B`（渐变止点） | 7.03:1 | 远超 3:1 大字号门槛 |
+| `negative-dk` 在渐变最亮点 | `#E6B1A8` | `#555553`（渐变起点附近） | 3.96:1 | 过 3:1 门槛，但余量不算特别宽裕，以后渐变角度/亮度再调整要重新核一遍，别假设这次过了就永远过 |
+| `positive-dk` 在深卡片平坦区 | `#B7D1A8` | `#2C2C2B` | 9.41:1 | 远超 3:1 |
+| 白色正文文字在深卡片 | `#FFFFFF` | `#2C2C2B` | 13.98:1 | 轻松通过 |
+
+`positive`/`negative`/`positive-dk`/`negative-dk`/`coral`/`seafoam`/`ok`/`live` 这几个财务/状态语义色，核对了从第一次候选D落地到这次三轮反转的全部历史 diff，逐值完全没变过——它们从来不是"暖色 vs 灰阶"这个问题的一部分，这轮也原样没动。
+
+## 色板改动汇总（`tailwind.config.ts`）
+
+| Token | 暖色值（第三十八轮） | 灰阶值（这轮定案） |
+|---|---|---|
+| `ink` | `#23232E` | `#373736` |
+| `paper` | `#FEFCF7` | `#F7F7F6` |
+| `sand` | `#EDE8DA` | `#DBDAD6` |
+| `gold` | `#B89E61` | `#A4A3A0` |
+| `gold-lt` | `#F0E8D6` | `#EDECE9`（字面值，见上方修正说明） |
+| `gold-dk` | `#7E6630` | `#6E6E6C`（跟 `muted` 共用同一色号，候选D设计如此） |
+| `muted` | `#8A7A6A` | `#6E6E6C` |
+| `accent-circle` | `#B89E61` | `#A4A3A0` |
+| `accent.700`（CTA/选中态） | `#23232E` | `#373736` |
+| `hero-gradient` 主体 | `#2A2A38→#23232E→#1B1B24` 三段式 | `#6E6E6C→color-mix(#373736 82% black)` 收平二段式 |
+| `hero-gradient` 光晕层 | `rgba(184,158,97,.30)`（暖金） | `rgba(219,218,214,.30)`（sand 灰） |
+| `boxShadow.hero`/`.card` 锚定 RGB | `35,35,46` | `55,55,54` |
+| `hero-label` | `color-mix(#EDE8DA 70%, white)` | `color-mix(#DBDAD6 70%, white)` |
+
+`positive`/`negative`/`-dk` 变体、`coral`、`seafoam`、`ok`/`ok-bg`、`live`/`live-bg`、`cream`：不变。
+
+## 代码落地（28 个文件，Remy 指定的第三十八轮改动清单逐一核对，一个不漏）
+
+- **`tailwind.config.ts`**：colors/backgroundImage/boxShadow 三块改回灰阶定案值，新增本轮决策注释（不是简单复制 candidate D 当年的注释，是重新写的、带这次验证依据的说明）。
+- **`app/globals.css`**：`body` 硬编码 `background-color`/`color`、`.action-bar::before` 渐隐带渐变、`.chip` 背景 rgba，共 3 处。
+- **`app/icon.svg`**：`fill` 两处改回灰阶。
+- **`app/manifest.ts`**：`background_color`/`theme_color`。
+- **`public/icons/icon-192.png`/`icon-512.png`**：这两个是二进制文件，round38 的 diff 是二进制差异看不出内容——直接用 `git show a96f065~1:public/icons/icon-192.png` 从候选D时期的 git 历史里原样取回，不是重新画的，像素核对过中心点已经是灰阶 `#373736`。
+- **`reference/artifact-v10-source.html`**：`:root` 色板块 + `dropdown-panel`/`dd-row`/`dd-dot`/`hero`/`custom-split-light`/`.list`/`.settle-detail`/`.hist-card` 里的字面 hex/rgba，以及文档内 SCREENS 数组里一处历史说明文字，全部同步改回灰阶——这份文件是历轮"逐 token 核对 Artifact"反复当权威源头用的（round18/20/26/32 都这么做过），第三十八轮已经吃过一次"这份文件没同步、下次核对又被带偏"的教训，这次没有重蹈。
+- **`app/trips/[tripId]/payment-methods/payment-methods-manager.tsx`**、**`app/trips/[tripId]/settlement/mark-settled-button.tsx`**：硬编码 `#7E6630`（"设置当前余额"/"标记已结算"按钮禁用态背景）改回 `#6E6E6C`；各自的 `rgba(184,158,97,.14)` 改回 `rgba(164,163,160,.14)`。
+- **`app/trips/[tripId]/trip-header-nav.tsx`**：`rgba(35,35,46,.07)`（行程切换面板分隔线）改回 `rgba(55,55,54,.07)`。`#EBEAE8`（选中行底色）和 `#B5B4B1`（未选中圆点色）两处历轮都没变过，这次也不用动。
+- **其余 18 个文件**（`app/page.tsx`、`app/my-trips.tsx`、`app/invite/[code]/claim-form.tsx`、`app/trips/[tripId]/fx-compare-card.tsx`、`expense-list.tsx`、`fx-compare-list.tsx`、`wallet-grid.tsx`、`exchange/exchange-form.tsx`、`settlement/settlement-body.tsx`、`invites/invites-manager.tsx`、`trips/new/provision-gate.tsx`、`expenses/expense-form.tsx`、`components/select-dropdown.tsx`、`trips/new/new-trip-form.tsx`、`components/category-combobox.tsx`）：全部是 `rgba(184,158,97,X)` → `rgba(164,163,160,X)`（`gold` 的 RGB，暖→灰）字面替换，X 保留各自原来的透明度（.14/.2/.3 不等），逐文件 grep 核对过，全仓库 30 处（29 处分散在这些文件 + 1 处在 `globals.css`）+ 1 处 `trip-header-nav.tsx` 的 ink rgba，跟第三十八轮 commit message 里记录的"30 处 gold rgba + 1 处 ink rgba"数字精确对上，没有漏改也没有多改。
+- **`app/trips/[tripId]/wallet-card.tsx`**：只有一处注释文字（`.quickadd` 背景值的说明）恢复补充 `#373736`，`SHADE_OPTIONS`（钱包卡三档色阶选择器 `#1A1A19`/`#242422`/`#2E2E2C`）这个功能本身在候选D和暖色两个时期都从没被改过——它是独立于 ink/gold 主色板之外的钱包卡自定义色阶，跟这次"暖色 vs 灰阶"的问题不是一回事，像素核对过默认值 `#2E2E2C` 已经跟 image8 采样的钱包卡颜色几乎完全一致，不用动。
+
+**token 命名**：沿用候选D原有的 `gold`/`gold-dk`/`gold-lt` 命名，没有改成 `neutral` 之类的中性命名。这跟上次被抓包"名字叫 gold 颜色却是灰色"不是同一种情况——候选D时期这套命名本来就是这样定的（`gold`/`gold-dk`/`gold-lt` 是延续 remy-thailand 原始色板的 token 名称，历史上灰阶/暖色切换过好几轮，token 名字一直没变过，只是指向的具体色值在变），每个 token 定义旁边都有清楚的颜色注释写明"这轮实际指向的是候选D灰阶值"，不是悄悄换了颜色又不留痕迹。如果 Remy 觉得这套命名本身就该换成中性名字，这是一个独立于本轮"改色"之外的命名规范判断，没有在这轮顺手做，留给她表态。
+
+## 验证

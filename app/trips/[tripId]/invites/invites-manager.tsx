@@ -165,7 +165,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
               const isRevoked = invite.revokedAt !== null;
               const isExpired = invite.expiresAt !== null && new Date(invite.expiresAt).getTime() < Date.now();
               return (
-                <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(184,158,97,.14)] px-[5px] py-[3px] shadow-card">
+                <li key={invite.id} className="flex flex-col gap-1 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
                   <span className="flex items-start gap-1.5">
                     <span aria-hidden="true">🔗</span>
                     <span className="flex min-w-0 flex-col gap-0.5">
@@ -310,7 +310,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
             {participants.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between rounded-xl border border-sand bg-[rgba(184,158,97,.14)] px-[5px] py-[3px] shadow-card"
+                className="flex items-center justify-between rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card"
               >
                 <span className="flex items-center gap-2 text-[11px]">
                   <Avatar name={p.displayName} size={24} />

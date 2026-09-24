@@ -166,8 +166,8 @@ export function SelectDropdown({
                 triggerRef.current?.focus();
               }}
               className={`cursor-pointer rounded-lg px-[6px] py-[5px] text-[10.5px] ${
-                opt.value === value ? 'bg-[rgba(184,158,97,.14)] font-medium text-ink' : 'text-ink'
-              } ${opt.disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-[rgba(184,158,97,.14)]'}`}
+                opt.value === value ? 'bg-[rgba(164,163,160,.14)] font-medium text-ink' : 'text-ink'
+              } ${opt.disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-[rgba(164,163,160,.14)]'}`}
             >
               {opt.label}
             </li>

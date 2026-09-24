@@ -78,7 +78,7 @@ export default async function HomePage({ searchParams }: { searchParams?: { iden
     // 改 text-[15px]，跟本站其它屏的标题规格统一（这个未登录态入口页之前漏掉了）。
     <main className="flex flex-col gap-3.5">
       {searchParams?.identity_invalid && (
-        <p className="rounded-xl border border-sand bg-[rgba(184,158,97,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+        <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
           这条身份链接无效或已失效，请重新确认链接是否正确。
         </p>
       )}

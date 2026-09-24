@@ -284,7 +284,7 @@ export function WalletGrid({
         <span className="text-[10px] text-muted">已选：{selectedIconLabel}</span>
       </div>
       {/* 没套 expense-form.tsx 那个 rounded-xl+bg 提示盒——那个盒子的浅灰底色是靠反衬
-          page.tsx 的纯 bg-paper 页面底色出效果的；这个表单本身就是 bg-[rgba(184,158,97,.14)]
+          page.tsx 的纯 bg-paper 页面底色出效果的；这个表单本身就是 bg-[rgba(164,163,160,.14)]
           底，同色盒子叠同色底会看不出盒子只剩边框，索性跟 quick-add-expense.tsx 的错误提示
           一样只用纯文字，字号仍收到跟其它说明性小字同一档 10px。 */}
       {error && <p className="text-[10px] text-coral">{error}</p>}
@@ -312,7 +312,7 @@ export function WalletGrid({
   // default（浅色）变体：表单原地内联展开，自己带一层浅底边框盒子（这个盒子的浅灰底
   // 色是靠反衬页面纯 bg-paper 底色出效果的，跟弹层模式的白色卡片底不是一回事）。
   const inlineFormNode = creating && (
-    <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(184,158,97,.14)] p-3">
+    <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] p-3">
       {formFields}
     </form>
   );
@@ -360,7 +360,7 @@ export function WalletGrid({
           ) : (
             <div
               key={w.id}
-              className="relative w-[120px] shrink-0 rounded-xl border border-sand bg-[rgba(184,158,97,.14)] px-[9px] py-2"
+              className="relative w-[120px] shrink-0 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-2"
             >
               <button
                 type="button"

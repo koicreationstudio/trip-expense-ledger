@@ -125,7 +125,7 @@ export function SettlementBody({
             差 2px 肉眼其实能看出来）+ gap:2px（之前 `gap-1`=4px，多了整整一倍）；
             `.p-row` 的 gap 是 5px（之前 `gap-2`=8px）。padding 3px/5px 之前就是
             对的，这次连带核对了一遍确认没漂。 */}
-        <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(184,158,97,.14)] px-[5px] py-[3px] shadow-card">
+        <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
           {netEntries.map((entry) => {
             const isExpanded = expandedId === entry.participantId;
             return (
@@ -155,13 +155,13 @@ export function SettlementBody({
                   // fix(2026-09-17 第二十轮)：之前这里是"左边一条竖线缩进"的列表
                   // （border-l + pl-2），跟 Artifact `.settle-detail` 的真实规格
                   // （浅底色圆角盒子、盒内用 border-top 分隔行，不是竖线缩进）完全
-                  // 是两套不同的视觉语言。改成字面对齐：bg rgba(184,158,97,.14)
+                  // 是两套不同的视觉语言。改成字面对齐：bg rgba(164,163,160,.14)
                   // + border sand + radius 14px + padding 2px 7px + margin-bottom
                   // 7px，每行 padding 4px 0、gap 7px、字号 10px，meta（垫付/分摊·
                   // 日期）9px、金额 10px 半粗体——分类/日期/角色/不计分摊标签这些
                   // 字段方案demo没有全部对应（demo 不区分"垫付/分摊"角色），这是
                   // 真实需要的信息，塞进 meta 小字里，不因为对齐方案就把真信息丢了。
-                  <div className="ml-[25px] mb-[7px] flex flex-col rounded-[14px] border border-sand bg-[rgba(184,158,97,.14)] px-[7px] py-[2px]">
+                  <div className="ml-[25px] mb-[7px] flex flex-col rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[7px] py-[2px]">
                     {entry.detail.map((d, i) => {
                       // fix(2026-09-18)：商家名优先显示（跟活动流 expense-list.tsx
                       // 的 primaryName 同一条规则），没填商家名的历史/手动记录退回
@@ -178,7 +178,7 @@ export function SettlementBody({
                         <span className="min-w-0 flex-1 truncate font-medium">
                           {primaryName}
                           {d.excludeFromSplit && (
-                            <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(184,158,97,.3)] px-[5px] py-[1px] align-middle text-[8px] font-normal text-muted">
+                            <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.3)] px-[5px] py-[1px] align-middle text-[8px] font-normal text-muted">
                               不计分摊
                             </span>
                           )}
@@ -220,7 +220,7 @@ export function SettlementBody({
                 fix(2026-09-17 第二十二轮，Remy 明确表态"要"去掉头像)：round21 曾判断
                 "保留头像帮助一眼认人"，这轮 Remy 直接拍板照方案字面来——方案demo这里
                 只有"Alex → Remy"纯文字，没有头像，去掉，不再保留论证。 */}
-            <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(184,158,97,.14)] px-[5px] py-[3px] shadow-card">
+            <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
               {transfers.map((t) => {
                 const key = `${t.fromParticipantId}:${t.toParticipantId}`;
                 const isConfirmed = confirmedKeys.has(key);

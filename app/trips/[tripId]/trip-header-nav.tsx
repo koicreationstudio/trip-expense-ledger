@@ -195,7 +195,7 @@ export function TripHeaderNav({
             {otherTrips.map((trip) => (
               <li
                 key={trip.id}
-                className="flex items-center gap-[6px] border-t border-[rgba(35,35,46,.07)] px-[6px] py-[4px]"
+                className="flex items-center gap-[6px] border-t border-[rgba(55,55,54,.07)] px-[6px] py-[4px]"
               >
                 <span className="w-[9px] shrink-0 text-center text-[7px] leading-none text-[#B5B4B1]" aria-hidden="true">
                   ●

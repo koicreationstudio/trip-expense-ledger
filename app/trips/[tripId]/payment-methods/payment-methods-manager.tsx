@@ -258,7 +258,7 @@ export function PaymentMethodsManager({
           // 独立描边卡片"（之前用的 `tx-item` chokepoint 是圆角12px/自带padding/
           // 行与行之间用 gap-2(8px) 分开，两套完全不同的视觉语言）。改成跟
           // settlement-body.tsx 净值/转账清单同一套写法。
-          <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(184,158,97,.14)] px-[5px] py-[3px] shadow-card">
+          <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
             {methods.map((m) => (
               <li key={m.id} className="flex items-center gap-[5px] py-[3px]">
                 <span
@@ -316,7 +316,7 @@ export function PaymentMethodsManager({
         ) : (
           // fix(2026-09-17 第二十一轮)：同上——这里也改成共用 `.list` 容器包
           // `.check-row`（`font-size:10.5px`），不再是每行各自一个独立描边胶囊。
-          <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(184,158,97,.14)] px-[5px] py-[3px] shadow-card">
+          <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
             {methods.map((m) => (
               <li key={m.id} className="flex items-center gap-[5px] py-[3px]">
                 {/* fix(2026-09-24 第三十九轮，团队看板 id=2026-09-23_232946_2850b4c5)：
@@ -477,7 +477,7 @@ export function PaymentMethodsManager({
           type="button"
           onClick={() => setBalancePanelOpen((v) => !v)}
           className="big-cta"
-          style={{ backgroundColor: '#7E6630' }}
+          style={{ backgroundColor: '#6E6E6C' }}
         >
           ⚙ 设置当前余额
         </button>

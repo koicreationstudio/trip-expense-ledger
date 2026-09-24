@@ -4,23 +4,24 @@
 <style>
 :root{
   color-scheme: light;
-  /* 2026-09-23 第三十八轮：这份文件的 :root 色板之前一直是候选D灰阶（ink/gold/sand/
-     paper 全部近乎中性灰），跟 tailwind.config.ts 已经改回的暖色系不一致——这份文件是
-     全项目"逐 token 核对 Artifact 字面规格"时反复拿来当权威源头用的（round18/20/26/32
-     都这么做过），色板留灰阶不同步，以后任何人再核对一遍会把暖色误判成"漂移"、改回灰阶，
-     这次一并同步成 DESIGN-BRIEF.md「色彩强度柔和化（2026-09-08）」定案的暖色值，不再是
-     候选D的灰阶。 */
-  --ink:#23232E; --paper:#FEFCF7; --sand:#EDE8DA;
-  --gold:#B89E61; --gold-lt:#F0E8D6; --gold-dk:#7E6630;
-  --accent:#23232E; --accent-hover:#1D1D26;
+  /* 2026-09-24 第四十轮：色板第三次反转改回灰阶，这份文件的 :root 要跟
+     tailwind.config.ts 同步——这份文件是全项目"逐 token 核对 Artifact 字面规格"时
+     反复拿来当权威源头用的（round18/20/26/32 都这么做过），不同步的话下次核对
+     又会把灰阶误判成"漂移"改回暖色，第三十八轮那次就是这么翻车的。详细依据见
+     tailwind.config.ts colors 块顶部注释。gold-lt 这次用字面值 #EDECE9（跟
+     image8 像素采样一致），不再用 tailwind 那边旧公式算出来的 #E4E3E2——这份
+     文件本来就是字面 #EDECE9，这次两边统一。 */
+  --ink:#373736; --paper:#F7F7F6; --sand:#DBDAD6;
+  --gold:#A4A3A0; --gold-lt:#EDECE9; --gold-dk:#6E6E6C;
+  --accent:#373736; --accent-hover:#242423;
   --coral:#991B14; --positive:#3D6141; --negative:#A63926;
   --positive-dk:#B7D1A8; --negative-dk:#E6B1A8;
   --ok:#4C7A50; --ok-bg:#E3ECE0;
   --live:#3E7787; --live-bg:#DFEAEC;
   --cream:#F3E9D2;
   --hero-label: color-mix(in srgb, var(--sand) 70%, white);
-  --shadow-card: 0 1px 2px rgba(35,35,46,.06), 0 1px 1px rgba(35,35,46,.04);
-  --shadow-hero: 0 10px 24px -6px rgba(35,35,46,.35), 0 4px 10px rgba(35,35,46,.18);
+  --shadow-card: 0 1px 2px rgba(55,55,54,.06), 0 1px 1px rgba(55,55,54,.04);
+  --shadow-hero: 0 10px 24px -6px rgba(55,55,54,.35), 0 4px 10px rgba(55,55,54,.18);
   --font-sans: 'Inter', -apple-system, 'PingFang SC', sans-serif;
   --font-serif: 'IBM Plex Serif', Georgia, serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -134,24 +135,24 @@ body{
    照参考图逐项核对再改的，不是只调 CSS 数值——历史上这里已经被打回两次了） ---- */
 .subhead{font-size:10px; letter-spacing:.08em; color:var(--gold-dk); font-weight:500;}
 .dropdown-panel{
-  background:#FEFCF7; border:1px solid var(--sand); border-radius:14px; box-shadow:var(--shadow-card);
+  background:#F7F7F6; border:1px solid var(--sand); border-radius:14px; box-shadow:var(--shadow-card);
   padding:4px; margin-bottom:12px;
 }
 .dropdown-panel .dd-head{display:flex; justify-content:space-between; align-items:center; padding:2px 6px 3px;}
 .dropdown-panel .cap{font-size:9.5px; letter-spacing:.02em; color:var(--gold); font-weight:400;}
 .dd-new-corner{font-size:9.5px; color:var(--gold-dk); text-decoration:underline; text-underline-offset:2px; cursor:pointer;}
-.dd-row{display:flex; align-items:center; gap:6px; padding:4px 6px; background:transparent; border-top:1px solid rgba(35,35,46,.07);}
+.dd-row{display:flex; align-items:center; gap:6px; padding:4px 6px; background:transparent; border-top:1px solid rgba(55,55,54,.07);}
 .dd-row:first-of-type{border-top:none;}
 .dd-dot{width:9px; flex-shrink:0; font-size:7px; line-height:1; color:var(--ink); text-align:center;}
-.dd-row:not(.sel) .dd-dot{color:#B5A99A;}
+.dd-row:not(.sel) .dd-dot{color:#B5B4B1;}
 .dd-row .name{flex:1; font-size:11px; font-weight:400; color:var(--ink);}
-.dd-row.sel{background:#F0E8D6; border-radius:8px; border-top-color:transparent;}
+.dd-row.sel{background:#EBEAE8; border-radius:8px; border-top-color:transparent;}
 .dd-row.sel .name{font-weight:700;}
 .dd-row .check{color:var(--ink); font-size:10px; flex-shrink:0;}
 
 .hero{
-  background:radial-gradient(130px 100px at 90% 6%, rgba(184,158,97,.30), transparent 70%),
-             linear-gradient(165deg, #2A2A38 0%, #23232E 45%, #1B1B24 100%);
+  background:radial-gradient(130px 100px at 90% 6%, rgba(219,218,214,.30), transparent 70%),
+             linear-gradient(165deg, #6E6E6C 0%, #2c2c2b 30%, #2c2c2b 100%);
   border-radius:14px; padding:var(--card-pad); color:#fff; box-shadow:var(--shadow-hero); margin-bottom:10px;
 }
 .hero-top-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;}
@@ -211,7 +212,7 @@ body{
 .custom-split-row{display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:10px; color:#fff;}
 .custom-split-row input{width:58px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18); border-radius:8px; padding:var(--ctrl-pad); color:#fff; font-size:var(--ctrl-font); text-align:right;}
 /* 米黄底 split-panel 里用的浅色版自定义分摊（记一笔消费） */
-.custom-split-light{margin-top:2px; display:flex; flex-direction:column; gap:5px; background:rgba(35,35,46,.06); border-radius:10px; padding:7px;}
+.custom-split-light{margin-top:2px; display:flex; flex-direction:column; gap:5px; background:rgba(55,55,54,.06); border-radius:10px; padding:7px;}
 .custom-split-light .custom-split-row{color:var(--ink);}
 .custom-split-light .custom-split-row input{background:#fff; border:1px solid var(--sand); color:var(--ink);}
 
@@ -234,7 +235,7 @@ body{
 
 section.blk{margin-bottom:10px;}
 section.blk h4{margin:0 0 6px; font-size:10px; font-weight:500; color:var(--gold-dk); letter-spacing:.08em;}
-.list{background:rgba(184,158,97,.14); border:1px solid var(--sand); border-radius:14px; padding:var(--list-pad); box-shadow:var(--shadow-card); display:flex; flex-direction:column; gap:2px;}
+.list{background:rgba(164,163,160,.14); border:1px solid var(--sand); border-radius:14px; padding:var(--list-pad); box-shadow:var(--shadow-card); display:flex; flex-direction:column; gap:2px;}
 .p-row{display:flex; align-items:center; gap:7px; padding:var(--row-pad);}
 .avatar{width:22px; height:22px; border-radius:50%; background:var(--sand); color:var(--gold-dk); font-size:10.5px; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
 .p-row .nm{font-size:var(--row-name-font); font-weight:500;}
@@ -247,7 +248,7 @@ section.blk h4{margin:0 0 6px; font-size:10px; font-weight:500; color:var(--gold
 .p-row .amt .n{font-family:var(--font-serif); font-variant-numeric:tabular-nums;}
 .p-row .me{margin-left:auto; font-size:11px; color:var(--gold-dk);}
 .detail-toggle{all:unset; cursor:pointer; font-size:9px; color:var(--gold-dk); text-decoration:underline; text-underline-offset:2px; margin:0 0 5px 30px; display:inline-block;}
-.settle-detail{background:rgba(184,158,97,.14); border:1px solid var(--sand); border-radius:14px; padding:2px 7px; margin:0 0 7px; display:flex; flex-direction:column;}
+.settle-detail{background:rgba(164,163,160,.14); border:1px solid var(--sand); border-radius:14px; padding:2px 7px; margin:0 0 7px; display:flex; flex-direction:column;}
 .settle-detail .a-row{display:flex; align-items:center; gap:7px; padding:4px 0; font-size:10px;}
 .settle-detail .a-row+.a-row{border-top:1px solid var(--sand);}
 .settle-detail .a-row .cat{flex:1; min-width:0; font-weight:500;}
@@ -255,7 +256,7 @@ section.blk h4{margin:0 0 6px; font-size:10px; font-weight:500; color:var(--gold
 .settle-detail .a-row .amt{font-family:var(--font-serif); font-size:10px; font-weight:600; flex-shrink:0; margin-left:auto;}
 
 /* 活动流 / 记录·HISTORY —— 整块包成跟参与者/结算/支付方式一致的卡片规格 */
-.hist-card{background:rgba(184,158,97,.14); border:1px solid var(--sand); border-radius:14px; padding:8px 7px; box-shadow:var(--shadow-card);}
+.hist-card{background:rgba(164,163,160,.14); border:1px solid var(--sand); border-radius:14px; padding:8px 7px; box-shadow:var(--shadow-card);}
 .hist-static-note{font-size:9.5px; color:var(--gold-dk); margin:-2px 0 8px; line-height:1.5;}
 .hist-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
 .hist-sort{position:relative;}
@@ -475,7 +476,7 @@ const SCREENS = [
     id: 'trip', label: '行程主页', bignote: true,
     notes: [
       { b:'"2026 曼谷出差"标题字号收小', before:'18px，比其它屏幕的标题明显大一号', after:'统一收到 15px' },
-      { b:'切换行程下拉——第三次修订，这次先截图验证再改（第四轮反馈第三批）', before:'实际截图量过：面板背景 #FEFCF7，但未选中行、选中行各自套了一层实底色块（未选中 #EAEAE9、选中 #CACAC9），两个色块紧挨着像两张小卡片贴在面板里，层次偏"跳"；标题"切换行程"量出来是 #6E6E6C，但配上底色视觉上仍偏重；没有圆点标记；行与行之间没有分隔线，靠色块自己的边界区分', after:'未选中行改成透明、直接融进面板背景，只留一条 1px 极淡分隔线区分行与行；选中行只加一层很浅的灰 #EBEAE8（不再是 #CACAC9 那种明显更深的色块）；选中行左边加了实心圆点(●)+文字加粗，右边保留 ✓；标题文字改成"展开：切到其它行程"，颜色换浅一档（--gold token，#A4A3A0）；这轮改完把这份 HTML 存本地用 Playwright 实际截图看过、跟参考图描述逐条核对过，不是只调 CSS 数值就交差' },
+      { b:'切换行程下拉——第三次修订，这次先截图验证再改（第四轮反馈第三批）', before:'实际截图量过：面板背景 #F7F7F6，但未选中行、选中行各自套了一层实底色块（未选中 #EAEAE9、选中 #CACAC9），两个色块紧挨着像两张小卡片贴在面板里，层次偏"跳"；标题"切换行程"量出来是 #6E6E6C，但配上底色视觉上仍偏重；没有圆点标记；行与行之间没有分隔线，靠色块自己的边界区分', after:'未选中行改成透明、直接融进面板背景，只留一条 1px 极淡分隔线区分行与行；选中行只加一层很浅的灰 #EBEAE8（不再是 #CACAC9 那种明显更深的色块）；选中行左边加了实心圆点(●)+文字加粗，右边保留 ✓；标题文字改成"展开：切到其它行程"，颜色换浅一档（--gold token，#A4A3A0）；这轮改完把这份 HTML 存本地用 Playwright 实际截图看过、跟参考图描述逐条核对过，不是只调 CSS 数值就交差' },
       { b:'✅ 核实：钱包/取款换汇是否重复', after:'第四轮已经拍板合并，见下面这条具体说明' },
       { b:'我的钱包 vs 取款/换汇：真正合并（第四轮拍板）', before:'现状：点"💱 取款/换汇"会跳到一个完全独立的屏幕/导航项', after:'点击后改成在"我的钱包"卡片内部原地展开一个白色小面板（黑卡片里嵌一张白面板，方便看清表单字段），不再跳独立屏幕；左侧导航也不再单列"取款/换汇"这一项' },
       { b:'我的钱包卡对比度修正', before:'黑底上文字没有单独设置颜色，继承了深灰色 body 文字，对比度不够看不清', after:'chip 里的"泰锤现金/信用卡"标签和金额都改成白色（金额加粗），chip 底色和描边也略微调亮，黑底上清楚看得见了' },
