@@ -108,10 +108,14 @@ export function SetPinForm({ hasPinSet: initialHasPinSet }: { hasPinSet: boolean
         />
       </div>
       {error && <p className="text-[10px] text-coral">{error}</p>}
+      {/* fix(2026-09-24 第五十八轮，ui-auditor 真机走查抓到)：原本只判断 !pin，
+          只填了第一个框、确认框还是空的时候按钮就已经解锁，给"可以提交了"的
+          误导信号（点了还是会被 pin!==confirmPin 的校验拦下，不是数据风险，
+          纯粹是 disabled 态这个视觉信号不准）。两个框都有内容才解锁。 */}
       <button
         type="button"
         onClick={handleSave}
-        disabled={saving || !pin}
+        disabled={saving || !pin || !confirmPin}
         className="btn-secondary disabled:cursor-not-allowed"
       >
         {saving ? '保存中…' : hasPinSet ? '更新密码/PIN' : '设置密码/PIN'}
