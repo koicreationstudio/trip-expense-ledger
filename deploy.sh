@@ -9,12 +9,18 @@
 #      HEAD 那个 commit。照搬 calculator/deploy.sh、thailand-app/deploy.sh 已验证过
 #      的「部署基线」思路，适配成这个项目自己的结构）
 #   ② lint  ③ typecheck  ④ 单测 全过
+#   [拿部署互斥锁，从这里开始一直到脚本结束都在锁里 — 2026-09-24 round44 真实撞见
+#    两个进程同时跑 ./deploy.sh，同时写同一份 .open-next/ 互相踩文件，导致一次 build
+#    ENOENT 失败。复用全机通用的 ~/Desktop/Claude/scripts/deploy_mutex_lock.sh（10 条
+#    部署管线在用的同一套 mkdir 原子锁 + 死锁自动清理），锁的范围比其它项目更宽：
+#    其它项目大多只包 wrangler 那一行，这个项目是 build 步骤本身会撞车，所以从 ⑤ build
+#    包到 ⑦ 回读结束]
 #   ⑤ opennextjs-cloudflare build（内部触发 next build，打出 Worker 产物）
 #   ⑥ npx wrangler deploy
 #   ⑦ 回读部署后的 URL 打 /api/health 确认 200
 #
-# 退出码：0 成功 / 1 前置检查（① 干净树+已推 / lint/typecheck/test/build）没过，未部署 /
-#         2 wrangler deploy 本身失败 / 3 部署成功但回读没打到 200
+# 退出码：0 成功 / 1 前置检查（① 干净树+已推 / lint/typecheck/test/build / 互斥锁没拿到）
+#         没过，未部署 / 2 wrangler deploy 本身失败 / 3 部署成功但回读没打到 200
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT" || { echo "✘ 进不去 trip-expense-ledger 目录"; exit 1; }
@@ -64,6 +70,19 @@ echo "▶ [trip-expense-ledger deploy] ④ 单测"
 if ! npm test; then
   echo "✘ 单测不过，不部署"; exit 1
 fi
+
+echo "▶ [trip-expense-ledger deploy] 部署互斥锁 mutation 自检（防这套机制被后续改动悄悄削弱成空壳，每次真实部署都重新验一遍，不需要单独排期常驻任务）"
+if ! bash ~/Desktop/Claude/scripts/test_deploy_mutex_lock.sh >/dev/null; then
+  echo "✘ 部署互斥锁 mutation 自检失败（空壳），不部署"; exit 1
+fi
+
+echo "▶ [trip-expense-ledger deploy] 拿部署互斥锁（覆盖 build→wrangler deploy→回读整段，2026-09-24 round44 真实撞过一次 .open-next/ 互踩，全机通用锁见 ~/Desktop/Claude/scripts/deploy_mutex_lock.sh）"
+source ~/Desktop/Claude/scripts/deploy_mutex_lock.sh
+if ! deploy_lock_acquire "trip-expense-ledger"; then
+  echo "✘ 拿不到部署互斥锁（另一个进程可能正卡着），不部署"; exit 1
+fi
+trap 'deploy_lock_release "trip-expense-ledger"' EXIT
+echo "✓ 已拿到 trip-expense-ledger 部署互斥锁"
 
 echo "▶ [trip-expense-ledger deploy] ⑤ opennextjs-cloudflare build（内部会跑 next build）"
 if ! npx opennextjs-cloudflare build; then
