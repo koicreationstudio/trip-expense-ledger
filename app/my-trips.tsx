@@ -63,7 +63,18 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
         setError('打开这个行程失败，刷新页面再试一次');
         return;
       }
+      // fix(2026-09-24，第四十二轮，冷启动路径钱包深链间歇性失败排查)：这里是"从行程
+      // 列表进入"这条路径唯一铸新 tel_session 的地方，但之前只有 router.push 没有
+      // router.refresh()——跟这个 app 里另外三处同样"先换 session 再导航"的地方
+      // （trip-header-nav.tsx handleSwitch、logout-button.tsx、provision-gate.tsx）
+      // 不一致，那三处都是 push+refresh 成对出现。router.push 对一个客户端路由缓存
+      // 里还没有记录的 URL 会发一次新请求，理论上不依赖 refresh 也能拿到新数据，但
+      // 这次 ui-auditor 真机复测证实了行程详情页存在"URL 已跳但内容还在渲染上一屏"
+      // 的可感知窗口期（连着测的时候尤其明显），跟别处已经验证有效的这套 push+refresh
+      // 组合拳补齐，让这条路径也显式声明"进这个页面前，缓存别信，一定要拿最新的"，
+      // 不再是这个 app 里唯一一处"换了身份还可能拿到旧缓存"的例外。
       router.push(`/trips/${tripId}`);
+      router.refresh();
     } finally {
       setSwitchingId(null);
     }

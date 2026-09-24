@@ -61,9 +61,17 @@ export function ClaimForm({
             去开号
           </Link>
         </p>
+        {/* fix(2026-09-24，第四十二轮，横扫"换 session 再导航"这一类场景时顺带查到的
+            同款缺口)：认领身份成功那一刻服务端已经铸了新 tel_session（POST
+            /api/invite/[code]/claim），但这里点"现在就去记账"只 push 没有 refresh，
+            跟 my-trips.tsx handleOpen 是完全同一类问题（详见那边的注释）。这里补齐
+            router.refresh()，不是新问题，是同一个 class 在另一个入口的实例。 */}
         <button
           type="button"
-          onClick={() => router.push(`/trips/${tripId}`)}
+          onClick={() => {
+            router.push(`/trips/${tripId}`);
+            router.refresh();
+          }}
           className="btn-primary"
         >
           现在就去记账
