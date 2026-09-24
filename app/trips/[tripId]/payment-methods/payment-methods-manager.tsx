@@ -531,11 +531,19 @@ export function PaymentMethodsManager({
         {/* fix(2026-09-17 第十九轮)：跟上面同一批"改成 .big-cta 全宽"，颜色沿用 Artifact
             `style="background:var(--neutral-dk)"`——跟"添加支付方式"那颗纯黑主按钮区分开，
             是方案里同一颗按钮组件的第二种配色，不是新发明的按钮样式。图标 ⚙（0x2699）
-            核对过就是 Artifact 原文用的字符，不是 ⊙，这次没有改图标本身。 */}
+            核对过就是 Artifact 原文用的字符，不是 ⊙，这次没有改图标本身。
+            fix(2026-09-24，紧凑化第一轮，Remy 截图指出这颗按钮"全宽很重，跟上面添加支付方式
+            抢主次")：查了 reference/artifact-v10-source.html:381 才发现这一屏本来就有一条
+            scoped 覆盖 `#scr-payment .big-cta{padding:6px; font-size:10.5px}`——比通用
+            `.big-cta` 的 7px/11px 更小一档，这条覆盖之前从没被套用过，是真实的规格漏套，
+            不是这次新定的数值。全宽+双色 CTA 的形状本身是 Artifact 原意（第十九轮之前它是
+            "小胶囊+取消文字链接"，被判定跟方案不符改回全宽——历史见上一条注释），这次只补
+            scoped 的更小 padding/字号，形状没变；如果 Remy 看过这版还是觉得该收成非全宽的
+            小按钮，那是一次新的方案偏离判断，不在这轮范围内擅自改，留给她确认。 */}
         <button
           type="button"
           onClick={() => setBalancePanelOpen((v) => !v)}
-          className="big-cta"
+          className="big-cta p-[6px] text-[10.5px]"
           style={{ backgroundColor: '#6E6E6C' }}
         >
           ⚙ 设置当前余额
@@ -546,9 +554,14 @@ export function PaymentMethodsManager({
                 这句话说"已经记过的消费不会补算"，那时候是真的。这轮实现了创建钱包时的一次性
                 历史回溯（同支付方式+同币种，建钱包那一刻之前记过的消费会一次性补进起始余额），
                 这句话改成讲实际行为，同时如实标出没覆盖的边界——不是所有历史消费都保证会被
-                补算，取决于钱包创建时有没有直接绑支付方式。 */}
-            <p className="text-[10px] text-muted">
-              这里改的是这趟行程里每个钱包的余额（不是上面账号级的支付方式费率配置）。建钱包时如果直接绑了支付方式，绑定前的同支付方式+同币种历史消费会一次性补进来；之后新记的消费持续自动扣。如果是钱包建好之后才补绑支付方式，中间那段时间记的消费不会自动补，还是要自己来这里对一次。
+                补算，取决于钱包创建时有没有直接绑支付方式。
+                fix(2026-09-24，紧凑化第一轮)：原三句话压成一句，字号跟页面其它小字（tag-note/
+                del-icon 那档）对齐到 8.5px（原本是 10px，单独冒出一档偏大）。两个必须保留的
+                事实——①这里改的是钱包余额，跟上面账号级支付方式费率配置是两码事 ②绑定前的
+                历史消费会补进来——都还在，只是"钱包建好后才补绑不会自动补"这个次要边界情况
+                挪进后半句括号里，不占独立句子。 */}
+            <p className="text-[8.5px] text-muted">
+              这里改的是钱包余额，跟上面支付方式的费率配置是两码事；建钱包时如果直接绑了支付方式，之前的同类消费会自动补进来（钱包建好后才补绑的话不会，需要自己对一次）。
             </p>
             {wallets === null ? (
               <p className="text-xs text-muted">载入中…</p>
@@ -564,27 +577,47 @@ export function PaymentMethodsManager({
                 这趟行程建过的钱包都绑着已取消勾选的支付方式，去上面「本行程启用的支付方式」重新勾选看看。
               </p>
             ) : (
-              <ul className="flex flex-col gap-2">
+              /* fix(2026-09-24，紧凑化第一轮)：原本每个钱包各自一张 `tx-item` 卡片、占两行
+                 （名称+按钮一行，金额+日期一行），跟上面"已配置的支付方式"/"本行程启用的
+                 支付方式"两个区块（round21 已经改成共用 `.list` 容器 + 一行一条）不是同一套
+                 视觉语言，是这个文件里唯一还没跟上的一处，也是 Remy 这次截图点名的地方。
+                 改成同一个 `.list` 容器，每个钱包尽量一行：图标+名称+币种 / 金额 / 最近记录
+                 日期 / 小号按钮。按钮不再用 `.btn-secondary`（HIG 32px 触控热区，两行卡片里
+                 撑成一颗大白胶囊是主因之一），改用 Artifact 同一屏定义过的 `.mini-btn`
+                 视觉（深色小胶囊，bg-ink/text-[9px]/padding 3px 8px，见
+                 reference/artifact-v10-source.html:345 `.mini-btn` + :388 scoped
+                 `#scr-payment .mini-btn{font-size:9px;padding:3px 8px}`）——这个 class
+                 本身还没被搬进 globals.css 做成站内共用 chokepoint（现在只有这一屏两处用到，
+                 没有到需要建新全局 class 的规模），这里先按 Artifact 数值内联，不建新
+                 chokepoint，避免在没有把关全站其它位置的情况下贸然扩大一个新按钮规格的
+                 影响面。编辑态展开的输入框仍是主动操作时才出现，不是常态，沿用原本
+                 `field-input`/`btn-secondary`/`tap-link` 没有改。 */
+              <ul className="flex flex-col rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
                 {visibleWallets.map((w) => (
-                  <li key={w.id} className="tx-item flex-col items-stretch gap-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium">
-                        <span aria-hidden="true">{w.emoji}</span>
-                        <span className="truncate">{w.label}</span>
-                        <span className="font-mono text-[9px] text-muted">{w.currency}</span>
+                  <li key={w.id} className="flex flex-col gap-1 border-b border-sand py-[4px] last:border-b-0">
+                    <div className="flex items-center gap-[5px]">
+                      <span aria-hidden="true" className="shrink-0">
+                        {w.emoji}
                       </span>
-                      {editingWalletId !== w.id && (
-                        <button type="button" onClick={() => startEditBalance(w)} className="btn-secondary shrink-0">
-                          设置当前余额
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-serif text-[12.5px] tabular-nums">{formatMoney(w.currentBalance, w.currency)}</span>
+                      <span className="min-w-0 flex-1 truncate text-[10px] font-medium">
+                        {w.label} <span className="font-mono text-[8.5px] text-muted">{w.currency}</span>
+                      </span>
+                      <span className="shrink-0 font-serif text-[10.5px] tabular-nums">
+                        {formatMoney(w.currentBalance, w.currency)}
+                      </span>
                       {w.balanceUpdatedAt && (
-                        <span className="text-[9px] text-muted">
-                          最近记录 {new Date(w.balanceUpdatedAt).toLocaleDateString()}
+                        <span className="shrink-0 text-[8px] text-muted">
+                          {new Date(w.balanceUpdatedAt).toLocaleDateString()}
                         </span>
+                      )}
+                      {editingWalletId !== w.id && (
+                        <button
+                          type="button"
+                          onClick={() => startEditBalance(w)}
+                          className="shrink-0 rounded-full bg-ink px-[8px] py-[3px] text-[9px] font-medium text-white transition-colors hover:bg-accent-800"
+                        >
+                          设置
+                        </button>
                       )}
                     </div>
                     {editingWalletId === w.id && (
@@ -637,30 +670,34 @@ export function PaymentMethodsManager({
                 {/* fix(2026-09-24 追加需求，Remy 拍板)：本行程已开启、但还没建对应钱包的
                     支付方式——灰显 + 「建钱包」按钮，不是开关一打开就自动建，等这里主动
                     点了才建（走 `handleCreateWalletForMethod`，跟"我的钱包"区块新建一个
-                    绑支付方式的钱包背后同一个 POST 端点，历史消费回溯照样生效）。用跟
-                    真实钱包行同一个 `tx-item` 容器（`border-dashed` 呼应 wallet-grid.tsx
-                    里"+新建钱包"占位卡同款虚线语义，`opacity-70` 做弱化），保证跟面板里
-                    现有的行样式统一，不是另起一套视觉。建好之后 `loadWallets()` 让这个
-                    支付方式从这个列表里消失、同时在上面 `visibleWallets` 里出现，"就地"
-                    变成可填余额的正常行。 */}
+                    绑支付方式的钱包背后同一个 POST 端点，历史消费回溯照样生效）。
+                    fix(2026-09-24，紧凑化第一轮)：同上，从两行的虚线卡片改成跟真实钱包行
+                    同一个 `.list` 里的一行——虚线语义挪到「建钱包」按钮本身的
+                    `border-dashed`，弱化用 `opacity-70`（跟原本一致）；原本占一整行的说明
+                    句子（"这趟行程已开启这个支付方式，但还没建对应的钱包，没法追踪余额"）
+                    改成 `title`/`aria-label`，鼠标悬停或屏幕阅读器还是能拿到完整意思，
+                    只是常态不再占一整行视觉空间——按钮本身的"建钱包"三个字已经把意图说清楚。 */}
                 {missingWalletMethods.map((m) => (
-                  <li key={`missing-wallet-${m.id}`} className="tx-item flex-col items-stretch gap-1 border-dashed opacity-70">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-muted">
-                        <span aria-hidden="true">{m.kind === 'card' ? '💳' : '💵'}</span>
-                        <span className="truncate">{m.label}</span>
-                        <span className="font-mono text-[9px] text-muted">{m.settlementCurrency}</span>
-                      </span>
-                      <button
-                        type="button"
-                        disabled={creatingWalletMethodId === m.id}
-                        onClick={() => handleCreateWalletForMethod(m)}
-                        className="btn-secondary shrink-0"
-                      >
-                        {creatingWalletMethodId === m.id ? '建立中…' : '建钱包'}
-                      </button>
-                    </div>
-                    <p className="text-[9px] text-muted">这趟行程已开启这个支付方式，但还没建对应的钱包，没法追踪余额。</p>
+                  <li
+                    key={`missing-wallet-${m.id}`}
+                    className="flex items-center gap-[5px] border-b border-sand py-[4px] opacity-70 last:border-b-0"
+                    title="这趟行程已开启这个支付方式，但还没建对应的钱包，没法追踪余额。"
+                  >
+                    <span aria-hidden="true" className="shrink-0">
+                      {m.kind === 'card' ? '💳' : '💵'}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-muted">
+                      {m.label} <span className="font-mono text-[8.5px] text-muted">{m.settlementCurrency}</span>
+                    </span>
+                    <button
+                      type="button"
+                      disabled={creatingWalletMethodId === m.id}
+                      onClick={() => handleCreateWalletForMethod(m)}
+                      aria-label={`「${m.label}」这趟行程已开启，但还没建对应的钱包，点击建钱包`}
+                      className="shrink-0 rounded-full border border-dashed border-sand bg-white px-[8px] py-[3px] text-[9px] font-medium text-ink transition-colors hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {creatingWalletMethodId === m.id ? '建立中…' : '建钱包'}
+                    </button>
                   </li>
                 ))}
               </ul>
