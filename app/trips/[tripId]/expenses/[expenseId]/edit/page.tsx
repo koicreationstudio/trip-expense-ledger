@@ -4,6 +4,9 @@ import { getDb } from '@/lib/db/client';
 import { expenses, participants, paymentMethods, trips } from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadEnabledPaymentMethodIds, paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
+// fix(2026-09-24，Remy 真实反馈的真 bug，见 payment-method-label.ts 顶部注释)：
+// "现金"HKD/USD 同名支付方式在这个下拉里也分不清，不只是汇率比价卡片那一处。
+import { disambiguatePaymentMethodLabels } from '@/lib/domain/payment-method-label';
 import { ExpenseForm } from '../../expense-form';
 
 /**
@@ -49,6 +52,7 @@ export default async function EditExpensePage({
   const enabledPaymentMethods = myPaymentMethods.filter(
     (m) => enabledIds.has(m.id) || m.id === expense.paymentMethodId
   );
+  const displayLabels = disambiguatePaymentMethodLabels(enabledPaymentMethods);
 
   return (
     // fix(2026-09-16 第十七轮)：gap-6(24px)→gap-3.5(14px)、标题 16px→15px，跟本站其它屏统一。
@@ -63,7 +67,7 @@ export default async function EditExpensePage({
         baseCurrency={trip.baseCurrency}
         myParticipantId={identity.participantId}
         participants={tripParticipants.map((p) => ({ id: p.id, displayName: p.displayName }))}
-        paymentMethods={enabledPaymentMethods.map((m) => ({ id: m.id, label: m.label }))}
+        paymentMethods={enabledPaymentMethods.map((m) => ({ id: m.id, label: displayLabels.get(m.id) ?? m.label }))}
         initialExpense={{
           id: expense.id,
           amount: expense.amount,

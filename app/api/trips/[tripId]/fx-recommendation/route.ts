@@ -8,6 +8,11 @@ import { fxRecommendationSchema } from '@/lib/validation/schemas';
 import { recommendPaymentMethods } from '@/lib/domain/fx-recommendation';
 import type { FxRateLookup } from '@/lib/domain/fx-recommendation';
 import { paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
+// fix(2026-09-24，Remy 真实反馈的真 bug)：她名下"现金"HKD/USD 两个支付方式
+// label 完全一样，汇率比价卡片分不清是哪个——这个 chokepoint 在真正给 UI 用的
+// 每一处（这个路由 + expenses/new、expenses/[expenseId]/edit 两个表单页）统一
+// 消歧义，不在各自 UI 组件里各写一份判断，详见该文件顶部注释。
+import { disambiguatePaymentMethodLabels } from '@/lib/domain/payment-method-label';
 // fix(2026-09-17 第二十二轮)：`ensureRatesFresh` 抽到 `lib/fx/rate-cache.ts` 共享模块，
 // 见那边的文件顶部注释——汇率比价卡的"渠道比价"这轮也要接同一份实时汇率，不能
 // 两边各写一份现拉逻辑各自漂移。这个文件不再自己定义/写 exchange_rate_cache。
@@ -59,13 +64,16 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
     return null;
   };
 
+  const displayLabels = disambiguatePaymentMethodLabels(methods);
+
   const results = recommendPaymentMethods({
     amount: parsed.data.amount,
     expenseCurrency: parsed.data.expenseCurrency,
     compareCurrency: trip.baseCurrency,
     paymentMethods: methods.map((m) => ({
       id: m.id,
-      label: m.label,
+      label: displayLabels.get(m.id) ?? m.label,
+      kind: m.kind,
       settlementCurrency: m.settlementCurrency,
       fxMarkupPercent: m.fxMarkupPercent,
       foreignTxnFeePercent: m.foreignTxnFeePercent,

@@ -257,6 +257,17 @@ export function FxCompareCard({
   // 同一张卡再出现（比如点"↻刷新"重新拉取）不再重复默认勾选，尊重用户手动取消过的选择。
   const initializedCardKeysRef = useRef<Set<string>>(new Set());
 
+  // fix(2026-09-24，Remy 明确要求)：这组选项要按"账号×行程"存 D1，刷新页面/
+  // 换设备都要能恢复，不能只是 useState。preferenceLoadedRef 标记"这次挂载
+  // 有没有问过服务器要不要恢复存档"——存档拉取完成前不能触发保存 effect，
+  // 否则会用页面刚打开时那份"计算出来的默认值"覆盖掉真正的存档（见下面两个
+  // effect）。用 setTimeout(0) 而不是直接同步置 true，是为了让"加载存档→
+  // setState→触发保存 effect"这条链路里，紧跟在加载之后的那次保存 effect
+  // 判断仍然读到 false（同一次 commit 的被动 effect 会在 setTimeout 宏任务
+  // 之前跑完），从而跳过"刚恢复完存档又立刻把同样的值原样写回一次"这次多余的
+  // 请求——不是必须的优化，但避免每次打开卡片都有一次没有意义的网络往返。
+  const preferenceLoadedRef = useRef(false);
+
   const [cardRecommendations, setCardRecommendations] = useState<FxRecommendationResult[] | null>(null);
   const [cardsLoading, setCardsLoading] = useState(false);
   const [cardsError, setCardsError] = useState<string | null>(null);
@@ -280,6 +291,93 @@ export function FxCompareCard({
   const activeRates = liveRates ?? fallbackMyrRates;
   const midRate = effectiveHold && effectiveTarget ? deriveMidRate(activeRates, effectiveHold, effectiveTarget) : undefined;
   const amount = Number(amountYuan) || 0;
+
+  // fix(2026-09-24，Remy 明确要求"按账号×行程记住这组选项，换设备也要能恢复")：
+  // 挂载时问一次服务器有没有存档，跟"展开/收起"卡片本身无关——收起状态下头部
+  // 也要显示正确的目标币种文案（"💱 汇率比价 → {effectiveTarget}"），不能等到
+  // 用户点开才去恢复。
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPreference() {
+      try {
+        const res = await fetch(`/api/trips/${tripId}/fx-compare-preference`);
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          preference: {
+            holdCurrency: string;
+            targetCurrency: string;
+            enabledCompareKeys: string[];
+            amountYuan: number;
+          } | null;
+        };
+        const saved = data.preference;
+        if (!saved || cancelled) return;
+
+        // 优雅降级：存的值如果不在当前候选池里了（比如候选池以后又调整过），
+        // 悄悄忽略、继续用这一刻算出来的默认值，不阻塞渲染也不报错。
+        if (holdCandidates.includes(saved.holdCurrency)) {
+          setHoldCurrency(saved.holdCurrency);
+          const savedTargetCandidates = resolveTargetCandidates(saved.holdCurrency);
+          if (savedTargetCandidates.includes(saved.targetCurrency)) {
+            setTargetCurrency(saved.targetCurrency);
+          }
+        }
+        if (Number.isFinite(saved.amountYuan) && saved.amountYuan >= 0) {
+          setAmountYuan(String(saved.amountYuan));
+        }
+        if (Array.isArray(saved.enabledCompareKeys)) {
+          setEnabledCompareKeys(new Set(saved.enabledCompareKeys));
+          // 把存档里提到过的卡标成"已经决定过"，避免"我的支付方式"卡片列表
+          // 第一次异步到达时，下面 loadCardRecommendations 里"新卡默认勾选"
+          // 那段逻辑把这些卡当成"没见过"又强制勾回来。存档之后才新增的卡
+          // （存档里完全没提到过）依然会走"新卡默认勾选"这条既有规则，这是
+          // 有意的取舍——见 PENDING-DECISIONS 这一轮记录，不是漏做。
+          for (const key of saved.enabledCompareKeys) {
+            if (key.startsWith('card:')) initializedCardKeysRef.current.add(key);
+          }
+        }
+      } catch {
+        // 拉取失败静默走默认值，不阻塞卡片渲染，不打扰用户。
+      } finally {
+        if (!cancelled) {
+          setTimeout(() => {
+            if (!cancelled) preferenceLoadedRef.current = true;
+          }, 0);
+        }
+      }
+    }
+    void loadPreference();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId]);
+
+  // 保存 effect：持有币/目标币/自选比较项/金额任一变化都存一次，debounce 600ms
+  // 避免打字/连续切换时每次改动都打一次接口。preferenceLoadedRef 没置 true 之前
+  // （存档还没问完）不保存，避免用"页面刚打开时算出来的默认值"覆盖掉真正的存档。
+  // 存 effectiveHold/effectiveTarget（已经做过候选池兜底校验的值）而不是原始
+  // holdCurrency/targetCurrency，保证写进 D1 的值本身永远合法。
+  useEffect(() => {
+    if (!preferenceLoadedRef.current) return;
+    const timer = setTimeout(() => {
+      void fetch(`/api/trips/${tripId}/fx-compare-preference`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          holdCurrency: effectiveHold,
+          targetCurrency: effectiveTarget,
+          enabledCompareKeys: Array.from(enabledCompareKeys),
+          amountYuan: amount,
+        }),
+      }).catch(() => {
+        // 保存失败不打断记账主流程——这组选项只是体验优化，不是关键记账数据，
+        // 静默失败即可，下次任何一个选项再变化会自然再触发一次保存。
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveHold, effectiveTarget, amount, enabledCompareKeys]);
 
   // 实时中间汇率单独一个 effect，跟"我持有"/"目标币种"切换无关——这张表的形状
   // 跟具体选了哪个币种没关系，切换币种不用重新打这个请求，只有展开卡片第一次
@@ -389,13 +487,27 @@ export function FxCompareCard({
           const costYuan = r.costInCompareCurrency !== null ? centsToYuan(r.costInCompareCurrency) : null;
           const impliedRate =
             notionalTargetAmountYuan && costYuan && costYuan > 0 ? notionalTargetAmountYuan / costYuan : null;
+          // fix(2026-09-24，Remy 真实反馈的真 bug)：这行文案之前硬编码"刷卡支付"，
+          // 连"现金"支付方式（r.kind==='cash'）也这么标，Remy 真实"现金"支付方式
+          // 明明不是刷卡。改成按 r.kind 分——现金/卡各自的文案。同时把 API 早就算
+          // 好但一直被这里丢掉的 `r.requiresConversion` 接进来：同币种（比如"现金
+          // USD"付 USD 计价的东西）不需要经过任何换汇步骤，文案上明确标"无需换汇"，
+          // 不是又是套用跟别的支付方式一样的"折合花 X"话术——即使显示的 X 数值
+          // 因为汇率加点/手续费都是 0% 而跟别的支付方式凑巧一样（这不是算法 bug，
+          // 是 Remy 目前给这几个支付方式配置的费率本来就都是 0%，详见
+          // PENDING-DECISIONS 这一轮的记录），文案至少要如实说明"这笔是不需要
+          // 换汇的"，不能让人误以为算法没有考虑币种差异。
+          const paymentModeLabel = r.kind === 'cash' ? '现金支付' : '刷卡支付';
+          const note =
+            r.unavailable || costYuan === null
+              ? '汇率缺失，建议手动核对'
+              : r.requiresConversion
+                ? `${paymentModeLabel} · 折合花 ${costYuan.toFixed(2)} ${baseCurrency}`
+                : `${paymentModeLabel} · 同币种无需换汇，花 ${costYuan.toFixed(2)} ${baseCurrency}`;
           return {
             key: `card-${r.paymentMethodId}`,
             label: r.label,
-            note:
-              r.unavailable || costYuan === null
-                ? '汇率缺失，建议手动核对'
-                : `刷卡支付 · 折合花 ${costYuan.toFixed(2)} ${baseCurrency}`,
+            note,
             kind: 'card',
             effectiveRate: impliedRate,
             amountInTarget: impliedRate ? amount * impliedRate : null,
