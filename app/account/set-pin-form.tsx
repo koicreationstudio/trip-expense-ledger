@@ -78,7 +78,7 @@ export function SetPinForm({ hasPinSet: initialHasPinSet }: { hasPinSet: boolean
         <input
           id="set-pin-input"
           type="password"
-          inputMode="numeric"
+          autoComplete="new-password"
           className="field-input"
           placeholder="至少 4 位"
           value={pin}
@@ -97,7 +97,7 @@ export function SetPinForm({ hasPinSet: initialHasPinSet }: { hasPinSet: boolean
         <input
           id="set-pin-confirm-input"
           type="password"
-          inputMode="numeric"
+          autoComplete="new-password"
           className="field-input"
           placeholder="跟上面一样"
           value={confirmPin}

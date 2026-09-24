@@ -1,5 +1,21 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-24，第六十一轮，主会话亲自端到端验收第五十八~六十轮 + 修 PIN 找回 3 个真 bug，claim id=2026-09-24_182221_4b4bd349】
+
+子 agent 额度用尽（20:40 重置）中途停下，主会话改为自己用测试账号在生产走全流程（全新无 cookie 浏览器上下文，测试行程「测试-验收QA-删除」，测完 D1 全部删除并回读为 0，Remy 香港行程 1 钱包/11 消费未受影响）。
+
+**验收通过**：首页未登录分支有「用密码/PIN 登录」；清空 cookie 后用 PIN 找回 → 首页「我的行程」列出旧行程；/account 身份链接默认折叠（页面不出现 /id/ 链接）、PIN 强度引导、保存后「✓ 已设置」；邀请链接认领流程；朋友视角只有 行程主页/结算/支付方式 三个 tab（无邀请管理）；**隐私两层**：朋友界面「我的钱包」空，且用朋友 cookie 直调 `/api/trips/:id/wallets`、`payment-methods` 返回空数组，房主私人钱包不外泄；第二人再开同一邀请显示「名额已满」。
+
+**实测抓到并修复的 3 个真 bug**（+ 横扫同类 1 个）：
+1. PIN 找回成功后 `router.refresh()` 留在 /trips/new → 服务端认出已登录画出「创建新行程」表单，换设备的人会以为旧行程没了。改为 `window.location.href = '/'` 整页回首页。
+2. PIN 找回、身份链接找回两屏都没有 `<form>`，按回车不提交。两屏都包 `<form onSubmit>` + `type="submit"`。
+3. 新用户开号页文案仍写身份链接是「最主要的方式」，与账号页「PIN 为主、链接备用」不一致，改写。
+4. 横扫：3 个密码/PIN 输入框（找回 1 + 设 PIN 2）都是 `inputMode="numeric"`，手机只弹数字键盘，但账号页建议「短密码」，设了字母密码的人在新手机打不出字母 → 全部去掉，改 autoComplete。
+
+**守护**：新增 `app/trips/new/provision-gate.test.ts`（3 条），mutation 验证 3 次（改回 router.refresh / 加回 numeric / submit 改回 button）各 1 条失败后还原。全量 147/147 过，tsc、eslint 干净。
+
+**未测（留下一轮）**：朋友能否看到共享消费、能否改/删房主记的账、撤销邀请后链接是否失效（测试行程没记账，需房主/朋友两身份来回切）。
+
 ## 【2026-09-24，第六十轮，我的账号页三处优化：身份链接改折叠备用 + 成功提示挪到按钮旁 + PIN 强度引导，claim id=2026-09-24_173400_d430724f，Version ID `e20e0e68-2af3-411e-8f5a-2e27dec50d18`】
 
 背景：Remy 贴截图反馈 `/account` 页面三处问题——①完整身份链接（能免密登录账号的链接）一直摊开显示在页面上，容易被截图带出去泄露 ②`SetPinForm` 提交成功后"已更新/已设置"提示孤零零挂在按钮上方，位置看起来跟这次点击没关系 ③4 位 PIN 全库比对只有 1 万种组合，太弱没有任何强度引导。lifeos-pm 派工时明确要求这轮也走独立 worktree 隔离（当天这个项目有多个并行 session 同时在跑，活动板 `claim.py` 上已经记过一次撞车事故，id=2026-09-24_153705_29408dae）。
@@ -51,6 +67,45 @@
 - ui-auditor 第一轮提过 disabled/enabled 按钮视觉对比"存在但偏弱"的审美建议（可以考虑加灰底强化区分），判断是可改可不改的细节，这轮没动，如果 Remy 在意可以下一轮加。
 
 ---
+
+## 【2026-09-24，第六十轮，首页(未登录分支)加「用密码/PIN 登录」直接入口，claim id=2026-09-24_173854_58e2868c，Version ID `d1450224-3b92-4b6f-84fd-5a9ea7217952`——代码已验证正确+已部署，但 ui-auditor 真机截图走查没走完，如实记录不敢说"已完成"】
+
+背景：Remy 要求首页直接给"用密码/PIN 登录"入口，不用像之前那样先点"创建新行程"绕一圈才点得到 PIN 找回。跟同一天并行跑的"/account 我的账号页优化"任务（`d430724f`）不改同一批文件，各自独立 worktree 开发。
+
+**隔离方式**：独立 worktree `~/Desktop/.worktrees/trip-expense-ledger-pin-login-entry`（分支 `pin-login-entry-worktree`），真实 `npm install`（不是软链接），`npm run lint`/`typecheck`/139 个单测全过。
+
+**改动**：
+- `app/trips/new/provision-gate.tsx`：`ProvisionGate` 加 `initialStep?: Step` prop，默认仍是 `'ask'`；新增 `enteredDirectly` 标记（挂载时判一次 `initialStep === 'pin-recover'`），从直接入口进来时 pin-recover 屏的"返回"按钮走 `router.push('/')` 退回首页，不是退到用户没见过的 `'ask'` 中间步骤。
+- `app/trips/new/page.tsx`：读 `?step=pin-recover`（白名单只认这一个值）传给 `ProvisionGate`。
+- `app/page.tsx`：未登录分支加 `.btn-secondary` 链接「用密码/PIN 登录」，跳 `/trips/new?step=pin-recover`，排在「创建新行程」主按钮和下面两行提示文字中间。
+
+底层身份链接机制、`recover-pin` API 逻辑完全没动，只加 UI 入口。
+
+**部署**：`git push origin HEAD:main`（fast-forward，无冲突）+ `./deploy.sh` 五关全过，Version ID `d1450224-3b92-4b6f-84fd-5a9ea7217952`，`/api/health` 回读 200。部署前确认了另一条并行任务（`d430724f`，改 `/account` 页）的 `deploy.sh` 已经跑完（`pgrep` 确认无残留进程），没有撞车。
+
+**代码层面的正确性验证（PM 本人直接用生产环境 API 走通全链路，不是只信子 agent）**：建了一个专属测试账号（不是 Remy 真实账号，也没碰她的真实 PIN），流程：`POST /api/account/provision` 开号 → `POST /api/trips` 建测试行程「PM测试-PIN登录验证-可删除」→ `POST .../expenses` 记一笔测试消费（商家"PM测试商家"）→ `POST /api/account/set-pin` 设 PIN「837215」→ **换一个全新、完全没有任何 cookie 的会话** → `POST /api/account/recover-pin` 传同一 PIN → 200 + 新 `tel_user_session` cookie → 拿这个新 cookie 打首页，正确落进"我的行程"分支，列表里看到测试行程 → `POST /api/account/switch-trip` → 打行程详情页，能看到那笔测试消费（"PM测试商家"/"测试消费(可删除)"）。**这条链路从"完全无 cookie"到"看到旧记录"全部走通，证明底层找回机制本身没问题。**
+
+**没走完的部分，如实说清楚——ui-auditor 真机截图走查两次都被同一个环境问题打断，不是代码缺陷**：
+
+派了两次独立 `ui-auditor` 做真机截图走查（手机+桌面视口），两次都在中途撞见**浏览器环境不隔离**的问题：
+- 第一次：`browser_navigate` 到首页后几次导航之间，页面在"测试-邀请流程"/"🇭🇰2026香港"（真实行程，HSBC 大马卡/真实金额）/"2026曼谷"之间不受控漂移，`browser_snapshot` 显示浏览器里本来就有一个停在"🇭🇰2026香港"的既有标签页——不是它自己点开的。ui-auditor 发现不对立刻停手，零交互、零写入，只截图观察过一次界面结构后退出登录。
+- 第二次（更严重）：一开始首页导航就被动跳到陌生行程"UI复测行程"（`tripId=68edf03b-...`，经核实是**另一个并行 session 的测试数据，不是 Remy 真实数据**），尝试点"退出登录"清理时因为两次 `browser_snapshot` 之间 DOM ref 重新分配，误点成"我的账号"链接，落到了陌生账号的密码/PIN 设置页（有"清除已设置的密码/PIN"这种破坏性按钮）——**没有点任何按钮，截图存证后立刻终止**，没造成任何损失，但也没能确认清理掉这个陌生账号的登录态。
+
+**根因后来在同一份文档往下翻第五十九轮里找到了印证**：round59（`fx-compare` 修复那条并行任务）的 ui-auditor 自己也独立撞见过同一类现象（浏览器标签页跳到 `/account`），排查后确认是"浏览器实例被共享，看到了另一个并行 session（就是我这条 PIN 登录任务）当时的标签页状态"——两条互相印证，说明这不是陈年孤儿数据，是**同一天两个并行的 lifeos-pm 派工 session，各自的 ui-auditor 子 agent 用的 Playwright MCP 浏览器实例互相串了标签页**。`ui-auditor` 这个 agent 的工具清单里没有标签页管理工具（`browser_tab_list`/`browser_tab_new`/`browser_tab_select`），撞见陌生标签页时没有办法自己关掉/隔离，只能全靠"发现不对就停手"这条纪律兜底——这次两次都靠这条纪律兜住了，没有造成真实损失，但也确实两次都没能把计划的截图走完。
+
+**已确认的截图证据（PM 本人逐张看过，不是只信文字描述）**：
+- `/Users/linotan/Desktop/Claude/trip-pin-01-homepage-mobile-loggedout.png`、`trip-pin-02-homepage-mobile-button-detail.png`——首页未登录态，「用密码/PIN 登录」正确排在「创建新行程」下方、两行提示文字上方，是带边框的次级按钮，层级区分清楚。干净，可信。
+- `trip-pin-03-pin-recover-screen-mobile.png`——文件名跟内容对不上（环境漂移导致存成了别的状态），已确认不含 Remy 真实数据（是另两个测试账号"测试-邀请流程"/"UI测试行程"），但不能当作"PIN 找回屏"这一步的证据用。
+- `env-issue-unexpected-trip-page.png`、`env-issue-landed-on-foreign-account-page.png`——两次撞见环境问题时的存证截图，已确认没有 Remy 真实数据、没有任何破坏性操作留下的痕迹。
+
+**没有拿到干净截图的步骤**：PIN 找回屏本身（有 accessibility snapshot 文字证据但没有干净截图）、"返回"按钮回首页、提交 PIN 后登录成功跳"我的行程"、点进行程看到旧记录——这四步严格按"独立 ui-auditor 截图"这条标准都没有完成。
+
+**测试数据清理**：`wrangler d1 execute trip-expense-ledger-db --remote` 精确删除，`SELECT COUNT(*)` 核对全部归零——测试行程（1）、测试消费+分摊（1+1）、测试 participant（1）、tel_session（2）、tel_user_session（3）、user（2，含一开始多建的一个没用上的测试账号）。没有碰第二次撞见的那个陌生账号（不是我的测试数据，没有权限也没有必要动它）。
+
+**这轮没有做、诚实说清楚的事**：
+1. 没有third次重试 ui-auditor——两次都撞同一类环境问题，判断继续硬撞风险大于收益，先停手上报。
+2. 严格按本项目"独立 ui-auditor 走查 + 真实验证都要满足才算完成"这条规矩，**这轮不能算完全完成**——代码正确性和部署都有扎实证据，唯独"真机截图看到 PIN 提交成功+行程列表+旧记录"这几步的视觉证据缺失，需要下一轮（确认没有其它并行 session 占用 Playwright 浏览器之后）补上，或者由 Remy/lifeos-pm 决定 API 级别证据是否已经足够放行。
+3. **这次意外发现的"Playwright MCP 浏览器实例在并行 session 之间共享，`ui-auditor` 缺标签页管理工具兜底"是一个超出这个项目范围的机器级基础设施问题**，已经在汇报里原样带给 lifeos-pm，不属于 trip-expense-ledger 这一个项目该自己解决的事。
 
 ## 【2026-09-24，第五十九轮，第2轮追加反馈 A/B/C/D 落地（支付方式label全站消歧义/汇率比价卡分组/最划算徽章排除同币种/我的钱包缺失占位），claim id=2026-09-24_172302_44bb711c，Version ID `1d00f7dc-6b59-4d32-b382-35c1e0f28f22`】
 

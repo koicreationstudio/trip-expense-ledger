@@ -106,7 +106,9 @@ export function ProvisionGate({ initialStep }: { initialStep?: Step } = {}) {
         setPinRecoverError('密码/PIN 不对，或者还没设过——没设过的话用身份链接找回');
         return;
       }
-      router.refresh();
+      // 留在 /trips/new 上 refresh 只会让服务端认出"已登录"然后画出建行程表单，
+      // 换设备找回的人会以为旧行程没了；整页跳首页，由首页决定进行程还是列「我的行程」。
+      window.location.href = '/';
     } finally {
       setPinRecovering(false);
     }
@@ -177,6 +179,13 @@ export function ProvisionGate({ initialStep }: { initialStep?: Step } = {}) {
             找出来贴在下面就行，贴完整链接或者只贴那串字符都可以。
           </p>
         </div>
+        <form
+          className="flex flex-col gap-3.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleRecoverSubmit();
+          }}
+        >
         <div className="flex flex-col gap-2">
           <label htmlFor="identity-recover-input" className="field-label">
             身份链接
@@ -194,9 +203,10 @@ export function ProvisionGate({ initialStep }: { initialStep?: Step } = {}) {
           />
         </div>
         {recoverError && <p className="text-[10px] text-coral">{recoverError}</p>}
-        <button type="button" onClick={handleRecoverSubmit} className="btn-primary">
+        <button type="submit" className="btn-primary">
           用这条链接登录
         </button>
+        </form>
         <button type="button" onClick={() => setStep('ask')} className="btn-secondary">
           返回
         </button>
@@ -213,6 +223,13 @@ export function ProvisionGate({ initialStep }: { initialStep?: Step } = {}) {
             之前在&ldquo;我的账号&rdquo;页面设过的那个密码/PIN，对上了就直接帮你登进原来的账号。
           </p>
         </div>
+        <form
+          className="flex flex-col gap-3.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!pinRecovering && pinInput) handlePinRecoverSubmit();
+          }}
+        >
         <div className="flex flex-col gap-2">
           <label htmlFor="pin-recover-input" className="field-label">
             密码/PIN
@@ -220,7 +237,7 @@ export function ProvisionGate({ initialStep }: { initialStep?: Step } = {}) {
           <input
             id="pin-recover-input"
             type="password"
-            inputMode="numeric"
+            autoComplete="current-password"
             className="field-input"
             placeholder="至少 4 位"
             value={pinInput}
@@ -231,14 +248,10 @@ export function ProvisionGate({ initialStep }: { initialStep?: Step } = {}) {
           />
         </div>
         {pinRecoverError && <p className="text-[10px] text-coral">{pinRecoverError}</p>}
-        <button
-          type="button"
-          onClick={handlePinRecoverSubmit}
-          disabled={pinRecovering || !pinInput}
-          className="btn-primary"
-        >
+        <button type="submit" disabled={pinRecovering || !pinInput} className="btn-primary">
           {pinRecovering ? '找回中…' : '用这个密码/PIN 登录'}
         </button>
+        </form>
         <button
           type="button"
           onClick={() => (enteredDirectly ? router.push('/') : setStep('ask'))}
@@ -256,7 +269,7 @@ export function ProvisionGate({ initialStep }: { initialStep?: Step } = {}) {
         <div>
           <h1 className="text-[15px] font-semibold text-ink">保存好你的专属身份链接</h1>
           <p className="mt-2 text-[10px] text-muted">
-            这条链接是你以后重新登录这个账号最主要的方式——没有邮箱密码，链接丢了就找不回账号（除非你之后去&ldquo;我的账号&rdquo;页面另外设一个密码/PIN 当备用）。建议现在复制存到备忘录或密码管理器。
+            这条链接能在新设备上登回这个账号。更省事的做法是建好行程后去&ldquo;我的账号&rdquo;设一个密码/PIN，以后换设备在首页输入它就能找回；没设 PIN 之前，这条链接是唯一的找回方式，建议先复制存到备忘录或密码管理器。
           </p>
         </div>
         <div className="flex flex-col gap-2 rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[9px] shadow-card">
