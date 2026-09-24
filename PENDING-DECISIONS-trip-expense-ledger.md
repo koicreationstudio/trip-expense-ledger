@@ -1,5 +1,50 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-25，第六十五轮，追加 UI 三处小修复：钱包卡说明文字空白/收据按钮瘦身/汇率比价渠道组默认收起+徽章归属，claim id=2026-09-24_235347_53dad9c3(C)+2026-09-24_235350_fe88a023(D)+2026-09-24_235353_7ec2b0e9(E)，Version ID `1c261b50-6e4f-4fc0-b021-3bb3f1312709`】
+
+背景：跟第六十四轮（Bug A 钱包深链冷启动失败 + Bug B 展开状态跨页残留，commit `9fb5061`+`571d0ad`）同一批交付，复用同一个 worktree（`trip-expense-ledger-worktrees/wallet-deeplink-and-form-reset`，分支 `fix/wallet-deeplink-and-form-reset`），开工前确认过 worktree 干净、跟 origin/main 同步在 `571d0ad`。三处都是 Remy 追加反馈的小问题，不是新一轮 Artifact 方案变更。
+
+### C. 「我的钱包」深色卡说明文字下方空白过大 —— 根因：`.tap-link` 的 `min-h-[32px]` 撑爆 9px 小字段落行高
+
+`app/trips/[tripId]/wallet-grid.tsx`。用本地 dev + Playwright 实测出精确的层级归因（不是猜的）：段落 `<p>` 本身高度从 45.5px（异常）到 27px（正常，2 行 × 13.5px 行高），跟下面「💱 取款 / 换汇」按钮的间距**从头到尾都只有 8px**（来自 `wallet-card.tsx` 外层 section 的 `gap-[8px]`，这个间距 token 本身一直是对的，不用动）。真正的问题是段落尾部那个 `<Link>`（"去『支付方式』手动设置余额 →"）套了全站共用的 `.tap-link` class（`inline-flex min-h-[32px]`），这个 inline-flex 元素塞进 9px 文字的行内流时，会把它所在那一行的行框强行撑到 32px（32-13.5=18.5px 的"隐形高度"，视觉上读成一大块空白）——**这是同一个文件里 224-236 行早就修过一次的同款 bug**（"已有支付方式"快捷 chip 当时也是因为 `.tap-link` 撑爆行高被改成纯下划线文字），这次是同一处理方式在另一处的遗漏，不是新 bug 类型。
+
+改法：去掉 `tap-link`，换成 `className="underline underline-offset-2"`，不强制行高，纯粹跟随段落自然行高（这是段落里的行内说明链接，不是需要 32px 触控热区的独立按钮）。钱包为空时的空状态说明行（`text-[9.5px]`，没有 Link）核对过，没有同类问题，没有改。
+
+验收：生产真机截图（Remy 真实「🇭🇰2026香港」行程，trip_id=`f78a6b5e-8612-4097-8bfd-88a5db664045`，只读不点），说明文字到按钮间距目视紧凑，跟卡片其它行一致，没有异常空白——独立 `ui-auditor` 截图 + PM 本人复核截图（`/Users/linotan/Desktop/Claude/C-wallet-mobile.png`/`C-wallet-desktop.png`）确认。
+
+### D. 记账表单「收据（可选）」文件选择按钮太粗太胖
+
+`app/trips/[tripId]/expenses/expense-form.tsx`。实测当前真实高度是 **32px**（不是 Remy 截图目测的 44px），border 是标准 1px（`border-sand`），跟全站 10 个文件共用的 `.btn-secondary` 同一个高度地板值——"看起来胖"的根因不是真的高，是 `rounded-full`(9999px) 满圆角胶囊形状 + `text-[11px] font-medium` 加粗字号，跟旁边 `text-[10.5px]` 常规字重的"未选择文件"文字反差太大。
+
+改法：**不改全局 `.btn-secondary`**（会牵动移除/比价/平均分摊等 9 处其它按钮），改成这个按钮专属的紧凑样式：圆角 `rounded-full`→`rounded-lg`(8px)，字号 `text-[11px] font-medium`→`text-[10.5px] font-normal`（跟"未选择文件"完全同档）。**`min-h-[32px]` 刻意没有再往下降**——这是这个 app"次级操作"类按钮（`.tap-link`/`.btn-secondary`）用了很多轮、写进 `globals.css` 注释的既定触控地板值，砍到 32px 以下会破坏跟全站其它次级按钮的触控一致性，判断用形状/字重而不是高度来做"细"这件事更安全。横扫确认全项目只有这一处 `type="file"`，没有同类需要一起改的调用点。
+
+验收：生产真机截图（独立测试账号+测试行程，不是 Remy 真实行程），`/Users/linotan/Desktop/Claude/D-receipt-field-mobile.png`，视觉确认瘦身生效，没有提交表单/没有真的选文件。
+
+### E. 汇率比价卡「渠道换汇」默认收起 + 「✓最划算」徽章归属收窄到「我的支付方式」
+
+`app/trips/[tripId]/fx-compare-card.tsx` + `lib/domain/fx-best-offer.ts`（+ 新增 4 条单测）。两个独立改动：
+
+1. **默认收起渠道组**：新增纯前端 state `channelGroupExpanded`（默认 `false`），**刻意不接入 `fx-compare-preference` 那个 D1 存档**（第五十七/五十八轮踩过的坑：把交互态当成偏好写回 D1 污染真实数据，这次不重蹈）。默认只显示「我的支付方式」（如果有的话），列表底部一行小字链接「看换汇渠道参考价 ▾」，点开才展开「渠道换汇」分组，链接文案变「收起换汇渠道参考价 ▲」。只剩一组可见时（默认态）不渲染组标题（多余），两组都展开时才各自显示"渠道换汇"/"我的支付方式"标题。
+2. **"✓最划算"徽章收窄**：原来的 `findBestOfferIndex(allRows)` 全局比较改成新增的 `findBestCardOfferGlobalIndex`，只在 `kind==='card'` 子集里找第一个合资格的行，换算回原始 `globalIndex` 返回——渠道行的 `globalIndex` 永远不可能命中这个返回值，天然不会被误标"最划算"，即使渠道数字本身更好看。新增 4 条单测覆盖（渠道排第一也不该拿章/卡片子集里跳过同币种不合格的再找下一张/一张卡都没有返回 -1/所有卡都不合格返回 -1），mutation 验证过（把过滤逻辑改回"不筛 kind 直接用全部行"，9 条测试里 4 条失败，证明测试真的在守这条规则，不是空壳）。
+
+**关于第五十七/五十八轮教训的处理**：`fx_compare_preference.enabled_compare_keys` 里可能还留着渠道 key（Remy 真实行程查证过，确实留着全部 5 个 `channel:*` key），这次完全没有动这份已存数据，也没有清空它——渠道组收起只是不渲染，不影响这份偏好数据本身，收起状态下这些 key 依旧"存在但不显示"，符合要求。
+
+**验收时的一个副作用，如实记录（不是这轮改动引入的，是这个组件本来就有的行为）**：独立 `ui-auditor` 只读访问 Remy 真实行程的汇率比价卡时，D1 `fx_compare_preference` 表的 `updated_at` 从 `1790261287257` 变成了 `1790266709619`——查证 `hold_currency`/`target_currency`/`enabled_compare_keys`/`amount_cents` 四个字段逐一比对**内容完全一致，没有被覆盖或丢失**，只是时间戳变了。根因是组件里"加载存档→setState→触发保存 effect"这条链路的既有 `setTimeout(0)` 防抖保护（`preferenceLoadedRef`，代码注释里写明是为了"跳过刚恢复完存档又立刻把同样的值原样写回一次"）在这次访问里没能完全生效，导致纯粹打开页面查看（哪怕零交互）也会触发一次"写回相同内容"的 PUT 请求。**这是这个组件既有的、独立于这轮三处改动的行为**（我没有碰 `loadPreference`/保存 effect 那段代码），只是这次验收过程中真实观测到了，如实记录，没有在这轮范围内修——是否要根治这个"只读访问也触发写"的问题，需要 Remy/lifeos-pm 判断要不要排进下一轮。
+
+验收：生产真机（独立测试账号，额外新建了一个测试支付方式"测试现金"用来验证徽章归属）截图默认收起/展开两态 + 徽章位置，`/Users/linotan/Desktop/Claude/E-fx-default-with-pm-mobile.png`/`E-fx-expanded-with-pm-mobile.png`，PM 本人复核截图确认"渠道换汇"5 行没有任何一行带徽章、徽章只出现在"我的支付方式"里的"测试现金"上。
+
+### 测试数据清理
+
+独立 `ui-auditor` 为验收 D/E 新建的测试账号+测试行程（trip_id=`a3af1873-7d91-45b5-b34f-3b6e44f8849f`，含 1 个测试支付方式"测试现金"）验收后由 PM 本人手动清理：`trip`/`participant`/`payment_method`/`trip_payment_method_enabled`/`fx_compare_preference`/`session`/`user` 各表精确 `DELETE` 后逐项 `SELECT COUNT(*)` 核对归零。Remy 真实「🇭🇰2026香港」行程验收前后各查一次：`expense` 11→11 没变；`wallet` 3（跟第五十七~五十九轮之后她自己建的 HSBC/现金USD 钱包状态一致，不是这轮改动造成的变化）。
+
+### 部署 + 验证
+
+本地：`npm run lint`（0 警告 0 错误）、`npx tsc --noEmit`（0 错误）、`npm test`（171/171 全过，含新增 4 条单测）。`git fetch` 确认无新并行提交后 `safe_commit.py` 提交（commit `dcdf9bc`）、`git push origin HEAD:main` fast-forward 成功、`./deploy.sh` 五关全过，Version ID `1c261b50-6e4f-4fc0-b021-3bb3f1312709`，`/api/health` 回读 200。部署后独立 `ui-auditor` 真机走查（不是复用 PM 自己开发时截的图），PM 本人另外逐张 `Read` 了关键截图核实（不是只信文字报告）。
+
+**没有做/留给下一轮判断的事**：
+1. E 验收时发现的"只读访问也会触发 `fx_compare_preference` 写回相同内容"这个既有行为，这轮没有修，需要 Remy/lifeos-pm 决定要不要排期。
+2. `ui-auditor` 顺带指出汇率比价卡顶部"基准换算卡片"那排网格（4 币种时最后一张单独占满一行、宽度跟其它卡不对称）视觉上有点突兀，不在这轮修复范围内，没有处理，留作观察记录。
+
 ## 【2026-09-24，第六十四轮，钱包深链"冷启动间歇性失败"找到两个真根因并修好 + "展开的东西跨页面还开着"复现并横扫，claim id=2026-09-24_134910_cbeb3e5c（Bug A）/ 2026-09-12_123625_33ca0734（Bug B），commit `9fb5061`，Version ID `fb126b6a-328d-4edb-b541-adb5a7b3bacb`】
 
 背景：钱包卡「去支付方式手动设置余额 →」这条深链被报"已修复"4 次、每次被独立复测推翻，第五十六轮的结论是"没有证据是 app 缺陷"。这轮换了做法：先写一份能反复跑的原生 Playwright 脚本（不走 MCP 浏览器工具），全程只用新建的专属测试账号（行程「QA深链探针r64-可删除」，11 笔消费、1 个钱包、2 个支付方式），在生产环境把每条入口各跑 10 次以上，每次同时判三种历史症状（落错页 / session 丢了 / 面板没展开），外加"没滚到顶"，并录网络请求和页面内 scroll 插桩。拿到修前失败数据之后才动代码。
