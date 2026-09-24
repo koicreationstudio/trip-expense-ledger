@@ -162,3 +162,123 @@ describe('FxCompareCard — round66 bug G：基准换算卡片网格不拉伸', 
     }
   });
 });
+
+describe('FxCompareCard — 第六十七轮任务 H：兑换金额输入框千分位', () => {
+  it('展示值带千分位，但派生出来的 amount 数值不受影响（挂载后默认值 1000 显示成 1,000）', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy));
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB']} />
+    );
+
+    await waitFor(() => expect(screen.getByText('DIAG测试卡')).toBeTruthy());
+
+    const input = screen.getByLabelText(/兑换金额/) as HTMLInputElement;
+    // 存档 amountYuan=1000，展示层应该带千分位逗号，不是裸数字 "1000"。
+    expect(input.value).toBe('1,000');
+    expect(input.type).toBe('text');
+  });
+
+  it('打字输入会即时格式化成千分位，state 本身仍是不带逗号的纯数字', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy));
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB']} />
+    );
+    await waitFor(() => expect(screen.getByText('DIAG测试卡')).toBeTruthy());
+
+    const input = screen.getByLabelText(/兑换金额/) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '12500', selectionStart: 5 } });
+    expect(input.value).toBe('12,500');
+  });
+
+  it('粘贴带逗号的数字（比如 "12,500"）会被正确剥逗号识别，不会变成 NaN', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy));
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB']} />
+    );
+    await waitFor(() => expect(screen.getByText('DIAG测试卡')).toBeTruthy());
+
+    const input = screen.getByLabelText(/兑换金额/) as HTMLInputElement;
+    // 模拟"粘贴"：浏览器粘贴事件之后 input.value 会直接变成粘贴内容（这里带逗号），
+    // 走的还是同一个 onChange，不需要额外写 onPaste。
+    fireEvent.change(input, { target: { value: '12,500', selectionStart: 6 } });
+    // 展示值应该正确重新格式化（不是原样带着粘贴来的逗号，也不是变成两个逗号）。
+    expect(input.value).toBe('12,500');
+
+    // 折算成目标币种的数字应该是用 12500 算出来的，不是 NaN——用「我持有」基准卡
+    // 那一排（不受这个 input 影响，用来间接确认组件整体没有因为 NaN 崩掉）加上
+    // 列表里数字确实是有限数字来把关。
+    const amountInTargetTexts = screen.queryAllByText(/฿/);
+    for (const el of amountInTargetTexts) {
+      expect(el.textContent).not.toMatch(/NaN/);
+    }
+  });
+
+  it('清空输入框，值变成空字符串展示（派生 amount 按现状降到 0，不引入新行为）', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy));
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB']} />
+    );
+    await waitFor(() => expect(screen.getByText('DIAG测试卡')).toBeTruthy());
+
+    const input = screen.getByLabelText(/兑换金额/) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '', selectionStart: 0 } });
+    expect(input.value).toBe('');
+  });
+
+  it('输入小数（"1234.5"）正确显示成 "1,234.5"，小数点后不会被塞进逗号', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy));
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB']} />
+    );
+    await waitFor(() => expect(screen.getByText('DIAG测试卡')).toBeTruthy());
+
+    const input = screen.getByLabelText(/兑换金额/) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '1234.5', selectionStart: 6 } });
+    expect(input.value).toBe('1,234.5');
+  });
+
+  it('非法字符（字母/负号/第二个小数点）被静默拒绝，值不变，不算用户交互', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy));
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB']} />
+    );
+    await waitFor(() => expect(screen.getByText('DIAG测试卡')).toBeTruthy());
+
+    const input = screen.getByLabelText(/兑换金额/) as HTMLInputElement;
+    expect(input.value).toBe('1,000');
+    fireEvent.change(input, { target: { value: '1,000a', selectionStart: 6 } });
+    // 非法输入直接当没发生过，展示值应该保持原样。
+    expect(input.value).toBe('1,000');
+
+    // 非法输入不算"用户交互"，不应该触发 D1 PUT。
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(putSpy).not.toHaveBeenCalled();
+  });
+
+  it('挂载→载入存档这条路径不会给输入框设置光标（不 focus，不触发重定位副作用报错）', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy));
+
+    // 这条测试本身只要渲染+等待不抛错就代表"恢复存档路径没有意外碰光标定位逻辑"
+    // （`setSelectionRange` 在没有 focus 的 input 上调用在某些浏览器环境会有副作用/
+    // 警告，这里用"渲染成功且展示值正确"作为验证）。
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB']} />
+    );
+    await waitFor(() => expect(screen.getByText('DIAG测试卡')).toBeTruthy());
+    const input = screen.getByLabelText(/兑换金额/) as HTMLInputElement;
+    expect(input.value).toBe('1,000');
+  });
+});

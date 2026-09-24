@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { yuanToCents, centsToYuan } from '@/lib/money';
 import { DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT, type FxRecommendationResult } from '@/lib/domain/fx-recommendation';
@@ -11,6 +11,12 @@ import { Switch } from '@/components/switch';
 import { findBestCardOfferGlobalIndex } from '@/lib/domain/fx-best-offer';
 import { isSameFxComparePreference, type FxComparePreferenceSnapshot } from '@/lib/domain/fx-compare-preference-diff';
 import { quickBaseGridClassName } from '@/lib/domain/quick-base-grid';
+import {
+  formatThousands,
+  stripThousands,
+  countMeaningfulCharsBefore,
+  positionForMeaningfulCount,
+} from '@/lib/format-thousands';
 
 /**
  * 汇率比价——2026-09-16 第十八轮，Remy 拍板"要根治"：把原本两张独立卡片
@@ -273,6 +279,29 @@ export function FxCompareCard({
   const effectiveTarget = targetCandidates.includes(targetCurrency) ? targetCurrency : (targetCandidates[0] ?? '');
 
   const [amountYuan, setAmountYuan] = useState('1000');
+  // fix(第六十七轮，任务 H"兑换金额输入框加千分位")：`amountYuan` 本身继续是
+  // 不带逗号的纯数字字符串（唯一真相来源，D1 payload/`amount` 派生值都不受影响），
+  // 千分位纯粹是展示层的事——`<input value>` 用 `formatThousands(amountYuan)`
+  // 包一层，不新增第二份 state。
+  //
+  // 光标定位：只有"用户刚打字"这一条路径需要重定位光标（挂载/恢复存档这些派生
+  // setState 不会 focus 这个输入框，不需要）。`amountInputRef` 拿到真实 DOM 节点，
+  // `pendingCursorMeaningfulCountRef` 记"这次 amountYuan 变化是不是用户刚打字
+  // 触发的、需要把光标摆在第几个有意义字符（数字/小数点，逗号不算）之后"——只在
+  // 下面 onChange 里设置，下面的 useLayoutEffect 消费一次就清空，不会误伤"从 D1
+  // 恢复存档"这类不该重定位光标的路径。
+  const amountInputRef = useRef<HTMLInputElement>(null);
+  const pendingCursorMeaningfulCountRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const pendingCount = pendingCursorMeaningfulCountRef.current;
+    if (pendingCount === null) return;
+    pendingCursorMeaningfulCountRef.current = null;
+    const input = amountInputRef.current;
+    if (!input) return;
+    const displayValue = formatThousands(amountYuan);
+    const pos = positionForMeaningfulCount(displayValue, pendingCount);
+    input.setSelectionRange(pos, pos);
+  }, [amountYuan]);
   // fix(2026-09-23 第三十三轮，方案二)：统一命名空间——渠道是 `channel:<key>`，
   // 我的支付方式是 `card:<paymentMethodId>`，同一个 Set 同一套勾选/过滤逻辑，
   // 不再是"渠道用 enabledChannelKeys、我的方式用 includeMyCards 总开关"两条平行轨道。
@@ -824,13 +853,26 @@ export function FxCompareCard({
             </label>
             <input
               id="fx-compare-amount"
-              type="number"
-              min="0"
-              step="1"
-              value={amountYuan}
+              ref={amountInputRef}
+              type="text"
+              inputMode="decimal"
+              value={formatThousands(amountYuan)}
               onChange={(e) => {
+                const rawInput = e.target.value;
+                // fix(第六十七轮，任务 H)：光标锚点必须在"剥逗号之前"、拿浏览器已经
+                // 原生插入这次按键之后的 `e.target.value` 算——逗号数量在剥逗号前后
+                // 会变，但"有意义字符（数字/小数点）之前有几个"这个计数不受影响，
+                // 是唯一能在两个字符串之间换算光标位置的锚点。
+                const selectionStart = e.target.selectionStart ?? rawInput.length;
+                const meaningfulBefore = countMeaningfulCharsBefore(rawInput, selectionStart);
+                const candidate = stripThousands(rawInput);
+                // 只允许数字 + 至多一个小数点（不允许负号/字母/多个小数点）；不合法
+                // 的按键/粘贴直接当没发生过——不更新 state，也不调用
+                // markUserInteracted()，保持"非法输入等于没输入"。
+                if (!/^\d*\.?\d*$/.test(candidate)) return;
                 markUserInteracted();
-                setAmountYuan(e.target.value);
+                pendingCursorMeaningfulCountRef.current = meaningfulBefore;
+                setAmountYuan(candidate);
               }}
               onBlur={() => loadCardRecommendations(false)}
               className="field-input w-28 font-serif tabular-nums"
@@ -841,33 +883,56 @@ export function FxCompareCard({
             // fix(2026-09-23 第三十三轮，方案二)：原本这里是"一起比较我的支付方式"
             // 总开关（includeMyCards），现在退休——每张卡自己的勾选框已经并进上面
             // "⚙自选比较项"下拉，不需要再单独一个总开关重复控制同一件事。
+            // fix(第六十七轮，任务 I，手机 390px 断行随意)：文案内容一个字没改，
+            // 只给不该被硬拗断的术语短语（带引号的术语、"「支付方式」页"这类
+            // 固定搭配、"⚙自选比较项"这个下拉名字）包一层 `whitespace-nowrap`，
+            // 让浏览器只在这些短语的两侧折行，不会拦腰截断。
             <p className="text-[10px] text-neutral-dk">
-              你在「支付方式」页配置的支付方式已经并入上面&ldquo;⚙自选比较项&rdquo;，取消勾选哪张卡它就会从下面列表消失（用的是真实汇率加点/手续费）。
+              你在<span className="whitespace-nowrap">「支付方式」页</span>配置的支付方式已经并入上面
+              <span className="whitespace-nowrap">&ldquo;⚙自选比较项&rdquo;</span>
+              ，取消勾选哪张卡它就会从下面列表消失（用的是真实汇率加点/手续费）。
             </p>
           ) : (
             !hasPaymentMethods && (
               <p className="text-[10px] text-neutral-dk">
                 先去{' '}
-                <Link href={`/trips/${tripId}/payment-methods`} className="tap-link">
+                <Link
+                  href={`/trips/${tripId}/payment-methods`}
+                  className="tap-link whitespace-nowrap"
+                >
                   支付方式设置
                 </Link>{' '}
-                加几张卡/现金，&ldquo;我持有 {baseCurrency}&rdquo;时就能一起比较刷卡划不划算。
+                加几张卡/现金，
+                <span className="whitespace-nowrap">
+                  &ldquo;我持有 {baseCurrency}&rdquo;
+                </span>
+                时就能一起比较刷卡划不划算。
               </p>
             )
           )}
           {hasPaymentMethods && effectiveHold !== baseCurrency && (
             <p className="text-[9.5px] text-neutral-dk">
-              「我持有」选的不是这趟行程本位币（{baseCurrency}）时，只比较换汇渠道，不比较我的支付方式——两者的钱是从不同基准算出来的，混在一起比不公平。
+              <span className="whitespace-nowrap">「我持有」</span>选的不是这趟行程
+              <span className="whitespace-nowrap">本位币（{baseCurrency}）</span>
+              时，只比较<span className="whitespace-nowrap">换汇渠道</span>
+              ，不比较<span className="whitespace-nowrap">我的支付方式</span>
+              ——两者的钱是从不同基准算出来的，混在一起比不公平。
             </p>
           )}
 
           {cardsError && <p className="text-[10px] text-coral">{cardsError}</p>}
 
           {!midRate ? (
-            <p className="text-[10px] text-neutral-dk">这个币种组合暂时没有参考汇率，换一组「我持有/目标币种」再看。</p>
+            <p className="text-[10px] text-neutral-dk">
+              这个币种组合暂时没有参考汇率，换一组
+              <span className="whitespace-nowrap">「我持有/目标币种」</span>
+              再看。
+            </p>
           ) : allRows.length === 0 ? (
             <p className="text-[10px] text-neutral-dk">
-              自选比较项都取消勾选了——去上面&ldquo;⚙自选比较项&rdquo;里勾几个看看。
+              自选比较项都取消勾选了——去上面
+              <span className="whitespace-nowrap">&ldquo;⚙自选比较项&rdquo;</span>
+              里勾几个看看。
             </p>
           ) : (
             // fix(2026-09-24 第五十八轮，Remy 报真 bug"两组数字排在一起容易看串"，
