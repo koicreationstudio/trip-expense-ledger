@@ -1,5 +1,76 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-24，第五十九轮，第2轮追加反馈 A/B/C/D 落地（支付方式label全站消歧义/汇率比价卡分组/最划算徽章排除同币种/我的钱包缺失占位），claim id=2026-09-24_172302_44bb711c，Version ID `1d00f7dc-6b59-4d32-b382-35c1e0f28f22`】
+
+背景：lifeos-pm 逐张核对过 Remy 贴的 5 张截图后派工，四件事一起做。派给子 agent 在隔离 worktree（`trip-expense-ledger-worktrees/round58-fx-fixes`，真实 npm install）实现，PM 本人复核了全部 diff（不是只信报告）、独立重跑一遍 lint/typecheck/144 个测试确认无误，再亲自合并到 main、push、`./deploy.sh` 部署。
+
+**A. 支付方式显示名消歧义 chokepoint 铺满全站**：
+- `app/trips/[tripId]/page.tsx` 第 115 行 `paymentMethodLabelById` 从原样 `m.label` 改成 `disambiguatePaymentMethodLabels(myPaymentMethods)`——这一个 chokepoint 同时修好了：钱包卡"绑了哪个支付方式"标签、活动流每行简写（"remy·09-18·咖啡·现金"的"现金"）、活动流"支付方式：全部"筛选下拉的选项列表（三者共用这同一份 `paymentMethodLabelById` 派生数据，不用分别改）。
+- `app/trips/[tripId]/wallet-grid.tsx`：新增 `displayLabels = disambiguatePaymentMethodLabels(paymentMethods)`，接进"已有支付方式"快捷 chip + "绑定支付方式"下拉选项两处裸 `m.label`。
+- 顺手修了一个真 bug（A 范围内，不是额外发挥）：上面这几颗快捷 chip 原本用全局 `.tap-link` class（`min-h-[32px]`），塞在 9px 小字号的 `flex-wrap` 段落里，只要换行就变成"32px 高的一条"，这就是 Remy 截图里"占两行、行距特别大"的根因。改成不强制高度的小号下划线文字。
+- `app/trips/[tripId]/missing-wallet-row.tsx`（新组件，见 D）的 chip 变体走查时**真机发现**第三处歧义（不是靠 grep 找到的）：占位 chip 原本只显示 emoji+名字，两个"现金"占位完全分不清，补上跟"list-row"变体一致的币种小字。
+- `payment-methods-manager.tsx` 自带的 `{label}（{kind}·{settlementCurrency}）` 格式本来就不歧义，没有碰。`expenses/new`/`edit` 两个页面第五十七轮已经接过这个 helper，这轮没有重复改。
+
+**B. 汇率比价卡片"渠道换汇"/"我的支付方式"拆成两个独立分组**——这是一次产品/视觉判断，不是机械改动，**需要 Remy 确认**：
+- 顺序：渠道换汇在前、我的支付方式在后——这个先后顺序是实现时的猜测，没有更强证据支持哪个该在前，需要 Remy 看效果后表态要不要换顺序。
+- 原来每行右上角的"渠道/我的方式"来源小徽章这次**去掉了**，判断是"分组标题本身已经够清楚，行内徽章显得冗余"，换取每行少一点视觉噪音——如果 Remy 觉得去掉徽章后反而看着空，这条可以加回来，不是不可逆的决定。
+- "✓最划算"徽章的判定逻辑**保持全局比较**（不因为视觉拆成两组就变成"每组各自评一个最划算"）——这条不是判断，是功能要求，已经用同一个 `firstEligibleIndex`（按分组前的全局排序算好）实现，不受影响。
+
+**C. "✓最划算"徽章排除同币种(无需换汇)的行**：新建 `lib/domain/fx-best-offer.ts` 导出 `findBestOfferIndex()`——在已排好序的数组里找第一个"不可用为 false 且 requiresConversion 为 true"的下标，`fx-compare-list.tsx`（记账表单支付方式选择器）跟 `fx-compare-card.tsx`（汇率比价卡片）共用同一个判定，不再各自实现一遍。新增 5 个单测（`fx-best-offer.test.ts`），mutation 验证过（临时改回"永远选第一行"，5 个里 3 个如期失败，另 2 个是"第一行本来就该拿"场景不受影响、属于预期，改回来后 5/5 全过）。
+
+**D. 行程主页「我的钱包」区块补显示未建钱包的占位**：
+- 新建共享组件 `app/trips/[tripId]/missing-wallet-row.tsx`（`MissingWalletRow`），把原来只在 `payment-methods-manager.tsx` 里的"建钱包"判断逻辑 + 交互整段抽出来，支持三种 `variant`（`list-row`/`chip-dark`/`chip-light`）适配两处不同外壳。`payment-methods-manager.tsx` 改成调用这个共享组件，删掉原来内联的重复代码——是真重构，没有留两份平行实现。
+- `page.tsx` 新算一份 `missingWalletMethods`（跟 `payment-methods-manager.tsx` 完全同一条判断规则：本行程已启用但还没建对应钱包的支付方式），一路透传给 `WalletCard` → `WalletGrid`，在横向滚动带里跟真实钱包卡片并排渲染占位 chip。
+- 卡类/现金类一视同仁，没有按 `kind` 过滤——延续 `payment-methods-manager.tsx` 现有的"钱包这个概念本来就不分卡/现金"判断，没有重新论证一遍。
+
+**验证**：worktree 里 `npm run lint`(0错误)/`npm run typecheck`(0错误)/`npm test`(144/144 全过，PM 本人独立重跑过一遍确认，不是只信子 agent 报告) 三关全过。`git merge --no-ff` 到 main（无冲突，round58 分支改动跟同期另一条并行 session 推的 PIN 登录改动（`6dfac3f`/`8da6c87`，account 相关文件）完全没有文件交集）。`./deploy.sh` 五关全过，Version ID `1d00f7dc-6b59-4d32-b382-35c1e0f28f22`，`/api/health` 回读 200。
+
+**独立 ui-auditor 真机走查（用 Remy 真实「🇭🇰2026香港」行程）结果**：B/C/D 全部✅通过，截图确认。A 里 A2(新建钱包弹窗)/A3(活动流)/A4(筛选下拉)/A5(缺钱包占位)✅通过，**A1(我的钱包卡片) 有一个如实要说清楚的落差**：查代码确认，行程主页「我的钱包」区块用的是 `wallet-grid.tsx` 的 `embedded-dark`（深色紧凑）卡片变体（第 346-380 行），这个变体**从来没有渲染过 `linkedPaymentMethodLabel`**（"🔗 绑定的支付方式叫什么"这行文字，只有支付方式设置页用的浅色 `default` 变体第 405-406 行才有）——64px 起步的窄卡片本来就没有第三行文字的空间，这是这个变体一直以来的设计限制，不是round58 引入的回归。也就是说：A1 这一处的底层数据值确实已经被这轮改对了（`paymentMethodLabelById` 现在算出的是"现金（HKD）"），但行程主页这张卡片上**目前没有任何 UI 会把这个值显示出来**，所以 Remy 在这个位置看不出任何视觉变化——这不是"改错了"，是"改对了但这个位置本来就没有对应的显示口"，如果 Remy 希望这张深色卡片上也能看到绑定的支付方式名字，需要另外找空间加一行，这次没有擅自加（怕挤爆本来就很窄的 64px 卡片，属于需要她确认要不要加的新增功能，不是这轮 bug 修复范围）。
+
+**顺手发现一个新现象，可能是既有 backlog 的新证据**：ui-auditor 用身份直连链接登录后，系统默认落到的不是「🇭🇰2026香港」，而是一个叫"测试-邀请流程"的假行程（trip_id=`0d642c2c-...`），需要手动去"我的行程"列表点进正确行程才行。这个现象主题上很贴近这个项目现有的一条未解决 backlog claim（id=2026-09-24_134910_cbeb3e5c，"钱包深链跳转在'刚登录/从行程列表进入'路径下间歇性失败...疑似登录恢复/最近访问记忆逻辑与手动导航冲突"）——这次没有去动它，只是把这个新观察到的现象记下来，留给下一轮专门排查那条 backlog 的人参考，不在这轮范围内处理。
+
+**一次真实写入的清理**：ui-auditor 为了验证 D（"建钱包"按钮），经 PM 授权点了一次，在生产为 Remy 真实账号建了一个 HSBC 大马 Visa Signature/MYR 钱包（余额 RM0.00，id `0e966a57-62b9-4ba8-a416-2168810b4fe9`）。这纯粹是为了验证按钮功能，不是 Remy 主动要建的，PM 走查完立刻 `DELETE` + `SELECT count(*)` 核对归零，没有留在她真实账号里。
+
+**小插曲，如实记录（不是这轮代码的 bug，是子 agent 的一次误判，已排除）**：实现过程中子 agent 用 Playwright 做完一次截图后，一次被动的 `browser_snapshot` 调用发现浏览器标签页跳到了生产环境 `/account` 页面（一个空的密码/PIN 输入框+disabled 按钮），当场判断"可能是安全事件"并主动停手上报。PM 复核后确认这不是安全事件：`git fetch` 发现 origin/main 当时已经领先本地两个 commit（`6dfac3f`/`8da6c83`，标题正是"我的账号页三处优化"+"PIN 登录入口"），且 `git worktree list` 能看到一个仍然存在的活跃 worktree `.worktrees/trip-expense-ledger-pin-login-entry`（分支 `pin-login-entry-worktree`，HEAD 正是 `8da6c87`）——这是另一个正在同时进行的、不相关的并行 session 在测它自己改的 PIN 登录功能，子 agent 的 Playwright 浏览器实例是共享的，只是"看到"了别的 session 当时的标签页状态，没有任何证据显示是被写入或篡改。子 agent 当场停手上报是正确的谨慎反应，不是过度反应，这次没有造成任何损失，只是少截了几张原计划要补的视觉走查截图（B 的"两组同时有数据"场景、C 在真实记账流程里的表现），这部分改由后续独立 ui-auditor 走查补上。
+
+**顺手发现但不在这轮范围内、留待整理的housekeeping项**：`git worktree list` 时看到一个很旧的孤儿 worktree `.worktrees/trip-expense-ledger-fx-compare-cd-fix`（detached HEAD，卡在 round33-36 那批"汇率比价 C/D 修复方案二"的旧 commit，早就被后续轮次取代），没有清理，不影响这次任务，记一笔提醒以后找时间 `git worktree remove` 掉。
+
+## 【2026-09-24，第五十八轮，lifeos-pm 复核第五十七轮时亲自查 D1 抓到真实污染 + 修复根因（验证方法本身有漏洞，不是小事，如实记录）】
+
+背景：lifeos-pm 审核第五十七轮"汇率比价卡片选项持久化"的产出时，没有只信报告里"已清理归零"这句话，自己直接跑
+```
+npx wrangler d1 execute trip-expense-ledger-db --remote --command "SELECT ... FROM fx_compare_preference WHERE trip_id='f78a6b5e-8612-4097-8bfd-88a5db664045'"
+```
+查生产 D1，查到 Remy 真实账号（`user_id=a54c9824-c44d-45f7-94b9-5bf3f8fcacc8`）+ 真实行程「🇭🇰2026香港」名下确实有一条 `fx_compare_preference` 记录，但内容是 `hold_currency=CNY / target_currency=THB / amount_cents=50000(=500) / enabled_compare_keys=[5个渠道+4张卡]`——明显是测试时留下的组合，不是 Remy 自己会设的真实偏好（Remy 真实想看的是"我持有 HKD"、兑换 1000）。第五十七轮报告原话"测试产生的 2 条 session + 1 条 preference 记录已删除，SELECT count(*) 核对归零"跟实况不符。
+
+**根因（已查清，不是猜测）**：这张表的 unique index 是 `(user_id, trip_id)`，同一个真实账号在同一趟行程下永远只有一条记录，PUT 是 upsert。第五十七轮报告里描述的验证分两个阶段：①PM 本人用临时 curl session 测 API（`PUT`/`GET` + 用第二个独立 session token 验证跨 session 持久化），测完确实 `DELETE` + `SELECT count(*)` 核对归零过——这一步没有说谎，日志时间点也对得上；②紧接着独立 `ui-auditor` 用 Remy **真实身份直连链接**做生产真机走查，走查步骤 5"改持有/目标/勾选/金额→刷新→数值原样保留"、步骤 6"退出登录+重新登录→数值仍是刚才设的"——这两步为了验证"记忆化真的生效"，必须真的把卡片的下拉/勾选/金额改成跟 Remy 平时用的值不一样的测试组合（否则测不出"记忆住了没有"），而这张卡片的持久化设计是**改动后 debounce 600ms 自动 PUT，没有独立的"保存"按钮**——ui-auditor 走查报告里写的"没提交任何记账/建钱包/设余额表单，全程只读操作"，这句话本身没说谎（确实没点过任何表单的提交按钮），但**遗漏了一个事实**：这张卡片的"下拉/勾选/输入框"本身就是没有显式提交动作的自动持久化控件，跟这张卡片交互 = 写生产数据，跟"只读走查"这个类别对不上。ui-auditor 走查完之后没有人再回头把这条被写脏的记录清理或还原，第五十七轮的清理步骤发生在 ui-auditor 走查**之前**（时间线上），根本来不及覆盖到之后才产生的这条脏数据。
+
+**这不是某个人"撒谎"或"偷懒"，是流程本身有一个结构性漏洞**：当一个功能的持久化设计是"交互即写入"（没有显式提交按钮、靠 debounce 自动保存）时，"只读走查"这个指令对这类组件是不成立的——任何一次为了验证"记忆化生效"而做的"改值→刷新→改回登录状态复测"操作，天然会在生产环境留下测试痕迹，而且这类痕迹不会出现在"session 表"这种一望而知是临时数据的地方，是直接叠加/覆盖在用户真实账号的正式数据行上（因为 unique index 保证只有一行，upsert 直接覆盖，不会留下"多余的脏行"这种容易被发现的信号，只会留下"内容不对但行数正常"这种更隐蔽的污染）。
+
+**根治动作（不是只这次删掉就算了）**：
+1. 这条记录已删除并验证归零（见下面"修复与验证"）。
+2. **交接规矩追加一条**：以后任何"带自动保存/debounce PUT/无显式提交按钮"的功能，走查指令不能只写"只读操作/别提交表单"——这类描述对这种组件不成立，必须明确写清楚"这个功能只要交互就是写生产数据，测完必须手动把值改回原状（如果知道原状是什么）或者直接找开发者用 SQL 删除这条记录"，不能假设"没点提交按钮=没写数据"。
+3. 扫过其它表（`wallet`/`expense`/`exchange_record`/`payment_method`）确认没有其它类似方式产生的污染，结果是干净的（见下面"其它表自查结果"），这次污染范围仅限这一条 `fx_compare_preference` 记录，没有扩散。
+
+**修复与验证**：
+```
+DELETE FROM fx_compare_preference WHERE id='9f91e210-9f3d-4b0e-9786-5feaf3b108e9';
+-- changes: 1
+
+SELECT * FROM fx_compare_preference WHERE trip_id='f78a6b5e-8612-4097-8bfd-88a5db664045';
+-- []（空）
+
+SELECT count(*) FROM fx_compare_preference;
+-- {"cnt": 0}
+```
+删除后 Remy 下次打开汇率比价卡片会看到组件自己的默认值（不是任何人为设的持久化偏好），这是这个功能上线前她从来没有过持久化偏好这一状态下最安全的退回方式。
+
+**其它表自查结果（干净，没有扩散）**：
+- `payment_method`（Remy 真实账号名下 5 条）——字段值（label/kind/settlement_currency/各项费率）跟第五十七轮报告里引用的真实数据完全吻合，没有异常。
+- `wallet`（真实行程下 1 条，"现金"HKD，余额 HK$8,120.00）——跟第五十轮"设置当前余额"紧凑化那轮报告里记录的金额一致，没有被这轮测试污染。
+- `expense`（真实行程最近 5 笔）——全部是真实商户名（云吞面/雪糕/点心/蛋挞咖啡等）+ 合理金额，`created_at` 最新一条比这次 fx_compare_preference 污染的时间戳（2026-09-24 17:08）更早，说明测试过程没有产生新的假消费记录。
+- `exchange_record`（真实行程）——0 条，没有异常。
+
 ## 【2026-09-24，第五十七轮，汇率比价卡片：选项按账号×行程存 D1 记忆化 + 3 个真实 bug（同名现金分不清/现金显示"刷卡支付"/换汇结果三者一样），claim id=2026-09-24_164334_4529a1b7，新 session 从这里读起】
 
 背景：Remy 贴了汇率比价卡片截图（行程主页，标题"我持有 HKD / 目标币种 / 自选比较项 / 刷新"，兑换金额 1000 HKD，下面支付宝/现金/Wise/HSBC 比价列表）报了 4 件事——①这组选项刷新页面就丢，要按账号×行程存起来，换设备也要能恢复 ②"现金"出现两行分不清 HKD 还是 USD ③现金也显示"刷卡支付" ④支付宝、现金 HKD、现金 USD 三者算出来的数字完全一样，怀疑换汇计算没按各自结算币种分别算。lifeos-pm 派工时明确要求跟同一天并行跑的"冷启动/快速导航 session 不稳定"排查（round56、claim id=2026-09-24_154224_abc42bfc）不要撞车，文件清单没有交集，改动前也核对过 `claim.py list`，确认干净。
