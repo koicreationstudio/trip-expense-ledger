@@ -1,5 +1,132 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-24，第四十一轮，色板 token 改名（gold 系→neutral 系）+ 两个悬案 bug 专项复现排查（未复现），新 session 开工前必看】
+
+背景：lifeos-pm 派工，Remy 确认两件事——①第四十轮留下的命名遗留问题：`gold`/`gold-lt`/`gold-dk` 这三个 token 从第四十轮改回灰阶之后名字就跟颜色对不上了（`gold` 实际是灰色 `#A4A3A0`，不是金色），这轮把名字也改掉；②团队看板 + PENDING-DECISIONS 历史几轮反复顺带撞见、一直没人专门复现过的两条可疑现象，这轮专门开一轮排查。
+
+### 一、色板 token 改名
+
+**改名对照表**（hex 值完全没动，只改名字）：
+
+| 改名前 | 改名后 | hex（不变）|
+|---|---|---|
+| `gold` | `neutral` | `#A4A3A0` |
+| `gold-lt` | `neutral-lt` | `#EDECE9` |
+| `gold-dk` | `neutral-dk` | `#6E6E6C` |
+
+**改了哪些文件**：`tailwind.config.ts`（token 定义 + 相关注释）、`reference/artifact-v10-source.html`（CSS 变量 `--gold`/`--gold-lt`/`--gold-dk` 同步改名，这份文件是历轮"逐 token 核对"权威源，第四十轮吃过没同步的教训，这轮直接一起改）、12 个组件/页面文件里全部 56 处 Tailwind 类名引用（`text-gold-dk`/`bg-gold-lt`/`text-gold` 等）、另外 3 个文件（`app/layout.tsx`/`app/my-trips.tsx`/`app/trips/[tripId]/settlement/mark-settled-button.tsx`）里提到 `gold-dk` 的说明性注释也顺手改了名字，避免以后看代码的人对着旧名字找不到 token。改名用 `perl -pi -e 's/\bgold-lt\b/neutral-lt/g; s/\bgold-dk\b/neutral-dk/g; s/\bgold\b/neutral/g'` 批量做，带单词边界，改完全项目 grep `gold` 只剩三个纯历史存档文件（`DESIGN-BRIEF-color-v5-preview.html`/`DESIGN-BRIEF-color-v6-preview.html`/`DESIGN-BRIEF-hero-wallet-variants.html`，这三个是候选版本的静态快照、不参与构建、没有任何代码引用它们，是记录"当时长什么样"的历史存档，故意没动，改了反而是篡改历史）以及 `DESIGN-BRIEF.md`/本文件里描述历史决定的叙述性文字（同理，历史记录不该被现在的改名倒着改写）。
+
+**`sand`（`#DBDAD6`）这个 token 没有改名，是这轮看过、认为不构成同类问题、没有一并改**：`sand` 的 RGB(219,218,214) 严格算确实也接近中性灰（跟 `gold` 系一样是第四十轮灰阶方向定下来的值），但"沙"这个词本身可以合理形容浅灰调的颜色，不像"金"那样特指一种明确、强烈的暖色调，是不是也该改是一个更模糊的边界判断，没有替 Remy 做这个决定，留给她看了这轮改动之后再表态要不要一并处理。
+
+**验证**：`npm run lint`（0 警告 0 错误）、`npx tsc --noEmit`（0 错误）、`npm test`（113 个单测全过）、`npm run build`（全部路由正常生成，`/trips/[tripId]` 等动态页确认是 `ƒ Dynamic`）四关全过。ui-auditor 真机走查见下方「三、验证方式」。
+
+### 二、两个悬案 bug 专项复现排查——**排查结论：45 次真机尝试，0 次复现，没有改任何代码**
+
+这两条现象第一次被记录是第三十三轮，之后第三十八轮（`?cb=` 轮询猜想）、第四十轮都顺带撞见过一次，但从来没人专门为它们开一轮复现确认，一直是"怀疑但未证实"的状态挂在这份文档里。这轮先做代码层面排查，再做真机复现，两条线都做完才下结论。
+
+**代码层面排查（找证据，不是凭印象）**：
+- 生产环境响应头实测：`curl` 直连 `/trips/{tripId}` 多次，`cache-control: private, no-cache, no-store, max-age=0, must-revalidate`，没有任何 `cf-cache-status` 头，说明这条路由没有被 Cloudflare 边缘缓存过，排除"边缘缓存把匿名响应误当成这个 URL 的缓存结果下发"这个假设。
+- `npx wrangler d1 info trip-expense-ledger-db`：`read_replication.mode = disabled`。这个项目的 D1 数据库没开读副本，排除"写入 session 后读副本还没追上、查询命中了滞后的副本"这个假设（这类延迟本来就很符合"偶发+几秒后自愈"这个症状，但这条路直接被实测数据堵死了）。
+- 全项目 + 全 git 历史（`git log --all -p -S "cb="`、`git log --all -S "setInterval"`）搜索：这个项目从来没有出现过 `?cb=时间戳` 这种轮询刷新机制，也从没写过 `setInterval`。第四十轮记录里"怀疑是页面自动轮询刷新跟点击时机撞车"这个猜测的机制本身在代码历史上不存在，这条猜测的具体机制被证伪（不代表现象本身没发生过，只是这个解释是错的）。
+- 检查了 `resolveIdentity()`（`lib/auth/session.ts`）、`getCurrentIdentity()`、`TripPage`（`app/trips/[tripId]/page.tsx`）的鉴权链路，是一次直白的 D1 查询+重定向，没有 middleware、没有会吞掉异常的 error boundary、没有会导致"偶发误判成未登录"的时序逻辑。
+
+**真机复现（ui-auditor 独立执行，生产环境，真实行程「🇭🇰2026香港」trip_id=f78a6b5e-8612-4097-8bfd-88a5db664045）**：
+- 任务一（直接跳转 URL 被弹回未登录落地页）：行程主页连续 15 次直接 URL 导航 + 结算页 5 次 + 支付方式页 5 次，共 25 次，**0 次复现**，全程停留在正确页面，console 0 报错。
+- 任务二（点行程切换按钮误触发导航到支付方式深链页）：连续点击切换按钮 20 次（开合交替），**0 次复现**，URL 全程没有变成 `/payment-methods?openBalance=1`，抽查截图确认每次点击都是真实的面板开合，不是点在失效元素上。
+- 全部 46 张截图存在 `/Users/linotan/Desktop/Claude/trip-expense-ledger-round41-bug-repro/`（ui-auditor 的 Playwright 沙箱只放行写入 `~/Desktop/Claude/` 目录，没能按原计划存进项目自己的 `audit-diffs/` 目录，这是 ui-auditor 这个角色本身的沙箱配置限制，跟这次任务无关，如实记录，没有绕过限制硬闯）。
+
+**结论：这轮没有改任何跟这两个现象相关的代码**——不是不想修，是 45 次真实尝试 + 代码层面排查都没找到能复现、能定位、能验证"改完真的解决了"的东西。如果为了"处理掉"硬塞一段防御性代码（比如给 `resolveIdentity` 加重试），没有真实复现路径就没法验证这段代码到底解决了什么问题，也不知道会不会引入新的副作用，这种"看起来在修"但没有实证支撑的改动比不修更不负责任。**建议**：这两条现象在 PENDING-DECISIONS 里已经挂了三轮、专项复现 45 次未中，建议降级/归档，不再占着"待排查"清单；如果 Remy 之后真机再次遇到，请尽量留住当时的截图/时间点/操作步骤（比如是不是隔了很久没操作突然点、是不是网络切换过），这类线索比再跑一轮盲测更有效。这是一个需要 Remy 认可的判断，不是这轮单方面拍板关闭。
+
+### 三、验证方式
+
+- lint/typecheck/113 单测/build 四关全过（本轮只有色板改名这一项代码改动，两个 bug 排查没有产出任何代码变更）。
+- `./deploy.sh` 五关全过，commit/Version ID 见下方部署记录（在本节写完之后补）。
+- ui-auditor 真机走查（生产环境，真实行程「🇭🇰2026香港」）：色板改名前后视觉对照（改名不改值，理论上应该长得一模一样）+ 两个 bug 的 45 次专项复现尝试，全部记录见上。
+
+---
+
+## 【2026-09-24，第四十轮，色板第三次反转(暖色→灰阶，最终定案)，commit `39d1680`，Version ID `9ed45c80-cfcb-4aed-a591-ed05759c7c5e`，新 session 开工前必看】
+
+背景：色板方向第三次拍板。09-16前暖色→09-中漂移成候选D灰阶→09-23第三十八轮 creative-director 判定灰阶是"漂移"改回暖色（依据是文字论证，没拿真实截图核对过）→本轮 Remy 亲眼对比真实生产截图（暖色版"2026香港"）跟她心里的目标截图（灰阶版"2026曼谷出差"）后明确推翻，要求改回灰阶。完整依据/取色方法/WCAG复核/文件清单见 `DESIGN-BRIEF.md`「第四十轮」一节，不重复贴一遍。
+
+**这次用像素级取色验证，不是凭印象**：Python PIL 对两张参照截图（`design-references/2026-09-24-image7/image8`）逐区域采样，发现结果几乎逐值吻合 candidate D 落地时期最后一版定案值，独立验证后采用，不是不验证就照抄旧值。顺手修正一处历史遗留不一致（`gold-lt` 字面值 `#EDECE9` 替换掉算出偏暗的旧公式 `color-mix→#E4E3E2`）。
+
+**代码落地 28 个文件**（Remy 指定的 round38 改动清单逐一核对，一个不漏）：`tailwind.config.ts`/`app/globals.css`/`app/icon.svg`/`app/manifest.ts`/`public/icons/icon-192+512.png`（从候选D时期 git 历史原样取回）/`reference/artifact-v10-source.html`（全量同步，这份文件是历轮"逐token核对"权威源，round38 吃过没同步的教训这次补上）+ 22 个组件/页面文件的 `rgba(184,158,97,X)→rgba(164,163,160,X)`/`#7E6630→#6E6E6C`/`rgba(35,35,46,X)→rgba(55,55,54,X)` 字面替换。财务语义色（该收绿/该付红/珊瑚警示色）历轮核对全程未变，这轮也没动。`npx tsc --noEmit`/`npx eslint`/113 个单测全过。
+
+**验证**：部署后独立拉取生产环境实际下发的 CSS bundle 逐字节核对新灰阶 hex 确实在生产环境生效（不是只信部署脚本"成功"两个字）。独立 `ui-auditor` 用真实行程"🇭🇰2026香港"（trip id `f78a6b5e-8612-4097-8bfd-88a5db664045`）走查行程主页/结算页/支付方式页/记账表单/行程切换面板 5 个页面（桌面+手机），色板统一到位，无残留暖色，`positive`/`negative`/`cream` 三个非本轮改动范围的颜色都确认没被误伤，console 0 报错，截图存 `audit-diffs/round40-grayscale-verify/`。PM 本人也亲自读了两张走查截图跟 image8 逐屏肉眼核对过，不是只信 ui-auditor 自述。
+
+**ui-auditor 顺带发现、这轮没处理、留给下一轮的两条（跟颜色无关，超出这轮范围）**：①走查中途两次直接跳转 trip URL 被弹回未登录落地页、几秒后重试又恢复正常，怀疑 session cookie 短暂抖动，未确认是否真 bug；②点行程切换按钮遇到一次误触发导航（落到支付方式深链页而不是打开下拉面板），重新取元素引用后恢复正常，怀疑是页面自动轮询刷新（URL 带 `?cb=时间戳`）跟点击时机撞车的假象。都没有复现确认，下一轮如果 Remy 真机也遇到再排查。
+
+**token 命名沿用 `gold`/`gold-dk`/`gold-lt`**（候选D原有命名，非本轮新造），没有改成中性命名——如果 Remy 觉得该改命名，这是独立于这轮"改色"的命名规范判断，留给她表态，没有这轮顺手做。
+
+## 【2026-09-24，第三十九轮，4条backlog统一处理 + 历史现金消费回溯补算钱包余额 + 钱包深链滚动第四版真正根因，commit `d8527ae`+`4309bf2`，Version ID `111275c2-ddf7-4a75-8962-b4614b545592`，新 session 开工前必看】
+
+背景：Remy 通过 lifeos-pm 拍板这轮做三件事——①团队看板上积压的 4 条 backlog 一次性统一处理 ②历史现金消费回溯补算进钱包余额（round38 记录的"留给 Remy 表态"的方案 B，这轮 Remy 已经选定要做）③钱包卡深链滚动 bug 第四次尝试，前三版（round38 及其两次复测）全部被 ui-auditor/Remy 本人证实没生效。这轮全程用真实行程"🇭🇰2026香港"（trip id `f78a6b5e-8612-4097-8bfd-88a5db664045`）验证，独立 ui-auditor 只读走查（登录 1 次，没碰任何写表单），走查完把测试产生的 session/user_session 精确清理（按 `created_at` 分界删除，删前 22/35 条，删后核对回到 10/21 条基线）。
+
+### 一、4 条 backlog 逐条处理结果
+
+**🔴 下拉点空白/Escape 关不掉（`id=2026-09-23_232943_59eb37d1`，已 `claim.py done`）——根治，不是补丁**：根因是 `trip-header-nav.tsx`（切换行程面板）+ `fx-compare-card.tsx`（我持有/目标币种/自选比较项三个下拉）各自手搓了一套 `useState` 开关，没接住 `components/select-dropdown.tsx` 组件本体自带的点空白/Escape 关闭逻辑。这次把这段关闭逻辑抽成共用 hook `useDismissableOpen`（`select-dropdown.tsx` 新增导出），`SelectDropdown` 组件本体自己也改成调用它（不再自己重复一份，组件本体和抽出来的 hook 是同一份实现）。具体改法：
+- `fx-compare-card.tsx`"💰 我持有 ▾"/"🎯 目标币种 ▾"这两个是"选一个值触发 onChange"的单选形状，直接换成调用 `<SelectDropdown>` 组件本体（不是另外接 hook），触发按钮样式用 `triggerClassName`/`renderValue` 还原成原来的圆角胶囊外观，只换实现不换外观。
+- `fx-compare-card.tsx`"⚙ 自选比较项 ▾"是多选 checkbox 面板，套不进 `SelectDropdown` 的单选模型，改用 `useDismissableOpen` hook 接住点空白/Escape 关闭。
+- `trip-header-nav.tsx`"切到其它行程"面板是整块管理面板（切换按钮+删除图标+新建行程链接混排），同样套不进单选模型，也用 `useDismissableOpen`。
+- **全项目扫描**（`grep` 找所有 `absolute...top-full...z-10` 悬浮面板 + 所有 `xxxOpen` 状态开关，逐个核对）：确认其余"Open"状态开关（`exchange-form.tsx` 的 `addSourceOpen`、`invites-manager.tsx` 的 `addParticipantOpen`/`genInviteOpen`、`wallet-card.tsx` 的 `exchangeOpen`）全部是**内联手风琴展开/收起**（渲染在文档流里，不是浮层菜单），不属于这个 bug class，没有一并改（改了反而是画蛇添足——手风琴本来就该用同一颗按钮开关，不需要点空白关闭）。
+- 涉及文件：`components/select-dropdown.tsx`、`app/trips/[tripId]/trip-header-nav.tsx`、`app/trips/[tripId]/fx-compare-card.tsx`。
+
+**🟡 N+1 查询（`id=2026-09-23_232430_18dcf425`，已 `claim.py done`）**：`lib/db/settlement-query.ts` 新增 `loadSettlementInputForTrips(db, tripIds)` 批量版，一次查全部行程的 expenses + splits（`inArray(tripId, tripIds)`，固定 2 条查询，不随行程数线性增长）；单行程版 `loadSettlementInput(db, tripId)` 重构成套壳调用批量版（传 `[tripId]` 取 Map 里一条），两个函数背后是同一份实现，不是两份互相漂移的代码。`lib/db/user-trips-query.ts` 的 `loadUserTripsWithBalance` 改成调用批量版。涉及文件：`lib/db/settlement-query.ts`、`lib/db/user-trips-query.ts`。
+
+**🟡 支付方式启用勾选框换深色 switch（`id=2026-09-23_232946_2850b4c5`，已 `claim.py done`）**：把 `expense-form.tsx`"跟其他人 split 这笔"那处原本唯一的自定义深色 switch（`role="switch"` 胶囊+白色圆点位移）抽成共用组件 `components/switch.tsx`，`payment-methods-manager.tsx`"本行程启用的支付方式"勾选框跟 `expense-form.tsx` 原处都改成调用这个组件本体——不是照抄一份样式给新的地方用，是两处都收进同一个 chokepoint，以后再新增第三处也不会漏。`<button>` 是 HTML labelable element，`id` 传给 `Switch`、外层 `<label htmlFor>` 照常可以点文字触发，不用额外接 aria-labelledby。涉及文件：`components/switch.tsx`（新建）、`app/trips/[tripId]/payment-methods/payment-methods-manager.tsx`、`app/trips/[tripId]/expenses/expense-form.tsx`。
+
+**🟢 分摊面板米黄背景色核对（`id=2026-09-23_232935_1bf1e193`，已 `claim.py done`）——核对结果：已经是对的，没有改代码**：`expense-form.tsx`/`quick-add-expense.tsx` 用的 `bg-cream` 这个 Tailwind token，值是 `#F3E9D2`（`tailwind.config.ts` 第 88 行），跟权威来源 `reference/artifact-v10-source.html` 第 20 行 `--cream:#F3E9D2` 逐字节一致，没有硬编码 hex 绕过 token 的情况（`grep` 全项目确认）。round38 色板暖色回归之后这块背景已经自然跟着修复，不存在 Remy 反馈时（round38 之前，灰阶色板生效期间）那种"跟页面冷色调跳色"的问题了。这项没有改任何代码，如实记录核对过程，不是悄悄跳过。
+
+### 二、历史现金消费回溯补算进钱包余额
+
+**设计取舍：选的是"钱包创建时算一次、写死这个差额"，不是"每次显示余额都动态重算"**——理由不是图省事，是这条分界线本身有一个**物理上永远成立、不会随时间推移变得不准确**的特性：一笔消费「是否发生在这个钱包诞生之前」这件事，一旦某一刻判定完，未来无论过多久都不会变（新消费只会发生在"以后"，不会倒着长回"以前"），不属于需要动态重算的数据。反过来说，如果选"每次读取都重新扫一遍历史消费"，反而要额外解决"这次扫到的算不算是已经被'记账自动扣'那条去forward逻辑处理过"这个真正会随时间/操作顺序变化、容易算重的问题——这才是真正"新老逻辑对不上"的风险来源，写死反而比动态更不容易出这类错。
+
+**实现**：`wallets` 表新增 `historical_backfill_applied_at` 列（migration `0010_soft_vanisher.sql`，幂等标记，防止同一批历史消费被算两次）。`app/api/trips/[tripId]/wallets/route.ts` POST：如果创建钱包时直接绑了 `paymentMethodId`，用跟 `app/api/trips/[tripId]/expenses/route.ts` 「记账自动扣」完全一致的匹配口径（`paymentMethodId` 匹配 + `currency` 精确一致 + `enteredByParticipantId` 是这个钱包的主人）去查所有 `createdAt < 这次 INSERT 的时间点` 的历史消费，把总额一次性从 `initialBalance` 里扣掉，写进同一条 INSERT。这条时间线分界（钱包诞生那一刻）之前归这次回溯逻辑管，之后归「记账自动扣」逻辑管，两条逻辑刚好接力、不重叠。
+
+**没有覆盖的边界（如实说清楚，不是藏起来）**：当前产品 UI 只有"创建钱包"这一个时刻能设置 `paymentMethodId`（`PATCH /api/trips/[tripId]/wallets/[walletId]` API 层技术上接受 `paymentMethodId` 字段，但没有任何前端入口会调用它传这个字段——查过 `wallet-grid.tsx`/`payment-methods-manager.tsx` 全部 PATCH 调用点，只有"设置当前余额"一种用法）。所以"钱包建好之后才补绑支付方式"这个理论上存在但当前 UI 走不到的场景，没有做对应的回溯——这次没有为了一个当前产品里根本点不到的入口去加更复杂的回溯逻辑，UI 文案（`wallet-grid.tsx`/`payment-methods-manager.tsx`）已经如实讲清楚这条边界，不是含糊带过。
+
+**用真实行程「🇭🇰2026香港」验证出的具体数字**：D1 查证这条真实行程唯一一个绑了支付方式的钱包——"现金"钱包（`id=872246bc-7f4f-46b6-9795-cd7acbbeb29c`，绑定"现金"支付方式 `id=a31f5c30-6466-412f-97cc-31047126721c`，`created_at=2026-09-23 15:03:06 UTC`）。匹配这个支付方式+HKD 币种+Remy 自己（`participant_id=5a81e7ae-72d1-4d9d-9fbf-bee617458dea`）记的历史消费，`created_at` 全部早于钱包创建时间：
+
+| 消费 | 金额 (分) | created_at (UTC) |
+|---|---|---|
+| taxi | 5000 | 2026-09-16 00:22 |
+| 酒店tax | 4200 | 2026-09-17 01:02 |
+| 雪糕 | 2600 | 2026-09-17 10:40 |
+| 云吞面 | 8600 | 2026-09-17 13:48 |
+| 咖啡 | 4200 | 2026-09-18 03:42 |
+| **合计** | **24600（HK$246.00）** | |
+
+这个钱包代码上线前 `current_balance=0`（Remy 从没手动设过起始余额），跑了一次幂等的生产数据迁移（`wrangler d1 execute` 直接跑一条 `UPDATE ... WHERE payment_method_id IS NOT NULL AND historical_backfill_applied_at IS NULL` 语句，不是新写一次性脚本，SQL 本身天然幂等——重跑一次 `changes:0` 验证过），`current_balance` 从 0 变成 **-24600（-HK$246.00）**。ui-auditor 独立走查截图 7 轮（含手机视口）核对这个数字，跟计算结果完全一致。
+
+**显式验证过跟「记账自动扣」不会重复扣款/对不上账，不是只靠读代码猜**：新写的单测 `app/api/trips/[tripId]/wallets/route.test.ts`（4 条用例：历史消费正确补算/币种不一致不计入/未绑支付方式不触发/不跨行程污染）里专门加了一段——钱包回溯补算完之后，再用同一个支付方式记一笔**新**消费，断言余额只被扣了一次（`-9200` 变成 `-10200`，不是被回溯逻辑和去forward逻辑各扣一次变成 `-10200` 之外的数），证明两段逻辑不会对同一笔消费重复计算。另外用 mutation 验证过这批测试不是空壳（临时把 `currentBalance: body.initialBalance - backfillAmount` 改回 `body.initialBalance`，测试如期失败：`expected +0 to be -9200`，改完立刻复原）。
+
+涉及文件：`lib/db/schema.ts`（新列）、`lib/db/migrations/0010_soft_vanisher.sql`（新迁移）、`app/api/trips/[tripId]/wallets/route.ts`（回溯逻辑）、`app/api/trips/[tripId]/wallets/route.test.ts`（新测试）、`app/api/trips/[tripId]/expenses/route.ts`（补充注释，交代两段逻辑的分工）、`app/trips/[tripId]/wallet-grid.tsx`/`app/trips/[tripId]/payment-methods/payment-methods-manager.tsx`（文案更新，讲清楚新行为+没覆盖的边界）。
+
+### 三、钱包卡"去支付方式手动设置余额→"深链滚动，第四版，真正根因（前三版全部猜错方向）
+
+**用 Playwright 在生产环境给 `Element.prototype.scrollIntoView` 打点插桩**（记录每次调用时目标元素的 `getBoundingClientRect` + 调用前后 `window.scrollY`），逐毫秒还原完整时间线，坐实：
+1. Next Link 默认的 hash 自动滚动（第三版指望的机制）确实在导航后 ~732ms 触发了一次，但那一刻 `loadMethods()`/`loadWallets()` 两个 `fetch` 还没发出（735ms 才发），目标元素当时"看起来已经部分在视口里"，浏览器判定不需要挪动，`scrollY` 前后都是 0，白打一次。
+2. 数据在 ~990-1000ms 到齐后，`payment-methods-manager.tsx` 自己的 `useEffect`（第二版就写对了，第三版也没动这段）在 ~1004ms 正确触发 `scrollIntoView({block:'start'})`，而且这次量出来的目标绝对位置（877px）也是对的——**但滚动结果只到 281px 就卡住不动**。
+3. 原因不是时机，是纯几何限制：这个面板此时的 `document.documentElement.scrollHeight` 只有 1125px，视口高度 844px，浏览器能滚的距离上限就是 `1125-844=281px`——跟历次复测卡住的那个位置分毫不差。**这个支付方式页面内容本来就不长（就 1 个钱包、几张卡片），浏览器物理上没法把接近页面末尾的区块滚到视口顶部**，不管重试几次、时机算得多准都没用；前三版全部在"时机"这个维度上找答案，找错了方向。
+4. 用同一份生产代码验证过这个诊断：往 `document.body` 尾部临时插一个 100vh 占位块，同一次 `scrollIntoView` 调用立刻精确滚到 `elTop≈0`（`scrollY:877, elTop:-0.25`），证明是"可滚动余量不够"这个假设成立。
+
+**真正的修法**：`payment-methods-manager.tsx` 在 `<section id="set-balance">` 结束之后新增一个占位 `<div className="h-screen" />`，只在 `defaultOpenBalancePanel && balancePanelOpen`（深链自动展开这个场景）时渲染——保证不管这趟行程钱包/支付方式配得多短，页面底下永远有至少一屏的"可滚动余量"；平时手动点"⚙设置当前余额"展开不渲染这块空白，面板收起也跟着收掉，不会在页面底部永久留一块空白区域。`wallet-grid.tsx` 的触发链接恢复 `scroll={false}`（第二版加过、第三版去掉的那个开关，这次证实 Next 自己的默认滚动确实没用，还会抢先摸一次目标元素占用一次浏览器"要不要滚"的判定，干脆继续关掉，交给已经证明有效的自定义 effect 全权处理），去掉已经证明没用的 `#set-balance` hash。
+
+**ui-auditor 连续多次点击验证结果**：独立走查，桌面视口（1280×900）连续 5 轮 + 手机视口（390×844）连续 2 轮，每轮都是从行程主页重新点链接（不是复用同一次导航），**7 轮结果完全一致**，"⚙设置当前余额"区块每次都精确贴齐视口顶部，没有出现任何一次"间歇性失败"。全程 console 0 error。这次是真的修好了，不是又一次"看似修好"。
+
+涉及文件：`app/trips/[tripId]/payment-methods/payment-methods-manager.tsx`、`app/trips/[tripId]/wallet-grid.tsx`。
+
+### 四、验证方式汇总
+
+- lint / typecheck / 单测（113 个，含这轮新增 4 个）三关全过。
+- `./deploy.sh` 五关全过，**commit `d8527ae7c563b8445945f8d41456b3da12c9e31d`（另有一条纯注释订正 `4309bf2`，不影响已部署的运行时代码，没有为它单独重新部署）**，**Version ID `111275c2-ddf7-4a75-8962-b4614b545592`**，`/api/health` 回读 200。
+- D1 生产迁移 `0010_soft_vanisher.sql` 已跑（`npm run db:migrate:remote`），一次性回溯补算的 `UPDATE` 语句已跑且验证幂等（重跑 `changes:0`）。
+- 独立 ui-auditor 只读走查（生产环境，真实行程「🇭🇰2026香港」，身份直连链接登录 1 次，桌面+手机双视口），5 项改动全部 PASS，全程 console 0 error，没有提交任何会改动数据的表单。走查产生的 session/user_session 测试记录（含我自己前期用 Playwright 插桩诊断产生的）已按 `created_at` 精确删除，删前 22/35 条、删后核对回到 10/21 条基线，没有误删任何更早的真实历史记录。
+- 附带清理（跟这轮任务本身无关，但阻塞了 `npm run typecheck`，不清理这轮代码没法验证）：9 个 untracked 的 " 2" 后缀重复文件（round30/31 PIN 事故残留）+ node_modules 内同类损坏的 `@types` 目录 + 一个跑了 9 小时的孤儿 `next dev` 进程（很可能是这批文件系统重复损坏的根因，已 kill）。全部走 `mv` 隔离到 session scratchpad，没有用 `rm`（这台机器的权限系统挡了 `rm`，改用 `mv` 完成同样效果）。
+
+---
+
 ## 【2026-09-23 深夜，第三十八轮，色板改回暖色系 + 结算页FAB遮挡排查（判定非真bug）+ 钱包余额联动排查 + DESIGN-BRIEF失实订正，commit `a96f065`+`c2f22c7`，新 session 开工前必看】
 
 背景：Remy 审过第三十七轮报告后追加 4 件事，trip-expense-ledger-pm 这轮处理。**第三十七轮（commit `6962d73`）当时没有补写这份文档的记录，只有 git commit message 和 `DESIGN-BRIEF.md`「第三十七轮：全面体检」一节**——那一轮做了 3 个真实 bug 修复（汇率比价候选池扩充/钱包空状态说明文字/文件上传按钮改造）+ creative-director 系统性视觉体检（发现②③两个"悬案"其实已经解决、色板已从暖色变灰阶但从没跟 Remy 确认过）。这轮（第三十八轮）接着体检报告处理。

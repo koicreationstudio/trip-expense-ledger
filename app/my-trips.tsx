@@ -28,7 +28,7 @@ function formatDateRange(start: string | null, end: string | null): string | nul
 }
 
 // fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 这一屏三个 chip
-// （币种/身份/状态）统一是同一个 `.chip{background:#fff;color:gold-dk}` 白底灰字样式，
+// （币种/身份/状态）统一是同一个 `.chip{background:#fff;color:neutral-dk}` 白底灰字样式，
 // 状态没有单独的彩色区分——之前"记账中"接了 DESIGN-BRIEF.md 第五版定的 ok/live
 // 三态色（跟结算页"有效/已确认"这类进度徽章共用配色），在这一屏跟另外两个 chip
 // 风格不统一，是真差异。这次首页卡片的状态 chip 改回跟另外两个一样的中性配色，
@@ -97,7 +97,7 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
       )}
       {activeTrips.length > 0 && (
         <div className="flex flex-col gap-2">
-          {/* fix(2026-09-16 第十八轮)：颜色本来就跟 gold-dk 同色号，补上 letter-spacing
+          {/* fix(2026-09-16 第十八轮)：颜色本来就跟 neutral-dk 同色号，补上 letter-spacing
               对齐 Artifact `section.blk h4` 完整规格（这次全站统一扫的同一批）。 */}
           {showSectionLabels && (
             <h2 className="text-[10px] font-medium tracking-[0.08em] text-muted">进行中</h2>

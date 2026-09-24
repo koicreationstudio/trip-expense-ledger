@@ -423,7 +423,7 @@ export function FxCompareCard({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-1 text-left text-[10px] uppercase tracking-[0.08em] text-gold-dk"
+          className="flex items-center gap-1 text-left text-[10px] uppercase tracking-[0.08em] text-neutral-dk"
         >
           💱 汇率比价 → {effectiveTarget}
           <span className="ml-1 normal-case tracking-normal">{expanded ? '▲' : '▼'}</span>
@@ -463,7 +463,7 @@ export function FxCompareCard({
                 .filter((h) => h !== effectiveTarget)
                 .map((h) => ({ value: h, label: h }))}
               ariaLabel="我持有的币种"
-              triggerClassName="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
+              triggerClassName="rounded-full bg-neutral-lt px-[9px] py-[5px] text-[10px] font-medium text-neutral-dk"
               panelClassName="absolute left-0 top-full z-10 mt-1 min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
               renderValue={() => `💰 我持有 ${effectiveHold || '…'}`}
             />
@@ -474,7 +474,7 @@ export function FxCompareCard({
               onChange={(v) => setTargetCurrency(v)}
               options={targetCandidates.map((c) => ({ value: c, label: TARGET_CURRENCY_LABELS[c] ?? c }))}
               ariaLabel="目标币种"
-              triggerClassName="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
+              triggerClassName="rounded-full bg-neutral-lt px-[9px] py-[5px] text-[10px] font-medium text-neutral-dk"
               panelClassName="absolute left-0 top-full z-10 mt-1 min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
               renderValue={() => '🎯 目标币种'}
             />
@@ -486,19 +486,19 @@ export function FxCompareCard({
               <button
                 type="button"
                 onClick={() => setChannelOpen((v) => !v)}
-                className="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk"
+                className="rounded-full bg-neutral-lt px-[9px] py-[5px] text-[10px] font-medium text-neutral-dk"
               >
                 ⚙ 自选比较项 ▾
               </button>
               {channelOpen && (
                 <div className="absolute left-0 top-full z-10 mt-1 min-w-[170px] rounded-[10px] border border-sand bg-white p-1 shadow-card">
-                  <div className="px-[6px] pb-[2px] pt-[3px] text-[8.5px] font-semibold uppercase tracking-wide text-gold-dk">
+                  <div className="px-[6px] pb-[2px] pt-[3px] text-[8.5px] font-semibold uppercase tracking-wide text-neutral-dk">
                     渠道
                   </div>
                   {STATIC_CHANNELS.map((c) => (
                     <label
                       key={c.key}
-                      className="flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-[6px] py-[4px] text-[10.5px] text-ink hover:bg-gold-lt"
+                      className="flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-[6px] py-[4px] text-[10.5px] text-ink hover:bg-neutral-lt"
                     >
                       <input
                         type="checkbox"
@@ -510,21 +510,21 @@ export function FxCompareCard({
                   ))}
                   {showCards && (
                     <>
-                      <div className="mt-[2px] border-t border-sand px-[6px] pb-[2px] pt-[5px] text-[8.5px] font-semibold uppercase tracking-wide text-gold-dk">
+                      <div className="mt-[2px] border-t border-sand px-[6px] pb-[2px] pt-[5px] text-[8.5px] font-semibold uppercase tracking-wide text-neutral-dk">
                         我的方式
                       </div>
                       {/* fix(2026-09-23 第三十三轮)：卡片列表异步拉取，还没拉回来之前
                           不能显示空的勾选框（用户会以为"我的方式"就是空的、可以勾但
                           勾了也没东西），用文字占位说明还在加载。 */}
                       {cardsLoading && cardRecommendations === null ? (
-                        <p className="px-[6px] py-[4px] text-[10px] text-gold-dk">加载中…</p>
+                        <p className="px-[6px] py-[4px] text-[10px] text-neutral-dk">加载中…</p>
                       ) : (cardRecommendations ?? []).length === 0 ? (
-                        <p className="px-[6px] py-[4px] text-[10px] text-gold-dk">暂无支付方式</p>
+                        <p className="px-[6px] py-[4px] text-[10px] text-neutral-dk">暂无支付方式</p>
                       ) : (
                         (cardRecommendations ?? []).map((r) => (
                           <label
                             key={r.paymentMethodId}
-                            className="flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-[6px] py-[4px] text-[10.5px] text-ink hover:bg-gold-lt"
+                            className="flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-[6px] py-[4px] text-[10.5px] text-ink hover:bg-neutral-lt"
                           >
                             <input
                               type="checkbox"
@@ -551,7 +551,7 @@ export function FxCompareCard({
                 void loadCardRecommendations(true);
               }}
               disabled={cardsLoading || liveRatesLoading}
-              className="rounded-full bg-gold-lt px-[9px] py-[5px] text-[10px] font-medium text-gold-dk disabled:opacity-50"
+              className="rounded-full bg-neutral-lt px-[9px] py-[5px] text-[10px] font-medium text-neutral-dk disabled:opacity-50"
             >
               {cardsLoading || liveRatesLoading ? '刷新中…' : '↻ 刷新'}
             </button>
@@ -570,7 +570,7 @@ export function FxCompareCard({
                   key={h}
                   className="flex min-w-[90px] flex-1 flex-col items-center gap-0.5 rounded-[14px] border border-sand bg-white px-[8px] py-[7px] shadow-card"
                 >
-                  <span className="text-[9px] text-gold-dk">1 {h}</span>
+                  <span className="text-[9px] text-neutral-dk">1 {h}</span>
                   <span className="font-serif text-[12.5px] font-semibold tabular-nums text-ink">
                     = {rate.toFixed(3)} {FX_SYMBOLS[effectiveTarget] ?? ''}
                   </span>
@@ -605,12 +605,12 @@ export function FxCompareCard({
             // fix(2026-09-23 第三十三轮，方案二)：原本这里是"一起比较我的支付方式"
             // 总开关（includeMyCards），现在退休——每张卡自己的勾选框已经并进上面
             // "⚙自选比较项"下拉，不需要再单独一个总开关重复控制同一件事。
-            <p className="text-[10px] text-gold-dk">
+            <p className="text-[10px] text-neutral-dk">
               你在「支付方式」页配置的支付方式已经并入上面&ldquo;⚙自选比较项&rdquo;，取消勾选哪张卡它就会从下面列表消失（用的是真实汇率加点/手续费）。
             </p>
           ) : (
             !hasPaymentMethods && (
-              <p className="text-[10px] text-gold-dk">
+              <p className="text-[10px] text-neutral-dk">
                 先去{' '}
                 <Link href={`/trips/${tripId}/payment-methods`} className="tap-link">
                   支付方式设置
@@ -620,7 +620,7 @@ export function FxCompareCard({
             )
           )}
           {hasPaymentMethods && effectiveHold !== baseCurrency && (
-            <p className="text-[9.5px] text-gold-dk">
+            <p className="text-[9.5px] text-neutral-dk">
               「我持有」选的不是这趟行程本位币（{baseCurrency}）时，只比较换汇渠道，不比较我的支付方式——两者的钱是从不同基准算出来的，混在一起比不公平。
             </p>
           )}
@@ -628,9 +628,9 @@ export function FxCompareCard({
           {cardsError && <p className="text-[10px] text-coral">{cardsError}</p>}
 
           {!midRate ? (
-            <p className="text-[10px] text-gold-dk">这个币种组合暂时没有参考汇率，换一组「我持有/目标币种」再看。</p>
+            <p className="text-[10px] text-neutral-dk">这个币种组合暂时没有参考汇率，换一组「我持有/目标币种」再看。</p>
           ) : allRows.length === 0 ? (
-            <p className="text-[10px] text-gold-dk">
+            <p className="text-[10px] text-neutral-dk">
               自选比较项都取消勾选了——去上面&ldquo;⚙自选比较项&rdquo;里勾几个看看。
             </p>
           ) : (
@@ -663,7 +663,7 @@ export function FxCompareCard({
                         : '缺汇率'}
                     </span>
                   </div>
-                  <div className="mt-[3px] text-[9.5px] text-gold-dk">{row.note}</div>
+                  <div className="mt-[3px] text-[9.5px] text-neutral-dk">{row.note}</div>
                 </li>
               ))}
             </ul>
@@ -672,7 +672,7 @@ export function FxCompareCard({
           {/* fix(2026-09-17 第二十二轮)：这条脚注之前明确写"渠道那组是固定参考表，
               不是实时拉取"——现在已经不是了，改成如实描述数据来源+新鲜度，抓不到
               实时数据时也要明确说"这是离线参考汇率"，不能让用户以为一直都是实时的。 */}
-          <p className="text-center text-[9px] text-gold-dk">
+          <p className="text-center text-[9px] text-neutral-dk">
             {usingFallbackRates
               ? liveRatesFailed
                 ? '⚠️ 实时汇率暂时抓不到，以下用的是离线参考汇率，可能不是最新数字。'

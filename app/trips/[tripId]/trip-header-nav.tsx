@@ -164,10 +164,10 @@ export function TripHeaderNav({
       {canOpenPanel && open && (
         <div className="w-full rounded-[14px] border border-sand bg-paper p-1 shadow-card">
           <div className="flex items-center justify-between gap-2 px-[6px] pb-[3px] pt-[2px]">
-            <span className="text-[9.5px] tracking-wide text-gold">
+            <span className="text-[9.5px] tracking-wide text-neutral">
               {otherTrips.length > 0 ? '展开：切到其它行程' : '管理行程'}
             </span>
-            <Link href="/trips/new" className="shrink-0 text-[9.5px] text-gold-dk underline underline-offset-2">
+            <Link href="/trips/new" className="shrink-0 text-[9.5px] text-neutral-dk underline underline-offset-2">
               ＋ 新建行程
             </Link>
           </div>
@@ -227,14 +227,14 @@ export function TripHeaderNav({
         </div>
       )}
 
-      {/* navtabs：Artifact `.navtabs{background:gold-lt;border-radius:999px;padding:3px;gap:4px}`
-          `.navtabs button{padding:6px 12px;border-radius:999px;font-size:11px;font-weight:500;color:gold-dk}`
+      {/* navtabs：Artifact `.navtabs{background:neutral-lt;border-radius:999px;padding:3px;gap:4px}`
+          `.navtabs button{padding:6px 12px;border-radius:999px;font-size:11px;font-weight:500;color:neutral-dk}`
           `.navtabs button.on{background:ink;color:#fff}`——方案里没有任何一个 tab 带下划线
           （选中态靠深色胶囊背景区分，不是靠下划线）。旧实现复用了 `.tap-link` 这个全站
           共享 class，那个 class 是给"编辑/删除/撤销"这类行内文字链接用的，天生带
           `underline`，被 subtab 借用后四个 tab（选中的和没选中的）全部长了下划线——
           这是这轮真的抓到的 bug，不是凭感觉猜的，`.tap-link` 定义见 app/globals.css。 */}
-      <nav className="flex w-fit flex-wrap gap-1 rounded-full bg-gold-lt p-[3px] text-[11px]">
+      <nav className="flex w-fit flex-wrap gap-1 rounded-full bg-neutral-lt p-[3px] text-[11px]">
         {navLinks.map((link) => {
           const isActive = pathname === link.href;
           return (
@@ -244,7 +244,7 @@ export function TripHeaderNav({
               className={
                 isActive
                   ? 'inline-flex items-center rounded-full bg-ink px-[12px] py-[6px] font-medium text-white'
-                  : 'inline-flex items-center rounded-full px-[12px] py-[6px] font-medium text-gold-dk hover:text-ink'
+                  : 'inline-flex items-center rounded-full px-[12px] py-[6px] font-medium text-neutral-dk hover:text-ink'
               }
             >
               {link.label}

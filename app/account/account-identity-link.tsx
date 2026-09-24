@@ -30,12 +30,12 @@ export function AccountIdentityLink({ url }: { url: string }) {
     // 重要动作"降级成了不起眼的次要按钮。这次链接框+按钮分开、按钮改用 .big-cta。
     // 链接文字本身 `.linkbox{word-break:break-all}` 长 token 本来就会换行显示，
     // Artifact demo 里的 URL 是手动截断成"...”的假数据，不是"必须单行"的规格，
-    // 这版保留换行显示（不做单行省略），只是把底色/文字色对齐 spec 的 gold-lt/gold-dk。
+    // 这版保留换行显示（不做单行省略），只是把底色/文字色对齐 spec 的 neutral-lt/neutral-dk。
     <section className="flex flex-col gap-2">
       <p className="text-[10px] text-muted">
         这条链接可以随时用来重新登录这个账号，没有邮箱密码。换设备、清了浏览器数据时，打开这条链接就能回来（下面还可以多设一个密码/PIN 当备用）。
       </p>
-      <code className="break-all rounded-xl bg-gold-lt px-[9px] py-2 font-mono text-[9.5px] text-gold-dk">
+      <code className="break-all rounded-xl bg-neutral-lt px-[9px] py-2 font-mono text-[9.5px] text-neutral-dk">
         {url}
       </code>
       <button type="button" onClick={handleCopy} className="big-cta">

@@ -239,7 +239,7 @@ export function ExchangeForm({
           <button
             type="button"
             onClick={() => setAddSourceOpen((v) => !v)}
-            className="tap-link shrink-0 whitespace-nowrap text-[9.5px] text-gold-dk underline underline-offset-2"
+            className="tap-link shrink-0 whitespace-nowrap text-[9.5px] text-neutral-dk underline underline-offset-2"
           >
             ＋ 添加来源钱包
           </button>
@@ -315,7 +315,7 @@ export function ExchangeForm({
               className="field-input flex-1 font-serif tabular-nums"
               placeholder="0.00"
             />
-            <span className="shrink-0 rounded-lg bg-gold-lt px-[7px] py-[5px] text-[9px] font-semibold text-gold-dk">
+            <span className="shrink-0 rounded-lg bg-neutral-lt px-[7px] py-[5px] text-[9px] font-semibold text-neutral-dk">
               {fromWallet?.currency}
             </span>
           </div>
@@ -328,7 +328,7 @@ export function ExchangeForm({
             本次汇率 <span className="text-[8.5px] font-normal text-muted">填这一笔实际用到的汇率，不是固定死的</span>
           </label>
           <div className="flex items-center gap-1.5">
-            <span className="shrink-0 rounded-lg bg-gold-lt px-[7px] py-[5px] text-[9px] font-semibold text-gold-dk">
+            <span className="shrink-0 rounded-lg bg-neutral-lt px-[7px] py-[5px] text-[9px] font-semibold text-neutral-dk">
               1 {fromWallet?.currency} =
             </span>
             <input
@@ -342,7 +342,7 @@ export function ExchangeForm({
               className="field-input flex-1 font-serif tabular-nums"
               placeholder="0.0000"
             />
-            <span className="shrink-0 rounded-lg bg-gold-lt px-[7px] py-[5px] text-[9px] font-semibold text-gold-dk">
+            <span className="shrink-0 rounded-lg bg-neutral-lt px-[7px] py-[5px] text-[9px] font-semibold text-neutral-dk">
               {toWallet?.currency}
             </span>
           </div>

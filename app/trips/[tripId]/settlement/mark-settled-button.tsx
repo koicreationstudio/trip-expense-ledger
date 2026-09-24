@@ -37,7 +37,7 @@ export function MarkSettledButton({
 
   return (
     // fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 这颗按钮是
-    // `<button class="big-cta" style="background:var(--gold-dk)" disabled>等所有转账
+    // `<button class="big-cta" style="background:var(--neutral-dk)" disabled>等所有转账
     // 确认收款后 · 整个行程才会标记已结算</button>`——跟表单/清单同宽的整行按钮，
     // 没收齐时按钮本身的文字就是这句提示，不是"紧凑按钮 + 下面单独一行小字"。
     // 2026-09-12 那次"修复"把 .btn-primary 从意外撑满全宽改回了紧凑胶囊，

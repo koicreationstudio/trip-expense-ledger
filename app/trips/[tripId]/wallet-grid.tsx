@@ -209,7 +209,7 @@ export function WalletGrid({
                   <button
                     type="button"
                     onClick={() => setLabel(m.label)}
-                    className="tap-link text-gold-dk"
+                    className="tap-link text-neutral-dk"
                   >
                     {m.label}
                   </button>
@@ -382,7 +382,7 @@ export function WalletGrid({
               </div>
               <div className="font-mono text-[10px] text-muted">{w.currency}</div>
               {w.linkedPaymentMethodLabel && (
-                <div className="mt-1 truncate text-[10px] text-gold-dk">🔗 {w.linkedPaymentMethodLabel}</div>
+                <div className="mt-1 truncate text-[10px] text-neutral-dk">🔗 {w.linkedPaymentMethodLabel}</div>
               )}
             </div>
           ),

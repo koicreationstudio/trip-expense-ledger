@@ -245,7 +245,7 @@ export function PaymentMethodsManager({
             override `#scr-payment section.blk h4{font-size:9px}`（比通用的 10px
             再收一档），round18 当时只套用了通用 10px 版本，没查到这条页面专属覆盖，
             这次三处小标题全部改成字面一致的 9px。 */}
-        <h2 className="text-[9px] font-medium tracking-[0.08em] text-gold-dk">已配置的支付方式</h2>
+        <h2 className="text-[9px] font-medium tracking-[0.08em] text-neutral-dk">已配置的支付方式</h2>
         {methods === null ? (
           <p className="text-xs text-muted">载入中…</p>
         ) : methods.length === 0 ? (
@@ -307,7 +307,7 @@ export function PaymentMethodsManager({
           这个勾选结果，不看「已配置的支付方式」那份账号级全量列表。行存在于
           trip_payment_method_enabled 即勾选，删行即取消勾选（PUT enablement 端点）。 */}
       <section className="flex flex-col gap-2">
-        <h2 className="text-[9px] font-medium tracking-[0.08em] text-gold-dk">本行程启用的支付方式</h2>
+        <h2 className="text-[9px] font-medium tracking-[0.08em] text-neutral-dk">本行程启用的支付方式</h2>
         <p className="text-[10px] text-muted">这行程要用到哪几张卡/钱包，不用的可以取消勾选，记账时下拉选单会更短。</p>
         {methods === null ? (
           <p className="text-xs text-muted">载入中…</p>
@@ -343,7 +343,7 @@ export function PaymentMethodsManager({
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-[9px] font-medium tracking-[0.08em] text-gold-dk">新增支付方式</h2>
+        <h2 className="text-[9px] font-medium tracking-[0.08em] text-neutral-dk">新增支付方式</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
@@ -470,7 +470,7 @@ export function PaymentMethodsManager({
           没有余额字段），Artifact 把它画在"支付方式"页只是信息架构上的归类，底层数据没变。 */}
       <section id="set-balance" className="flex flex-col gap-2">
         {/* fix(2026-09-17 第十九轮)：跟上面同一批"改成 .big-cta 全宽"，颜色沿用 Artifact
-            `style="background:var(--gold-dk)"`——跟"添加支付方式"那颗纯黑主按钮区分开，
+            `style="background:var(--neutral-dk)"`——跟"添加支付方式"那颗纯黑主按钮区分开，
             是方案里同一颗按钮组件的第二种配色，不是新发明的按钮样式。图标 ⚙（0x2699）
             核对过就是 Artifact 原文用的字符，不是 ⊙，这次没有改图标本身。 */}
         <button

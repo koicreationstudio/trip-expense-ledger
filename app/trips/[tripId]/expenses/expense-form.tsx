@@ -586,7 +586,7 @@ export function ExpenseForm({
                 这里补成一排可勾选的参与者 chip，跟自定义分摊共用同一份 splitIncluded
                 state，勾选结果对平分/自定义都生效。 */}
             <div className="flex flex-col gap-1">
-              <span className="text-[9px] font-semibold text-gold-dk">跟谁分？</span>
+              <span className="text-[9px] font-semibold text-neutral-dk">跟谁分？</span>
               {/* fix(2026-09-17 第二十轮，逐 token 核对)：Artifact `.split-panel .btns
                   {gap:5px}` + 按钮 `padding:var(--ctrl-pad)`=5px 7px——之前 gap-1.5
                   (6px)/px-[10px]配min-h（约等于 8-9px 竖向）跟这两个值都对不上。 */}
@@ -613,7 +613,7 @@ export function ExpenseForm({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[9px] font-semibold text-gold-dk" htmlFor="payer">
+              <label className="text-[9px] font-semibold text-neutral-dk" htmlFor="payer">
                 谁垫的钱？
               </label>
               <SelectDropdown
@@ -629,7 +629,7 @@ export function ExpenseForm({
             </div>
 
             <div className="flex flex-col gap-1">
-              <span className="text-[9px] font-semibold text-gold-dk">怎么分？</span>
+              <span className="text-[9px] font-semibold text-neutral-dk">怎么分？</span>
               <div className="flex flex-wrap gap-[5px]">
                 {SPLIT_SUB_MODE_OPTIONS.map((opt) => (
                   <button
@@ -648,7 +648,7 @@ export function ExpenseForm({
                 ))}
               </div>
               {splitMode === 'equal' && (
-                <p className="text-[10px] text-gold-dk">按上面「跟谁分？」勾选的人平均分摊这笔消费。</p>
+                <p className="text-[10px] text-neutral-dk">按上面「跟谁分？」勾选的人平均分摊这笔消费。</p>
               )}
             </div>
 

@@ -154,7 +154,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
           对齐方案顺序；"参与者认领状态"是比方案更完整的真功能（round14 已确认），
           留在最后，不在方案覆盖范围内，不用非得塞进方案排的位置。 */}
       <section className="flex flex-col gap-2">
-        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">现有邀请链接</h2>
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">现有邀请链接</h2>
         {invites === null ? (
           <p className="text-xs text-muted">载入中…</p>
         ) : invites.length === 0 ? (
@@ -223,7 +223,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
         // 圆角 14px），之前是裸 section 没有这层包装。
         <section className="flex flex-col gap-3 rounded-[14px] border border-sand p-[7px]">
           {/* fix(2026-09-16 第十八轮)：小标题统一成 Artifact `section.blk h4` 规格。 */}
-          <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">生成新邀请链接</h2>
+          <h2 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">生成新邀请链接</h2>
           <form onSubmit={handleCreateInvite} className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1">
               <label className="field-label" htmlFor="invitee-name">
@@ -277,7 +277,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
         </button>
       ) : (
         <section className="flex flex-col gap-3">
-          <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">直接添加参与者</h2>
+          <h2 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">直接添加参与者</h2>
           <p className="text-[10px] text-muted">不需要对方点邀请链接认领，适合对方不方便操作手机的场合，加进来的人只是个占位名字。</p>
           <form onSubmit={handleAddParticipant} className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1">
@@ -301,7 +301,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
       )}
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">参与者认领状态</h2>
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">参与者认领状态</h2>
         <p className="text-xs text-muted">认领错人、换手机号了，可以把某个人重置回未认领状态，让他重新用邀请链接认领。</p>
         {participants === null ? (
           <p className="text-xs text-muted">载入中…</p>
@@ -318,7 +318,7 @@ export function InvitesManager({ tripId }: { tripId: string }) {
                   {p.isOwner && <span className="ml-2 text-[10px] text-muted">创建者</span>}
                   <span
                     className={`ml-2 inline-flex items-center rounded-full px-[9px] py-[3px] text-[9.5px] font-medium ${
-                      p.claimed ? 'bg-ok-bg text-ok' : 'bg-gold-lt text-gold-dk'
+                      p.claimed ? 'bg-ok-bg text-ok' : 'bg-neutral-lt text-neutral-dk'
                     }`}
                   >
                     {p.claimed ? '已认领' : '未认领'}

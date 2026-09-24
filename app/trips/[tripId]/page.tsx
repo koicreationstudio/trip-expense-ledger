@@ -248,9 +248,9 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
       <section className="flex flex-col gap-2">
         {/* fix(2026-09-16 第十八轮)：小标题样式统一成 Artifact `section.blk h4` 规格
-            （10px/gold-dk/letter-spacing），文案"活动流"本身是 Remy 更早一轮的原话
+            （10px/neutral-dk/letter-spacing），文案"活动流"本身是 Remy 更早一轮的原话
             要求（盖过 Artifact"记录·HISTORY"），这次只改样式不改字。 */}
-        <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">活动流</h2>
+        <h2 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">活动流</h2>
         <ExpenseList
           tripId={trip.id}
           myParticipantId={identity.participantId}
@@ -286,7 +286,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-[10px] font-medium tracking-[0.08em] text-gold-dk">
+          <h2 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">
             换汇 · <span className="font-mono uppercase tracking-wide">EXCHANGE</span>
           </h2>
           <span className="text-[10px] text-muted">仅自己可见</span>

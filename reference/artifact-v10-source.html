@@ -8,11 +8,11 @@
      tailwind.config.ts 同步——这份文件是全项目"逐 token 核对 Artifact 字面规格"时
      反复拿来当权威源头用的（round18/20/26/32 都这么做过），不同步的话下次核对
      又会把灰阶误判成"漂移"改回暖色，第三十八轮那次就是这么翻车的。详细依据见
-     tailwind.config.ts colors 块顶部注释。gold-lt 这次用字面值 #EDECE9（跟
+     tailwind.config.ts colors 块顶部注释。neutral-lt 这次用字面值 #EDECE9（跟
      image8 像素采样一致），不再用 tailwind 那边旧公式算出来的 #E4E3E2——这份
      文件本来就是字面 #EDECE9，这次两边统一。 */
   --ink:#373736; --paper:#F7F7F6; --sand:#DBDAD6;
-  --gold:#A4A3A0; --gold-lt:#EDECE9; --gold-dk:#6E6E6C;
+  --neutral:#A4A3A0; --neutral-lt:#EDECE9; --neutral-dk:#6E6E6C;
   --accent:#373736; --accent-hover:#242423;
   --coral:#991B14; --positive:#3D6141; --negative:#A63926;
   --positive-dk:#B7D1A8; --negative-dk:#E6B1A8;
@@ -54,7 +54,7 @@ body{
   box-shadow:var(--shadow-card);
 }
 .brief h1{margin:0 0 4px; font-size:19px; font-weight:700; text-wrap:balance;}
-.brief p{margin:0; color:var(--gold-dk); font-size:12.5px;}
+.brief p{margin:0; color:var(--neutral-dk); font-size:12.5px;}
 .brief .rule{
   margin-top:10px; padding:9px 12px; background:var(--ok-bg); color:var(--ok);
   border-radius:10px; font-size:12px; font-weight:500;
@@ -72,12 +72,12 @@ body{
 }
 .nav button{
   all:unset; cursor:pointer; padding:8px 10px; border-radius:9px; font-size:12.5px; font-weight:500;
-  color:var(--gold-dk); display:flex; align-items:center; gap:7px;
+  color:var(--neutral-dk); display:flex; align-items:center; gap:7px;
 }
 .nav button .n{
-  font-family:var(--font-mono); font-size:9.5px; color:var(--gold); width:16px;
+  font-family:var(--font-mono); font-size:9.5px; color:var(--neutral); width:16px;
 }
-.nav button:hover{background:var(--gold-lt);}
+.nav button:hover{background:var(--neutral-lt);}
 .nav button.active{background:var(--ink); color:#fff;}
 .nav button.active .n{color:var(--hero-label);}
 
@@ -108,7 +108,7 @@ body{
 .notes .after{color:var(--ok); font-weight:600; font-size:11px;}
 .notes .unsure{color:var(--negative); font-size:11px; font-weight:600;}
 .legend{margin-top:14px; padding-top:12px; border-top:1px dashed var(--sand);}
-.legend p{margin:0 0 6px; font-size:11px; color:var(--gold-dk); font-weight:600;}
+.legend p{margin:0 0 6px; font-size:11px; color:var(--neutral-dk); font-weight:600;}
 .legend .row{display:flex; align-items:center; gap:6px; font-size:11px; margin-bottom:4px;}
 .dot{width:10px; height:10px; border-radius:50%; flex-shrink:0;}
 
@@ -117,30 +117,30 @@ body{
    ========================================================= */
 .topbar-row{display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px;}
 .title-block h3{margin:0; font-size:15px; font-weight:700; text-wrap:balance;}
-.title-block p{margin:2px 0 0; font-size:10.5px; color:var(--gold-dk);}
+.title-block p{margin:2px 0 0; font-size:10.5px; color:var(--neutral-dk);}
 .trip-pill{
   display:inline-flex; align-items:center; gap:4px; background:var(--ink); color:#fff;
   border-radius:999px; padding:4px 9px; font-size:11px; font-weight:500; cursor:pointer; border:none;
   box-shadow:var(--shadow-card);
 }
 .topbar-actions{display:flex; flex-direction:column; align-items:flex-end; gap:6px;}
-.account-links{display:flex; gap:10px; font-size:10.5px; color:var(--gold-dk);}
-.account-links a{color:var(--gold-dk); text-decoration:underline; text-underline-offset:2px;}
+.account-links{display:flex; gap:10px; font-size:10.5px; color:var(--neutral-dk);}
+.account-links a{color:var(--neutral-dk); text-decoration:underline; text-underline-offset:2px;}
 
-.navtabs{display:flex; gap:4px; background:var(--gold-lt); border-radius:999px; padding:3px; margin-bottom:14px; width:fit-content;}
-.navtabs button{all:unset; cursor:pointer; padding:6px 12px; border-radius:999px; font-size:11px; font-weight:500; color:var(--gold-dk);}
+.navtabs{display:flex; gap:4px; background:var(--neutral-lt); border-radius:999px; padding:3px; margin-bottom:14px; width:fit-content;}
+.navtabs button{all:unset; cursor:pointer; padding:6px 12px; border-radius:999px; font-size:11px; font-weight:500; color:var(--neutral-dk);}
 .navtabs button.on{background:var(--ink); color:#fff;}
 
 /* ---- 切换行程下拉：浅灰克制风格（第四轮反馈第三批：这轮先用 Playwright 把 HTML 存本地实际截图看过，
    照参考图逐项核对再改的，不是只调 CSS 数值——历史上这里已经被打回两次了） ---- */
-.subhead{font-size:10px; letter-spacing:.08em; color:var(--gold-dk); font-weight:500;}
+.subhead{font-size:10px; letter-spacing:.08em; color:var(--neutral-dk); font-weight:500;}
 .dropdown-panel{
   background:#F7F7F6; border:1px solid var(--sand); border-radius:14px; box-shadow:var(--shadow-card);
   padding:4px; margin-bottom:12px;
 }
 .dropdown-panel .dd-head{display:flex; justify-content:space-between; align-items:center; padding:2px 6px 3px;}
-.dropdown-panel .cap{font-size:9.5px; letter-spacing:.02em; color:var(--gold); font-weight:400;}
-.dd-new-corner{font-size:9.5px; color:var(--gold-dk); text-decoration:underline; text-underline-offset:2px; cursor:pointer;}
+.dropdown-panel .cap{font-size:9.5px; letter-spacing:.02em; color:var(--neutral); font-weight:400;}
+.dd-new-corner{font-size:9.5px; color:var(--neutral-dk); text-decoration:underline; text-underline-offset:2px; cursor:pointer;}
 .dd-row{display:flex; align-items:center; gap:6px; padding:4px 6px; background:transparent; border-top:1px solid rgba(55,55,54,.07);}
 .dd-row:first-of-type{border-top:none;}
 .dd-dot{width:9px; flex-shrink:0; font-size:7px; line-height:1; color:var(--ink); text-align:center;}
@@ -219,58 +219,58 @@ body{
 /* 汇率比价（完整重做） */
 .fx-section{margin-bottom:14px;}
 .fx-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
-.fx-refresh{all:unset; cursor:pointer; font-size:10px; color:var(--gold-dk); background:var(--gold-lt); padding:4px 9px; border-radius:999px;}
+.fx-refresh{all:unset; cursor:pointer; font-size:10px; color:var(--neutral-dk); background:var(--neutral-lt); padding:4px 9px; border-radius:999px;}
 .fx-base-row{display:flex; gap:6px; margin-bottom:8px;}
 .fx-base-card{flex:1; background:#fff; border:1px solid var(--sand); border-radius:14px; padding:7px 8px; text-align:center; box-shadow:var(--shadow-card);}
-.fbc-lbl{font-size:9px; color:var(--gold-dk);}
+.fbc-lbl{font-size:9px; color:var(--neutral-dk);}
 .fbc-val{font-family:var(--font-serif); font-size:12.5px; font-weight:600; margin-top:1px;}
 .fx-channels{display:flex; flex-direction:column; gap:7px; margin-top:10px;}
 .fx-row{border:1px solid var(--sand); border-radius:14px; padding:8px 10px; font-size:11px; background:#fff;}
 .fx-row.ref{opacity:.8; border-style:dashed; background:transparent;}
 .fx-row-top{display:flex; justify-content:space-between; align-items:center; font-weight:600; gap:6px;}
 .fx-row-amt{font-family:var(--font-serif); font-variant-numeric:tabular-nums;}
-.fx-row-note{color:var(--gold-dk); font-size:9.5px; margin-top:3px;}
-.fx-src{font-size:9px; color:var(--gold-dk); margin-top:8px; text-align:center;}
+.fx-row-note{color:var(--neutral-dk); font-size:9.5px; margin-top:3px;}
+.fx-src{font-size:9px; color:var(--neutral-dk); margin-top:8px; text-align:center;}
 .fx-badge-best{background:var(--ok); color:#fff; font-size:9px; font-weight:700; padding:2px 7px; border-radius:999px; margin-left:6px; display:inline-flex; align-items:center; white-space:nowrap;}
 
 section.blk{margin-bottom:10px;}
-section.blk h4{margin:0 0 6px; font-size:10px; font-weight:500; color:var(--gold-dk); letter-spacing:.08em;}
+section.blk h4{margin:0 0 6px; font-size:10px; font-weight:500; color:var(--neutral-dk); letter-spacing:.08em;}
 .list{background:rgba(164,163,160,.14); border:1px solid var(--sand); border-radius:14px; padding:var(--list-pad); box-shadow:var(--shadow-card); display:flex; flex-direction:column; gap:2px;}
 .p-row{display:flex; align-items:center; gap:7px; padding:var(--row-pad);}
-.avatar{width:22px; height:22px; border-radius:50%; background:var(--sand); color:var(--gold-dk); font-size:10.5px; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.avatar{width:22px; height:22px; border-radius:50%; background:var(--sand); color:var(--neutral-dk); font-size:10.5px; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
 .p-row .nm{font-size:var(--row-name-font); font-weight:500;}
-.p-row .tag{display:inline-block; margin-left:6px; font-size:9px; color:var(--gold-dk);}
+.p-row .tag{display:inline-block; margin-left:6px; font-size:9px; color:var(--neutral-dk);}
 .p-row .badge{display:inline-flex; margin-top:2px; padding:2px 7px; border-radius:999px; font-size:8.5px; font-weight:500;}
 .p-row .badge.ok{background:var(--ok-bg); color:var(--ok);}
-.p-row .badge.wait{background:var(--gold-lt); color:var(--gold-dk);}
+.p-row .badge.wait{background:var(--neutral-lt); color:var(--neutral-dk);}
 .p-row .badge.lg{font-size:11px; padding:3px 10px; font-weight:600;}
 .p-row .amt{margin-left:auto; font-size:11px; font-weight:500;}
 .p-row .amt .n{font-family:var(--font-serif); font-variant-numeric:tabular-nums;}
-.p-row .me{margin-left:auto; font-size:11px; color:var(--gold-dk);}
-.detail-toggle{all:unset; cursor:pointer; font-size:9px; color:var(--gold-dk); text-decoration:underline; text-underline-offset:2px; margin:0 0 5px 30px; display:inline-block;}
+.p-row .me{margin-left:auto; font-size:11px; color:var(--neutral-dk);}
+.detail-toggle{all:unset; cursor:pointer; font-size:9px; color:var(--neutral-dk); text-decoration:underline; text-underline-offset:2px; margin:0 0 5px 30px; display:inline-block;}
 .settle-detail{background:rgba(164,163,160,.14); border:1px solid var(--sand); border-radius:14px; padding:2px 7px; margin:0 0 7px; display:flex; flex-direction:column;}
 .settle-detail .a-row{display:flex; align-items:center; gap:7px; padding:4px 0; font-size:10px;}
 .settle-detail .a-row+.a-row{border-top:1px solid var(--sand);}
 .settle-detail .a-row .cat{flex:1; min-width:0; font-weight:500;}
-.settle-detail .a-row .meta{color:var(--gold-dk); font-size:9px; flex-shrink:0;}
+.settle-detail .a-row .meta{color:var(--neutral-dk); font-size:9px; flex-shrink:0;}
 .settle-detail .a-row .amt{font-family:var(--font-serif); font-size:10px; font-weight:600; flex-shrink:0; margin-left:auto;}
 
 /* 活动流 / 记录·HISTORY —— 整块包成跟参与者/结算/支付方式一致的卡片规格 */
 .hist-card{background:rgba(164,163,160,.14); border:1px solid var(--sand); border-radius:14px; padding:8px 7px; box-shadow:var(--shadow-card);}
-.hist-static-note{font-size:9.5px; color:var(--gold-dk); margin:-2px 0 8px; line-height:1.5;}
+.hist-static-note{font-size:9.5px; color:var(--neutral-dk); margin:-2px 0 8px; line-height:1.5;}
 .hist-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
 .hist-sort{position:relative;}
-.hist-sort-btn{all:unset; cursor:pointer; font-size:9.5px; color:var(--gold-dk); background:var(--gold-lt); padding:5px 9px; border-radius:999px;}
+.hist-sort-btn{all:unset; cursor:pointer; font-size:9.5px; color:var(--neutral-dk); background:var(--neutral-lt); padding:5px 9px; border-radius:999px;}
 .hist-sort-menu{position:absolute; top:110%; right:0; z-index:10; background:#fff; border:1px solid var(--sand); border-radius:10px; padding:4px; box-shadow:var(--shadow-card); min-width:160px;}
 .hist-sort-opt{padding:6px 8px; border-radius:7px; font-size:10.5px; cursor:pointer;}
-.hist-sort-opt.on{background:var(--gold-lt); font-weight:600;}
+.hist-sort-opt.on{background:var(--neutral-lt); font-weight:600;}
 .hist-filters{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;}
-.fchip{all:unset; cursor:pointer; padding:var(--ctrl-pad); border-radius:999px; font-size:var(--ctrl-font); font-weight:500; color:var(--gold-dk); background:var(--gold-lt);}
+.fchip{all:unset; cursor:pointer; padding:var(--ctrl-pad); border-radius:999px; font-size:var(--ctrl-font); font-weight:500; color:var(--neutral-dk); background:var(--neutral-lt);}
 .fchip.on{background:var(--ink); color:#fff;}
 .fdrop{position:relative;}
 .fdrop-menu{position:absolute; top:110%; left:0; z-index:10; background:#fff; border:1px solid var(--sand); border-radius:10px; padding:4px; box-shadow:var(--shadow-card); min-width:110px;}
 .fdrop-opt{padding:6px 8px; border-radius:7px; font-size:10.5px; color:var(--ink); cursor:pointer; white-space:nowrap;}
-.fdrop-opt:hover{background:var(--gold-lt);}
+.fdrop-opt:hover{background:var(--neutral-lt);}
 .hist-list{display:flex; flex-direction:column;}
 .hist-row{position:relative; display:flex; align-items:center; gap:8px; padding:7px 4px; cursor:pointer; overflow:hidden;}
 .hist-row+.hist-row{border-top:1px solid var(--sand);}
@@ -278,16 +278,16 @@ section.blk h4{margin:0 0 6px; font-size:10px; font-weight:500; color:var(--gold
 .hist-icon{font-size:15px; width:24px; text-align:center; flex-shrink:0;}
 .hist-mid{flex:1; min-width:0;}
 .hist-name{font-size:12px; font-weight:500;}
-.hist-meta{font-size:9.5px; color:var(--gold-dk); margin-top:1px;}
-.hist-approx{font-size:9.5px; color:var(--gold-dk); margin-top:1px;}
+.hist-meta{font-size:9.5px; color:var(--neutral-dk); margin-top:1px;}
+.hist-approx{font-size:9.5px; color:var(--neutral-dk); margin-top:1px;}
 .hist-amt{font-family:var(--font-serif); font-size:12.5px; font-weight:600; flex-shrink:0; transition:transform .18s ease;}
 .hist-actions{position:absolute; right:4px; top:0; bottom:0; display:flex; align-items:center; gap:5px; transform:translateX(120%); transition:transform .18s ease; background:linear-gradient(to left, var(--paper) 65%, transparent); padding-left:22px;}
 .hist-row.show-actions .hist-actions{transform:translateX(0);}
 .hist-row.show-actions .hist-amt{transform:translateX(-58px);}
-.hist-actions button{all:unset; cursor:pointer; width:23px; height:23px; border-radius:50%; background:#fff; border:1px solid var(--sand); display:flex; align-items:center; justify-content:center; font-size:10.5px; color:var(--gold-dk);}
+.hist-actions button{all:unset; cursor:pointer; width:23px; height:23px; border-radius:50%; background:#fff; border:1px solid var(--sand); display:flex; align-items:center; justify-content:center; font-size:10.5px; color:var(--neutral-dk);}
 .hist-actions button.del{color:var(--coral); border-color:var(--negative-dk);}
 
-.empty{font-size:11.5px; color:var(--gold-dk); padding:6px 2px;}
+.empty{font-size:11.5px; color:var(--neutral-dk); padding:6px 2px;}
 
 .actionbar{position:sticky; bottom:-18px; margin:16px -14px -18px; background:var(--paper); border-top:1px solid var(--sand); padding:10px 14px; display:flex; justify-content:flex-end;}
 .actionbar button{all:unset; cursor:pointer; display:flex; align-items:center; gap:6px; background:var(--ink); color:#fff; padding:9px 14px; border-radius:999px; font-size:12px; font-weight:500; box-shadow:var(--shadow-card);}
@@ -295,24 +295,24 @@ section.blk h4{margin:0 0 6px; font-size:10px; font-weight:500; color:var(--gold
 /* 表单通用（第四轮反馈第二批：紧凑 token 统一收紧一档） */
 .field{display:flex; flex-direction:column; gap:2px; margin-bottom:6px;}
 .field label{font-size:var(--label-font); font-weight:500; color:var(--ink);}
-.field label.sub{color:var(--gold-dk); font-weight:400;}
-.field .hint{font-size:var(--hint-font); color:var(--gold-dk); font-weight:400;}
+.field label.sub{color:var(--neutral-dk); font-weight:400;}
+.field .hint{font-size:var(--hint-font); color:var(--neutral-dk); font-weight:400;}
 .field input, .field textarea{
   border:1px solid var(--sand); border-radius:10px; padding:var(--ctrl-pad); font-size:var(--ctrl-font); font-family:var(--font-sans);
   color:var(--ink); background:#fff; width:100%;
 }
-.field input::placeholder{color:var(--gold);}
+.field input::placeholder{color:var(--neutral);}
 .row2{display:flex; gap:7px;}
 .row2 .field{flex:1;}
 .dd-fake{border:1px solid var(--sand); border-radius:10px; padding:var(--ctrl-pad); font-size:var(--ctrl-font); display:flex; justify-content:space-between; align-items:center; background:#fff; cursor:pointer;}
-.dd-fake .chev{color:var(--gold-dk); font-size:9.5px;}
+.dd-fake .chev{color:var(--neutral-dk); font-size:9.5px;}
 .amt-input-row{display:flex; align-items:center; gap:5px;}
 .amt-input-row input{flex:1;}
-.cur-badge{font-size:9px; font-weight:600; color:var(--gold-dk); background:var(--gold-lt); padding:5px 7px; border-radius:8px; flex-shrink:0;}
+.cur-badge{font-size:9px; font-weight:600; color:var(--neutral-dk); background:var(--neutral-lt); padding:5px 7px; border-radius:8px; flex-shrink:0;}
 
 .cat-dropdown-list{border:1px solid var(--sand); border-radius:10px; padding:4px; margin-top:2px; background:#fff; display:flex; flex-direction:column; max-height:170px; overflow-y:auto;}
 .cat-opt{padding:5px 6px; border-radius:7px; font-size:10.5px; cursor:pointer;}
-.cat-opt:hover{background:var(--gold-lt);}
+.cat-opt:hover{background:var(--neutral-lt);}
 
 /* 米黄开关式分摊（记一笔消费，图8：跟其他人split这笔展开卡片，第四轮反馈第二批再收紧） */
 .split-toggle-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:11px;}
@@ -322,7 +322,7 @@ section.blk h4{margin:0 0 6px; font-size:10px; font-weight:500; color:var(--gold
 .switch.on .knob{left:16px;}
 .split-panel{background:var(--cream); border-radius:12px; padding:8px; display:flex; flex-direction:column; gap:7px;}
 .split-panel .grp{display:flex; flex-direction:column; gap:4px;}
-.split-panel .glabel{font-size:9px; color:var(--gold-dk); font-weight:600;}
+.split-panel .glabel{font-size:9px; color:var(--neutral-dk); font-weight:600;}
 .split-panel .btns{display:flex; gap:5px;}
 .split-panel .btns button{all:unset; cursor:pointer; flex:1; text-align:center; padding:var(--ctrl-pad); border-radius:999px; font-size:var(--ctrl-font); font-weight:500; background:#fff; color:var(--ink);}
 .split-panel .btns button.on{background:var(--ink); color:#fff;}
@@ -331,15 +331,15 @@ section.blk h4{margin:0 0 6px; font-size:10px; font-weight:500; color:var(--gold
 .acct-type{width:31px; height:31px; border-radius:50%; border:1.5px solid var(--sand); background:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer;}
 .acct-type.on{border-color:var(--ok); background:var(--ok-bg); box-shadow:0 0 0 2px var(--ok-bg);}
 
-.trip-card{border:1px solid var(--sand); border-radius:14px; padding:var(--card-pad-sm); margin-bottom:6px; box-shadow:var(--shadow-card); background:var(--gold-lt);}
+.trip-card{border:1px solid var(--sand); border-radius:14px; padding:var(--card-pad-sm); margin-bottom:6px; box-shadow:var(--shadow-card); background:var(--neutral-lt);}
 .trip-card .top{display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; gap:6px;}
 .trip-card .name{font-size:13px; font-weight:700;}
-.icon-btn{all:unset; cursor:pointer; font-size:10.5px; color:var(--gold-dk); padding:2px 5px;}
+.icon-btn{all:unset; cursor:pointer; font-size:10.5px; color:var(--neutral-dk); padding:2px 5px;}
 .trip-card .chips{display:flex; gap:5px; margin-bottom:4px;}
-.chip{font-size:8.5px; padding:2px 7px; border-radius:999px; background:#fff; color:var(--gold-dk); font-weight:500;}
+.chip{font-size:8.5px; padding:2px 7px; border-radius:999px; background:#fff; color:var(--neutral-dk); font-weight:500;}
 .trip-card .amt{font-family:var(--font-serif); font-size:13px; font-weight:700; font-variant-numeric:tabular-nums;}
-.trip-card .meta{font-size:9.5px; color:var(--gold-dk); margin-top:2px;}
-.trip-card .date-range{font-size:9px; color:var(--gold-dk); margin:0 0 3px;}
+.trip-card .meta{font-size:9.5px; color:var(--neutral-dk); margin-top:2px;}
+.trip-card .date-range{font-size:9px; color:var(--neutral-dk); margin:0 0 3px;}
 .rename-pop{display:flex; gap:5px; margin:5px 0; align-items:center;}
 .rename-pop input{flex:1; border:1px solid var(--sand); border-radius:8px; padding:4px 6px; font-size:10.5px;}
 .mini-btn{all:unset; cursor:pointer; background:var(--ink); color:#fff; font-size:9.5px; padding:4px 9px; border-radius:999px; white-space:nowrap;}
@@ -350,15 +350,15 @@ section.blk h4{margin:0 0 6px; font-size:10px; font-weight:500; color:var(--gold
 .acct-link{display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--sand); font-size:11.5px;}
 .acct-link:last-child{border-bottom:none;}
 
-.linkbox{background:var(--gold-lt); border-radius:11px; padding:8px 9px; font-family:var(--font-mono); font-size:9.5px; word-break:break-all; color:var(--gold-dk); margin-top:6px;}
+.linkbox{background:var(--neutral-lt); border-radius:11px; padding:8px 9px; font-family:var(--font-mono); font-size:9.5px; word-break:break-all; color:var(--neutral-dk); margin-top:6px;}
 
-.tag-note{font-size:var(--meta-font); color:var(--gold-dk); margin-top:2px;}
+.tag-note{font-size:var(--meta-font); color:var(--neutral-dk); margin-top:2px;}
 
 .wallet-select-row{display:flex; gap:5px; flex-wrap:wrap;}
-.wallet-select-btn{all:unset; cursor:pointer; padding:var(--ctrl-pad); border-radius:999px; font-size:var(--ctrl-font); font-weight:500; border:1px solid var(--sand); color:var(--gold-dk); background:#fff;}
+.wallet-select-btn{all:unset; cursor:pointer; padding:var(--ctrl-pad); border-radius:999px; font-size:var(--ctrl-font); font-weight:500; border:1px solid var(--sand); color:var(--neutral-dk); background:#fff;}
 .wallet-select-btn.on{background:var(--ink); color:#fff; border-color:var(--ink);}
 
-.info-banner{background:var(--gold-lt); color:var(--gold-dk); font-size:9.5px; padding:7px 9px; border-radius:10px; margin-bottom:7px; line-height:1.5;}
+.info-banner{background:var(--neutral-lt); color:var(--neutral-dk); font-size:9.5px; padding:7px 9px; border-radius:10px; margin-bottom:7px; line-height:1.5;}
 
 /* 支付方式屏新增块 */
 .del-icon{all:unset; cursor:pointer; color:var(--coral); font-size:11px; padding:3px; flex-shrink:0;}
@@ -476,7 +476,7 @@ const SCREENS = [
     id: 'trip', label: '行程主页', bignote: true,
     notes: [
       { b:'"2026 曼谷出差"标题字号收小', before:'18px，比其它屏幕的标题明显大一号', after:'统一收到 15px' },
-      { b:'切换行程下拉——第三次修订，这次先截图验证再改（第四轮反馈第三批）', before:'实际截图量过：面板背景 #F7F7F6，但未选中行、选中行各自套了一层实底色块（未选中 #EAEAE9、选中 #CACAC9），两个色块紧挨着像两张小卡片贴在面板里，层次偏"跳"；标题"切换行程"量出来是 #6E6E6C，但配上底色视觉上仍偏重；没有圆点标记；行与行之间没有分隔线，靠色块自己的边界区分', after:'未选中行改成透明、直接融进面板背景，只留一条 1px 极淡分隔线区分行与行；选中行只加一层很浅的灰 #EBEAE8（不再是 #CACAC9 那种明显更深的色块）；选中行左边加了实心圆点(●)+文字加粗，右边保留 ✓；标题文字改成"展开：切到其它行程"，颜色换浅一档（--gold token，#A4A3A0）；这轮改完把这份 HTML 存本地用 Playwright 实际截图看过、跟参考图描述逐条核对过，不是只调 CSS 数值就交差' },
+      { b:'切换行程下拉——第三次修订，这次先截图验证再改（第四轮反馈第三批）', before:'实际截图量过：面板背景 #F7F7F6，但未选中行、选中行各自套了一层实底色块（未选中 #EAEAE9、选中 #CACAC9），两个色块紧挨着像两张小卡片贴在面板里，层次偏"跳"；标题"切换行程"量出来是 #6E6E6C，但配上底色视觉上仍偏重；没有圆点标记；行与行之间没有分隔线，靠色块自己的边界区分', after:'未选中行改成透明、直接融进面板背景，只留一条 1px 极淡分隔线区分行与行；选中行只加一层很浅的灰 #EBEAE8（不再是 #CACAC9 那种明显更深的色块）；选中行左边加了实心圆点(●)+文字加粗，右边保留 ✓；标题文字改成"展开：切到其它行程"，颜色换浅一档（--neutral token，#A4A3A0）；这轮改完把这份 HTML 存本地用 Playwright 实际截图看过、跟参考图描述逐条核对过，不是只调 CSS 数值就交差' },
       { b:'✅ 核实：钱包/取款换汇是否重复', after:'第四轮已经拍板合并，见下面这条具体说明' },
       { b:'我的钱包 vs 取款/换汇：真正合并（第四轮拍板）', before:'现状：点"💱 取款/换汇"会跳到一个完全独立的屏幕/导航项', after:'点击后改成在"我的钱包"卡片内部原地展开一个白色小面板（黑卡片里嵌一张白面板，方便看清表单字段），不再跳独立屏幕；左侧导航也不再单列"取款/换汇"这一项' },
       { b:'我的钱包卡对比度修正', before:'黑底上文字没有单独设置颜色，继承了深灰色 body 文字，对比度不够看不清', after:'chip 里的"泰锤现金/信用卡"标签和金额都改成白色（金额加粗），chip 底色和描边也略微调亮，黑底上清楚看得见了' },
@@ -888,7 +888,7 @@ const SCREENS = [
         <div class="tag-note" id="settle-progress" style="margin-top:6px">转账进度：0 / 2 笔已确认收款</div>
       </section>
       <div class="rule warn" style="margin:0 0 10px; padding:9px 12px; font-size:10.5px; line-height:1.65">✅ 第四轮拍板保留：你之前提到"结清不代表所有人都结清了"，所以"标记本行程已结算"从一个不分人的总开关，改成这种"每一笔转账各自勾选已收款"，凑齐了才整体算结算——这套交互这轮已经确认保留，不用再改。</div>
-      <button class="big-cta" id="settle-final-btn" style="background:var(--gold-dk)" disabled>等所有转账确认收款后 · 整个行程才会标记已结算</button>
+      <button class="big-cta" id="settle-final-btn" style="background:var(--neutral-dk)" disabled>等所有转账确认收款后 · 整个行程才会标记已结算</button>
     `
   },
   {
@@ -902,7 +902,7 @@ const SCREENS = [
     ],
     html: `
       <div class="title-block" style="margin-bottom:8px"><h3 style="font-size:15px">支付方式</h3></div>
-      <p style="font-size:10.5px;color:var(--gold-dk);margin:0 0 10px">支付方式挂在你自己身上，跟着你走，不跟着行程走——这趟旅行结束了，卡的设定还留着，下一趟行程一样能直接用。</p>
+      <p style="font-size:10.5px;color:var(--neutral-dk);margin:0 0 10px">支付方式挂在你自己身上，跟着你走，不跟着行程走——这趟旅行结束了，卡的设定还留着，下一趟行程一样能直接用。</p>
       <section class="blk">
         <h4>已添加</h4>
         <div class="list" style="margin-bottom:8px">
@@ -928,7 +928,7 @@ const SCREENS = [
         <span class="hint">这行程要用到哪几张卡/钱包，不用的可以取消勾选，记账时下拉选单会更短。</span>
       </section>
       <section class="blk">
-        <button class="big-cta" style="background:var(--gold-dk)" onclick="toggleBalancePanel(this)">⚙ 设置当前余额</button>
+        <button class="big-cta" style="background:var(--neutral-dk)" onclick="toggleBalancePanel(this)">⚙ 设置当前余额</button>
         <div class="balance-panel" id="balance-panel" hidden>
           <div class="info-banner" style="margin-bottom:9px">✅ 第四轮拍板：延续"钱包余额"跟上面"本行程启用的支付方式"共用同一套勾选这个假设，所以只列出已勾选的这 2 项，不用再改。</div>
           <p class="hint" style="display:block; margin:0 0 8px">输入每个账户里现在有多少钱 · 留空或 0 表示不用 · 保存后从此刻起每笔消费自动减</p>
@@ -1009,7 +1009,7 @@ const SCREENS = [
     html: `
       <a class="hint" style="text-decoration:underline;display:inline-block;margin-bottom:12px">← 返回</a>
       <div class="title-block" style="margin-bottom:10px"><h3 style="font-size:15px">我的账号</h3></div>
-      <p style="font-size:11.5px;color:var(--gold-dk);margin:0 0 8px">这条链接是你重新登录这个账号唯一的方式，没有邮箱密码。换设备、清了浏览器数据时，打开这条链接就能回来。</p>
+      <p style="font-size:11.5px;color:var(--neutral-dk);margin:0 0 8px">这条链接是你重新登录这个账号唯一的方式，没有邮箱密码。换设备、清了浏览器数据时，打开这条链接就能回来。</p>
       <div class="linkbox">https://trip-expense-ledger.workers.dev/id/g6EDgnEi...</div>
       <button class="big-cta" style="margin-top:10px">复制链接</button>
     `
@@ -1354,7 +1354,7 @@ function updateSettleProgress(){
       btn.disabled = false; btn.style.background = 'var(--ok)';
       btn.textContent = '✓ 全部已收款 · 标记本行程已结算';
     } else {
-      btn.disabled = true; btn.style.background = 'var(--gold-dk)';
+      btn.disabled = true; btn.style.background = 'var(--neutral-dk)';
       btn.textContent = '等所有转账确认收款后 · 整个行程才会标记已结算';
     }
   }

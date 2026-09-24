@@ -7,7 +7,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 
 // 严格只用在阿拉伯数字金额上（DESIGN-BRIEF.md 第三版），不含中文字形，
-// 中文标题/label 继续用 Inter，靠字号+gold-dk 文字色做个性，不换字体。
+// 中文标题/label 继续用 Inter，靠字号+neutral-dk 文字色做个性，不换字体。
 // 2026-09-13：Remy 拍板从 Fraunces 换成 IBM Plex Serif（配色对比稿定案版本），
 // 只换这一个 next/font 声明 + tailwind.config.ts 的 serif token，全站 14 处
 // font-serif 用法零改动地跟着换字体，维持"所有金额同一种字体"这条既有纪律。

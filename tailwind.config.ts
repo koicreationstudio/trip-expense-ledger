@@ -39,7 +39,7 @@ const config: Config = {
         // 文件清单里，全程没被改回暖色）的实际像素也印证了这批灰阶值就是候选D时期
         // 真实上线过的颜色，不是这次重新发明的。
         //
-        // 跟 candidate D 唯一的实质差异：`gold-lt` 这次改成字面值 `#EDECE9`，不再用
+        // 跟 candidate D 唯一的实质差异：`neutral-lt` 这次改成字面值 `#EDECE9`，不再用
         // `color-mix(in srgb, #A4A3A0 30%, white)` 算出来的 `#E4E3E2`——候选D时期
         // tailwind.config.ts 用公式算、但 `reference/artifact-v10-source.html`
         // 的 `:root` 一直是字面 `#EDECE9`，两个文件本来就不一致；这次拿 image8 里
@@ -52,6 +52,14 @@ const config: Config = {
         // `coral`、`ok`/`live`、`seafoam` 这几个财务/状态语义色，从第一次候选D
         // 落地到这次三轮反转全程没变过（历次 diff 核对过，逐值一致）——这几个色
         // 从来不是"暖色 vs 灰阶"这个问题的一部分，不在这轮改动范围内，原样不动。
+        //
+        // 【2026-09-24 第四十一轮：token 改名，`gold`/`gold-lt`/`gold-dk` →
+        // `neutral`/`neutral-lt`/`neutral-dk`】第四十轮把颜色从暖色改回灰阶后，
+        // 命名一直没跟着改，`gold` 这个名字实际指向的是灰色（不是金色），容易让人
+        // 看代码时误判颜色。这轮只改名字，hex 值完全没动。`sand`（#DBDAD6）这个
+        // 名字虽然现在饱和度也很低、肉眼接近灰色，但「沙」本身可以合理形容浅灰调，
+        // 不像「金」那样特指鲜明的暖色调，属于没那么明确的边界情况，这轮没有一并
+        // 改名，留给 Remy 看了如果觉得也该改再说。
         accent: {
           50: '#f2f2f2',
           100: '#e0e0e0',
@@ -62,13 +70,13 @@ const config: Config = {
         ink: '#373736', // 像素采样自 image8"行程主页"选中胶囊 + "快速记账"卡片实底：RGB(55,55,54)
         paper: '#F7F7F6', // 像素采样自 image8 整页背景（众数采样，最大占比色）：RGB(247,247,246)
         sand: '#DBDAD6', // 像素采样自 image8 浅色容器边框：RGB(219,218,215)，跟候选D定案值 #DBDAD6 几乎完全吻合
-        gold: '#A4A3A0',
+        neutral: '#A4A3A0',
         // 字面值改用实测像素 #EDECE9（原公式 color-mix(#A4A3A0 30%, white) 算出
         // #E4E3E2，偏暗一档，image8 里顶部导航 tab 轨道底色实测是 #EDECE9，改用
         // 验证过的字面值，参见上方色板总注释）。
-        'gold-lt': '#EDECE9',
-        'gold-dk': '#6E6E6C', // 跟 muted 共用同一色号(Welded Iron)，候选D设计如此，非失误
-        // accent-circle（头像圈/图标圈）跟 gold 同值。
+        'neutral-lt': '#EDECE9',
+        'neutral-dk': '#6E6E6C', // 跟 muted 共用同一色号(Welded Iron)，候选D设计如此，非失误
+        // accent-circle（头像圈/图标圈）跟 neutral 同值。
         'accent-circle': '#A4A3A0',
         // 共用语义色板收尾落地（2026-09-11）：DESIGN-BRIEF-color-v6-preview.html 519-533行
         // 「共用语义色板速查」表定义好三轮却一直没真正接进 tailwind、代码里净额正负色
@@ -89,10 +97,10 @@ const config: Config = {
         'positive-dk': '#B7D1A8',
         seafoam: '#2DAA85',
         'sf-lt': '#D0F0E5',
-        muted: '#6E6E6C', // 跟 gold-dk 共用同一色号(Welded Iron)，候选D设计如此，非失误
+        muted: '#6E6E6C', // 跟 neutral-dk 共用同一色号(Welded Iron)，候选D设计如此，非失误
         // 第五版补丁：状态色体系（行程/邀请/认领的进度语义），绝不跟
         // emerald(该收)/red(该付) 财务语义色混用（绝对禁止第12条）。
-        // wait（待定态）复用现有 gold-dk/gold-lt，不新增 hex（色相跟
+        // wait（待定态）复用现有 neutral-dk/neutral-lt，不新增 hex（色相跟
         // brand-pm 的 wait 太像，见 DESIGN-BRIEF 第五版第4条）。
         ok: '#4C7A50',
         'ok-bg': '#E3ECE0',
@@ -106,7 +114,7 @@ const config: Config = {
         // 2026-09-16 第十七轮补：Artifact `--cream:#F3E9D2`，"快速记账"卡里"分摊"三段式
         // 分段控件（.seg3）的轨道底色——深色卡片上垫一条暖米黄色的浅色轨道，选中项是
         // 深色实底 pill 嵌在里面，是方案里専门跟"仅我自己/平分/自定义分摊"这组配色对应
-        // 的语义色，不能借用 gold-lt（那个是偏灰不是偏黄，视觉上不是同一个东西）。
+        // 的语义色，不能借用 neutral-lt（那个是偏灰不是偏黄，视觉上不是同一个东西）。
         cream: '#F3E9D2',
       },
       borderRadius: {

@@ -29,11 +29,11 @@ export default async function PaymentMethodsPage({
         <h1 className="text-[15px] font-bold text-ink">支付方式</h1>
         {/* fix(2026-09-16 第十八轮，Remy 拍板"跟着方案为准"，逐字抄 Artifact V10
             "05 支付方式"屏原文，不再意译)：`<p style="font-size:10.5px;
-            color:var(--gold-dk)">支付方式挂在你自己身上，跟着你走，不跟着行程走——
+            color:var(--neutral-dk)">支付方式挂在你自己身上，跟着你走，不跟着行程走——
             这趟旅行结束了，卡的设定还留着，下一趟行程一样能直接用。</p>`，字号/颜色
-            也一并对齐（10.5px / gold-dk，之前是 10px / muted，两个颜色虽然同色号但
+            也一并对齐（10.5px / neutral-dk，之前是 10px / muted，两个颜色虽然同色号但
             这次统一按 spec 语义写）。 */}
-        <p className="mt-1 text-[10.5px] text-gold-dk">
+        <p className="mt-1 text-[10.5px] text-neutral-dk">
           支付方式挂在你自己身上，跟着你走，不跟着行程走——这趟旅行结束了，卡的设定还留着，下一趟行程一样能直接用。
         </p>
       </div>
