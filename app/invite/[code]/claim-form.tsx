@@ -80,8 +80,12 @@ export function ClaimForm({
     );
   }
 
+  // fix(2026-09-24 第六十四轮)：真正的 method/action + 下面的隐藏 participantId，
+  // React 水合之前点「认领这个身份」也能原生提交（路由认得表单提交，成功 303 进行程页）；
+  // 水合之后 handleSubmit 里 preventDefault 照旧走 fetch。背景见 app/my-trips.tsx TripCard 注释。
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form method="post" action={`/api/invite/${code}/claim`} onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <input type="hidden" name="participantId" value={participantId} />
       <div className="flex flex-col gap-1">
         <label className="field-label" htmlFor="participant">
           我是

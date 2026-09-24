@@ -181,11 +181,33 @@ function TripCard({
   // <button>，改名 ✎ 图标必须是独立控件——两个 <button> 不能互相嵌套（无效 HTML），
   // 改成外层 relative 容器 + 卡片按钮 + 绝对定位的编辑图标按钮，图标点击
   // stopPropagation 不让事件冒泡触发卡片的 onOpen。
+  //
+  // fix(2026-09-24 第六十四轮，钱包深链"冷启动间歇性失败"的真根因)：卡片以前是
+  // 纯 `<button type="button" onClick>`，只有 React 水合完、onClick 接上之后点了才
+  // 有反应。冷启动（刚打开身份链接落到这个列表）时 JS 还在下载，列表已经画出来了，
+  // 这时候点卡片等于白点：没有请求、没有跳转、也没有任何提示，人就停在「我的行程」。
+  // 生产环境原生 Playwright 实测：列表一出现就点 0/10 成功，等水合完再点 10/10
+  // 成功，看一眼再点(0.9~1.6 秒) 6/10、9/10，失败的每一次点击那一刻按钮上都还没挂
+  // React 事件、网络上也没有 switch-trip 请求。第四十七/五十三轮看到的"点了落在
+  // 我的行程"、"3 次 2 败"就是这个。
+  // 修法是渐进增强：外面包一个真正的 `<form method="post">` 指向同一个
+  // switch-trip 接口（接口认得表单提交，成功 303 跳进行程页）。水合之前点 = 浏览器
+  // 原生提交表单，照样能进；水合之后 onSubmit 拦下来走原来的 fetch + router.push
+  // 路线，体验不变。守护：`app/my-trips.test.ts` + `scripts/e2e-wallet-deeplink-probe.mjs`
+  // （E2E_LOGIN_CLICK=eager 专测"一出现就点"）。
   return (
     <div className="relative">
+      <form
+        method="post"
+        action="/api/account/switch-trip"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onOpen(trip.id);
+        }}
+      >
+      <input type="hidden" name="tripId" value={trip.id} />
       <button
-        type="button"
-        onClick={() => onOpen(trip.id)}
+        type="submit"
         disabled={switching}
         className={`flex w-full flex-col gap-1 rounded-[14px] border border-sand px-[10px] py-2 text-left text-[12.5px] hover:border-muted disabled:opacity-50 ${
           ended ? 'bg-paper opacity-70' : 'bg-[rgba(164,163,160,.14)] shadow-card'
@@ -230,6 +252,7 @@ function TripCard({
         )}
         {switching && <span className="text-[10px] text-muted">打开中…</span>}
       </button>
+      </form>
 
       {trip.isOwner && !editing && (
         <button

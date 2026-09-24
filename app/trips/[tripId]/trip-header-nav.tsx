@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { UserTripSummary } from '@/lib/db/user-trips-query';
@@ -53,6 +53,14 @@ export function TripHeaderNav({
   // `SelectDropdown` 的"选一个 value"单选形状对不上，套不进那个组件本体，但"点空白/
   // Escape 关闭"这段行为改用同一个共用 hook，不用重新手写一份监听器。
   const dismissRef = useDismissableOpen(open, () => setOpen(false));
+  // fix(2026-09-24 第六十四轮，Bug B「展开的东西跨页面导航后还开着」横扫出来的实例)：
+  // 这个组件挂在 trip 共享布局里，切 tab（行程主页/结算/支付方式/邀请管理）时布局不
+  // 重新挂载，`open` 会原样带到下一页。而且 tab 链接就在这同一个 header 容器里，
+  // 点它不算"点空白"，useDismissableOpen 也不会关。生产实测：面板开着点「结算」tab，
+  // 到了结算页面板还展开着（修前 1/1 复现）。路径一变就收起。
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);

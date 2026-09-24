@@ -17,7 +17,9 @@ export default async function NewTripPage({ searchParams }: { searchParams?: { s
   const user = await getCurrentUser();
   if (!user) {
     const initialStep = searchParams?.step === 'pin-recover' ? 'pin-recover' : undefined;
-    return <ProvisionGate initialStep={initialStep} />;
+    // 第六十四轮横扫同类：`key` 跟着 step 参数走，同一页只换 ?step= 时也重新挂载，
+    // ProvisionGate 里 useState(initialStep) 不会沿用上一个参数的旧步骤（同 payment-methods/page.tsx）。
+    return <ProvisionGate key={initialStep ?? 'ask'} initialStep={initialStep} />;
   }
 
   // fix(2026-09-12 死路走查)：已有账号时这页直接进 NewTripForm，原本填到一半

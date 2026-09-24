@@ -99,6 +99,16 @@ lib/storage/            # receipts.ts：R2 binding 存收据图片
 - `switch-trip` 是账号系统唯一新增的跨 trip 权限边界：`userId` 没有关联到目标 trip 的 participant，一律 404，必须有测试跟现有「越权 404」原则一样严格覆盖
 - 一般 UI 组件测试覆盖率不做硬性要求，但涉及金额展示/换算的组件要测
 
+## 手动 e2e 回归探针（第六十四轮建，改到相关代码必须手动跑）
+这两份脚本直接调 npm 的 playwright 包打生产环境（不用 MCP 浏览器工具，那个在这台机器上会跟别的并行 session 串标签页），要打真实网络、几分钟才跑完，所以**没有**塞进 `deploy.sh` 当硬关卡，靠这里和 `deploy.sh` 头部注释提醒：
+
+- `npm run test:e2e:wallet-deeplink`（`scripts/e2e-wallet-deeplink-probe.mjs`）：钱包卡「去支付方式手动设置余额」深链。p1 冷启动（全新浏览器→身份链接→我的行程点卡片→点深链）/ p2 已登录刷新直开深链 / p3 点深链→后退→再点 / p4 刷新后深链一出现就点 / p5 深链页↔头部支付方式 tab 同页换参数再后退。每条默认 10 次，每次都分别判「落错页 / session 丢了 / 面板没展开 / 没滚到顶」，同时录网络请求和页面内 scroll 插桩。`E2E_LOGIN_CLICK=eager` 专测"列表一出现就点卡片"（水合前点击），`E2E_THROTTLE=1` 模拟中端手机。
+- `npm run test:e2e:expandable-reset`（`scripts/e2e-expandable-reset-probe.mjs`）：各种展开的面板/表单打开后切页面再回来，是不是还开着。
+
+**必须用专属测试账号**，身份链接只从环境变量 `E2E_IDENTITY_URL` 读，不准写进任何文件；绝不能拿 Remy 的真实身份链接反复登录（第五十六/五十八轮教训）。脚本会给测试 session 打 UA 标记，跑完照脚本最后打印的 SQL 按标记清掉。
+
+**什么时候必须跑**：改了 `app/my-trips.tsx`、`app/invite/[code]/claim-form.tsx`、`wallet-grid.tsx`、`payment-methods/**`、`trip-header-nav.tsx`、`switch-trip`/`claim` 接口，或者任何 session/cookie/跳转相关代码。静态守护 `app/cold-start-prehydration.test.ts`、`app/navigation-state-reset.test.ts` 在 `npm test` 里每次都跑，但它们只锁结构，真实浏览器时序要靠这两份脚本。
+
 ## CI / 提交前检查
 - `.github/workflows/ci.yml` 跑：lint → tsc（类型检查）→ vitest（重点覆盖 settlement.ts / fx-recommendation.ts）→ next build
 - `.github/dependabot.yml` 覆盖 npm + github-actions 两个 ecosystem，weekly

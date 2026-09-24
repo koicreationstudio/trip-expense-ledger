@@ -37,7 +37,18 @@ export default async function PaymentMethodsPage({
           支付方式挂在你自己身上，跟着你走，不跟着行程走——这趟旅行结束了，卡的设定还留着，下一趟行程一样能直接用。
         </p>
       </div>
-      <PaymentMethodsManager tripId={params.tripId} defaultOpenBalancePanel={searchParams?.openBalance === '1'} />
+      {/* fix(2026-09-24 第六十四轮)：`key` 跟着 openBalance 走。Next 14 在同一个页面只换
+          URL 参数时（带 ?openBalance=1 ↔ 不带，头部「支付方式」tab / 浏览器前进后退都会
+          这样切）不会重新挂载这个组件，里面 `useState(defaultOpenBalancePanel)` 只在第一次
+          挂载时读一次，之后参数怎么变面板都停在老状态：从深链进来再点头部「支付方式」面板
+          还开着（Bug B 同一类残留），反过来后退回深链 URL 面板却是收起的（第四十七轮症状②）。
+          生产实测修前两个方向都 100% 复现，见 PENDING-DECISIONS 第六十四轮。换 key =
+          参数一变就当成新页面重新挂载，面板状态永远从 URL 重新算。 */}
+      <PaymentMethodsManager
+        key={searchParams?.openBalance === '1' ? 'open-balance' : 'default'}
+        tripId={params.tripId}
+        defaultOpenBalancePanel={searchParams?.openBalance === '1'}
+      />
     </main>
   );
 }

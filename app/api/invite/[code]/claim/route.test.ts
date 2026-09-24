@@ -151,3 +151,52 @@ describe('reset-claim 必须连 userId 一起清掉', () => {
     expect(row?.userId).toBeNull();
   });
 });
+
+describe('原生表单提交（第六十四轮：同行人冷启动、JS 还没水合就点认领）', () => {
+  function formClaim(code: string, participantId: string) {
+    return new NextRequest(`http://localhost/api/invite/${code}/claim`, {
+      method: 'POST',
+      headers: new Headers({ 'content-type': 'application/x-www-form-urlencoded' }),
+      body: new URLSearchParams({ participantId }).toString(),
+    });
+  }
+
+  it('名单里的人：303 进行程页 + 种 tel_session；同一个人再提交一次 / 不在名单里：303 回邀请页不种 cookie', async () => {
+    const ownerProvision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const ownerUserToken = ownerProvision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    const tripRes = await tripsPostHandler(
+      jsonRequest(
+        'http://localhost/api/trips',
+        'POST',
+        { name: '表单认领', baseCurrency: 'MYR', ownerDisplayName: 'O', participantNames: ['Li'] },
+        { userToken: ownerUserToken }
+      )
+    );
+    const tripBody = (await tripRes.json()) as any;
+    const tripId: string = tripBody.trip.id;
+    const ownerToken = tripRes.cookies.get(SESSION_COOKIE_NAME)?.value;
+    const li = tripBody.participants.find((p: { displayName: string }) => p.displayName === 'Li');
+    const owner = tripBody.participants.find((p: { displayName: string }) => p.displayName === 'O');
+    const inviteRes = await invitesPostHandler(
+      jsonRequest('http://localhost/api/trips/x/invites', 'POST', {}, { token: ownerToken }),
+      { params: { tripId } }
+    );
+    const code: string = ((await inviteRes.json()) as any).code;
+
+    const ok = await claimHandler(formClaim(code, li.id), { params: { code } });
+    expect(ok.status).toBe(303);
+    expect(new URL(ok.headers.get('location')!).pathname).toBe(`/trips/${tripId}`);
+    expect(ok.cookies.get(SESSION_COOKIE_NAME)?.value).toBeTruthy();
+
+    const again = await claimHandler(formClaim(code, li.id), { params: { code } });
+    expect(again.status).toBe(303);
+    expect(new URL(again.headers.get('location')!).pathname).toBe(`/invite/${code}`);
+    expect(again.cookies.get(SESSION_COOKIE_NAME)?.value).toBeFalsy();
+
+    // 已认领的房主本人不在"未认领名单"里，拿表单硬塞他的 id 也认领不了
+    const hijack = await claimHandler(formClaim(code, owner.id), { params: { code } });
+    expect(hijack.status).toBe(303);
+    expect(new URL(hijack.headers.get('location')!).pathname).toBe(`/invite/${code}`);
+    expect(hijack.cookies.get(SESSION_COOKIE_NAME)?.value).toBeFalsy();
+  });
+});

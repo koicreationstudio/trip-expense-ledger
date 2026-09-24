@@ -207,6 +207,50 @@ describe('switch-trip：账号系统唯一新增的跨 trip 权限边界', () =>
     expect(((await switchToForeign.json()) as any).error).toBe('not_found');
   });
 
+  // 第六十四轮：首页行程卡片水合之前靠原生 <form method="post"> 提交，走的是这条表单分支。
+  // 权限边界必须跟 JSON 分支一模一样严，只是回应改成 303 跳转。
+  function formRequest(tripId: string, userToken?: string) {
+    const headers = new Headers({ 'content-type': 'application/x-www-form-urlencoded' });
+    if (userToken) headers.set('cookie', `${USER_SESSION_COOKIE_NAME}=${userToken}`);
+    return new NextRequest('http://localhost/api/account/switch-trip', {
+      method: 'POST',
+      headers,
+      body: new URLSearchParams({ tripId }).toString(),
+    });
+  }
+
+  it('原生表单提交（水合前点卡片）：自己的行程 303 跳进行程页并种 tel_session；别人的行程/没登录 303 回首页不种 cookie', async () => {
+    const uProvision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const uToken = uProvision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    const tRes = await tripsPostHandler(
+      jsonRequest(
+        'http://localhost/api/trips',
+        'POST',
+        { name: 'TF', baseCurrency: 'MYR', ownerDisplayName: 'UF', participantNames: [] },
+        { userToken: uToken }
+      )
+    );
+    const tId: string = ((await tRes.json()) as any).trip.id;
+
+    const own = await switchTripHandler(formRequest(tId, uToken));
+    expect(own.status).toBe(303);
+    expect(new URL(own.headers.get('location')!).pathname).toBe(`/trips/${tId}`);
+    const identity = await resolveIdentity(db, own.cookies.get(SESSION_COOKIE_NAME)?.value);
+    expect(identity?.tripId).toBe(tId);
+
+    const otherProvision = await provisionHandler(jsonRequest('http://localhost/api/account/provision', 'POST'));
+    const otherToken = otherProvision.cookies.get(USER_SESSION_COOKIE_NAME)?.value;
+    const foreign = await switchTripHandler(formRequest(tId, otherToken));
+    expect(foreign.status).toBe(303);
+    expect(new URL(foreign.headers.get('location')!).pathname).toBe('/');
+    expect(foreign.cookies.get(SESSION_COOKIE_NAME)?.value).toBeFalsy();
+
+    const anon = await switchTripHandler(formRequest(tId));
+    expect(anon.status).toBe(303);
+    expect(new URL(anon.headers.get('location')!).pathname).toBe('/');
+    expect(anon.cookies.get(SESSION_COOKIE_NAME)?.value).toBeFalsy();
+  });
+
   it('没有 tel_user_session 一律 401', async () => {
     const res = await switchTripHandler(
       jsonRequest('http://localhost/api/account/switch-trip', 'POST', { tripId: 'nope' })

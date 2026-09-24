@@ -19,6 +19,16 @@
 #   ⑥ npx wrangler deploy
 #   ⑦ 回读部署后的 URL 打 /api/health 确认 200
 #
+# ⚠️ 手动必跑（不在关卡里，要打真实网络、跑几分钟，不适合每次部署都卡）：改了
+#   app/my-trips.tsx / app/invite/[code]/claim-form.tsx / wallet-grid.tsx /
+#   payment-methods/** / trip-header-nav.tsx / 任何 session、cookie、跳转相关代码，
+#   部署后用专属测试账号跑一遍（绝不能用 Remy 真实身份链接）：
+#     E2E_IDENTITY_URL=... E2E_TRIP_NAME=... npm run test:e2e:wallet-deeplink
+#     E2E_IDENTITY_URL=... E2E_TRIP_NAME=... E2E_LOGIN_CLICK=eager npm run test:e2e:wallet-deeplink
+#     E2E_IDENTITY_URL=... E2E_TRIP_NAME=... npm run test:e2e:expandable-reset
+#   钱包深链被报"已修复"推翻过 4 次，就是因为以前只凭点一两次下结论。详见 CLAUDE.md
+#   「手动 e2e 回归探针」和 PENDING-DECISIONS 第六十四轮。
+#
 # 退出码：0 成功 / 1 前置检查（① 干净树+已推 / lint/typecheck/test/build / 互斥锁没拿到）
 #         没过，未部署 / 2 wrangler deploy 本身失败 / 3 部署成功但回读没打到 200
 set -uo pipefail
