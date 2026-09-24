@@ -86,9 +86,9 @@ lib/storage/            # receipts.ts：R2 binding 存收据图片
 ```
 
 ## 部署：Cloudflare Workers（D1 + R2）
-- **一律走 `./deploy.sh`，不能裸 `wrangler deploy`**（settings.json 已 deny 裸推，跟 Remy 其他项目同一套规矩）；deploy.sh 五步：lint → typecheck → test → `opennextjs-cloudflare build` → `wrangler deploy`，末尾回读部署 URL 的 `/api/health` 确认 200
+- **一律走 `./deploy.sh`，不能裸 `wrangler deploy`**（settings.json 已 deny 裸推，跟 Remy 其他项目同一套规矩）；deploy.sh 关卡：① 工作树干净 + HEAD 已推 origin/main（2026-09-23 round35 事故补）→ lint → typecheck → test → `opennextjs-cloudflare build` → `wrangler deploy`，末尾回读部署 URL 的 `/api/health` 确认 200
 - D1 database：`trip-expense-ledger-db`（binding `DB`），R2 bucket：`trip-expense-ledger-receipts`（binding `RECEIPTS`），两者的 id/名字写在 `wrangler.jsonc` 里
-- 数据库迁移：`lib/db/migrations/*.sql`（drizzle-kit 生成）用 `npm run db:migrate:local` / `db:migrate:remote` 跑（内部是 `wrangler d1 migrations apply`，不是 drizzle-kit 自己的 migrator）
+- 数据库迁移：`lib/db/migrations/*.sql`（drizzle-kit 生成）本地用 `npm run db:migrate:local`；**生产迁移一律走 `npm run db:migrate:remote`（内部已改成调 `scripts/migrate-remote.sh`，不再是裸 `wrangler d1 migrations apply --remote`）**——2026-09-23 round35 事故发现生产 D1 migration 完全没有跟 deploy.sh 一样的闸门，谁想跑就能直接裸跑，跟 Worker 代码部署时序完全脱节；2026-09-24 补上跟 deploy.sh 关① 同款的「工作树干净 + HEAD 已推 origin/main」检查。裸 `wrangler d1 migrations apply ... --remote`（不管哪个数据库）已在 `~/.claude/settings.json` 全局 deny，强制走这个脚本；本项目大量用来做数据核对/一次性清理的 `wrangler d1 execute`（非 migrations）没有被锁，那是另一类操作（见 PENDING-DECISIONS 各轮记录），继续照旧用
 - `lib/db/client.ts` 的 `getDb()` 是唯一读 D1 binding 的入口，生产环境走 `getCloudflareContext()`；**这个文件绝对不能 import `wrangler`**（哪怕是动态 import 也不行）——Next 的 webpack 打生产包时会把 `wrangler` 整个 CLI 一起打进 Worker 产物直接炸构建，测试专用的 `getPlatformProxy()` 逻辑收在只被 `*.test.ts` 引用的 `lib/db/test-client.ts` 里，靠 `__setTestD1Provider()` 做依赖注入，不能图省事挪回 `client.ts`
 - 本地开发：`next.config.mjs` 里 `initOpenNextCloudflareForDev()` 让 `next dev` 也能连到本地 miniflare 模拟的真实 D1/R2，不需要另开一套本地 sqlite 文件路线
 - 域名是 `*.workers.dev`（`https://trip-expense-ledger.remybali.workers.dev`），不是 `*.pages.dev`——这是 Worker 部署（`wrangler deploy`）跟 Pages 部署（`wrangler pages deploy`）的天然差异，Remy 已确认接受
