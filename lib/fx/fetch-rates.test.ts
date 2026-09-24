@@ -55,4 +55,33 @@ describe('fetchMyrRates', () => {
     const rates = await fetchMyrRates(fetchImpl);
     expect(rates).toBeNull();
   });
+
+  it('fix(2026-09-24 超时守护)：请求真的带上了超时用的 AbortSignal，不是裸调用没有任何超时控制', async () => {
+    let capturedSignal: AbortSignal | undefined;
+    const fetchImpl = vi.fn().mockImplementation((_url: string, opts?: RequestInit) => {
+      capturedSignal = opts?.signal as AbortSignal | undefined;
+      return Promise.resolve({ ok: true, json: async () => ({ rates: { USD: 0.21 } }) });
+    }) as unknown as typeof fetch;
+
+    await fetchMyrRates(fetchImpl);
+
+    // 这条断言是这次修复的 mutation 验证：把 fetch-rates.ts 里的
+    // `{ signal: AbortSignal.timeout(...) }` 删掉重新跑这条测试会失败
+    // （capturedSignal 会是 undefined），证明这不是空壳测试。
+    expect(capturedSignal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('fix(2026-09-24 超时守护)：请求被 abort(超时触发)时按既有网络异常路径返回 null，不抛错拖垮调用方', async () => {
+    const fetchImpl = vi.fn().mockImplementation((_url: string, opts?: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        opts?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted.', 'TimeoutError'));
+        });
+        opts?.signal?.dispatchEvent(new Event('abort'));
+      });
+    }) as unknown as typeof fetch;
+
+    const rates = await fetchMyrRates(fetchImpl);
+    expect(rates).toBeNull();
+  });
 });

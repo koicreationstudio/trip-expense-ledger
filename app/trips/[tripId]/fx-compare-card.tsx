@@ -7,6 +7,7 @@ import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
 import { deriveMidRate } from '@/lib/fx/derive-mid-rate';
 import { resolveHoldCandidates, resolveTargetCandidates, resolveDefaultTarget } from '@/lib/fx/fx-compare-defaults';
 import { SelectDropdown, useDismissableOpen } from '@/components/select-dropdown';
+import { Switch } from '@/components/switch';
 
 /**
  * 汇率比价——2026-09-16 第十八轮，Remy 拍板"要根治"：把原本两张独立卡片
@@ -495,18 +496,29 @@ export function FxCompareCard({
                   <div className="px-[6px] pb-[2px] pt-[3px] text-[8.5px] font-semibold uppercase tracking-wide text-neutral-dk">
                     渠道
                   </div>
+                  {/* fix(2026-09-24，团队看板 id=2026-09-24_153503_855780ae，Remy 明确要求)：
+                      原生方框 checkbox 换成全站统一的深色开关组件——跟"支付方式"页
+                      "本行程启用的支付方式"那批（`payment-methods-manager.tsx`）复用
+                      同一个 `components/switch.tsx`，不是另写一套新样式，`Switch`/`label`
+                      同级摆放（不是 label 包 Switch）也照抄那边的结构。round46 已经
+                      查清楚这处在 Artifact 权威设计源里本来就是原生 checkbox（不是漏改），
+                      这次是 Remy 在方案基础上明确要求"全站 checkbox 一律统一成开关"才
+                      纳入范围，不是擅自扩大范围。 */}
                   {STATIC_CHANNELS.map((c) => (
-                    <label
+                    <div
                       key={c.key}
-                      className="flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-[6px] py-[4px] text-[10.5px] text-ink hover:bg-neutral-lt"
+                      className="flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-[6px] py-[4px] hover:bg-neutral-lt"
                     >
-                      <input
-                        type="checkbox"
+                      <Switch
+                        id={`fx-compare-channel-${c.key}`}
                         checked={enabledCompareKeys.has(`channel:${c.key}`)}
                         onChange={() => toggleCompareKey(`channel:${c.key}`)}
+                        ariaLabel={`比较渠道「${c.name}」`}
                       />
-                      {c.name}
-                    </label>
+                      <label htmlFor={`fx-compare-channel-${c.key}`} className="flex-1 text-[10.5px] text-ink">
+                        {c.name}
+                      </label>
+                    </div>
                   ))}
                   {showCards && (
                     <>
@@ -522,17 +534,23 @@ export function FxCompareCard({
                         <p className="px-[6px] py-[4px] text-[10px] text-neutral-dk">暂无支付方式</p>
                       ) : (
                         (cardRecommendations ?? []).map((r) => (
-                          <label
+                          <div
                             key={r.paymentMethodId}
-                            className="flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-[6px] py-[4px] text-[10.5px] text-ink hover:bg-neutral-lt"
+                            className="flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-[6px] py-[4px] hover:bg-neutral-lt"
                           >
-                            <input
-                              type="checkbox"
+                            <Switch
+                              id={`fx-compare-card-${r.paymentMethodId}`}
                               checked={enabledCompareKeys.has(`card:${r.paymentMethodId}`)}
                               onChange={() => toggleCompareKey(`card:${r.paymentMethodId}`)}
+                              ariaLabel={`比较我的支付方式「${r.label}」`}
                             />
-                            {r.label}
-                          </label>
+                            <label
+                              htmlFor={`fx-compare-card-${r.paymentMethodId}`}
+                              className="flex-1 text-[10.5px] text-ink"
+                            >
+                              {r.label}
+                            </label>
+                          </div>
                         ))
                       )}
                     </>
