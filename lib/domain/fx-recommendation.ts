@@ -21,6 +21,13 @@ export interface FxPaymentMethodInput {
   cashbackPercent: number;
 }
 
+/**
+ * 现金换汇（拿现金去换钱店换成当地币）的默认损耗百分比，也是汇率比价渠道组
+ * 「换钱店」那一项的点差，两处共用这一个数。现金支付方式没填加点（0）时按它估算，
+ * 否则 0% 会被当成零损耗中间价，跟刷卡比永远"最划算"（2026-09-24 Remy 实测反馈）。
+ */
+export const DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT = 2.512;
+
 /** 返回 1 单位 from 换算成多少 to；查不到返回 null（不阻塞记账，调用方应兜底走手动输入）。 */
 export type FxRateLookup = (from: string, to: string) => number | null;
 
@@ -32,6 +39,8 @@ export interface FxRecommendationResult {
   costInCompareCurrency: number | null;
   effectiveRate: number | null;
   requiresConversion: boolean;
+  /** 现金换汇没填实际加点，按 DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT 估算的 */
+  cashMarkupEstimated?: boolean;
   /** 汇率查不到导致无法计算，调用方应提示用户手动输入汇率 */
   unavailable: boolean;
 }
@@ -51,6 +60,7 @@ export function recommendPaymentMethods(params: {
     const requiresConversion = method.settlementCurrency !== expenseCurrency;
     let effectiveRate = 1;
     let baseInSettlementCurrency = amount;
+    let cashMarkupEstimated = false;
 
     if (requiresConversion) {
       const marketRate = getMarketRate(expenseCurrency, method.settlementCurrency);
@@ -65,7 +75,9 @@ export function recommendPaymentMethods(params: {
           unavailable: true,
         };
       }
-      effectiveRate = marketRate * (1 + method.fxMarkupPercent / 100);
+      cashMarkupEstimated = method.kind === 'cash' && method.fxMarkupPercent === 0;
+      const markupPercent = cashMarkupEstimated ? DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT : method.fxMarkupPercent;
+      effectiveRate = marketRate * (1 + markupPercent / 100);
       baseInSettlementCurrency = amount * effectiveRate;
     }
 
@@ -98,6 +110,7 @@ export function recommendPaymentMethods(params: {
       costInCompareCurrency: Math.round(costInCompareCurrency),
       effectiveRate,
       requiresConversion,
+      cashMarkupEstimated,
       unavailable: false,
     };
   });

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { yuanToCents, centsToYuan } from '@/lib/money';
-import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
+import { DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT, type FxRecommendationResult } from '@/lib/domain/fx-recommendation';
 import { deriveMidRate } from '@/lib/fx/derive-mid-rate';
 import { resolveHoldCandidates, resolveTargetCandidates, resolveDefaultTarget } from '@/lib/fx/fx-compare-defaults';
 import { SelectDropdown, useDismissableOpen } from '@/components/select-dropdown';
@@ -162,7 +162,7 @@ const STATIC_CHANNELS: StaticChannel[] = [
   { key: 'wise', name: 'Wise', spread: -0.00714, note: '接近中间价 · 约 0.7% 手续费' },
   { key: 'tng', name: 'TNG 跨境', spread: -0.01515, note: 'DuitNow 跨境 · 约 -1.5%' },
   { key: 'atm', name: 'ATM 取款', spread: -0.02217, note: '银行外汇费约 2% + ฿220 固定手续费' },
-  { key: 'moneychanger', name: '换钱店', spread: -0.02512, note: '市区 Superrich · 约 -2.5%，机场更差' },
+  { key: 'moneychanger', name: '换钱店', spread: -DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT / 100, note: '市区 Superrich · 约 -2.5%，机场更差' },
   {
     key: 'alipay',
     name: '支付宝',
@@ -510,8 +510,10 @@ export function FxCompareCard({
             r.unavailable || costYuan === null
               ? '汇率缺失，建议手动核对'
               : r.requiresConversion
-                ? `${paymentModeLabel} · 折合花 ${costYuan.toFixed(2)} ${baseCurrency}`
-                : `${paymentModeLabel} · 同币种无需换汇，花 ${costYuan.toFixed(2)} ${baseCurrency}`;
+                ? r.cashMarkupEstimated
+                  ? `现金去换钱店换 · 按约 ${DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT.toFixed(1)}% 损耗估算，折合花 ${costYuan.toFixed(2)} ${baseCurrency}（可在支付方式里填实际加点）`
+                  : `${paymentModeLabel} · 折合花 ${costYuan.toFixed(2)} ${baseCurrency}`
+                : `${paymentModeLabel} · 同币种可直接用，无需换汇，约合 ${costYuan.toFixed(2)} ${baseCurrency}`;
           return {
             key: `card-${r.paymentMethodId}`,
             label: r.label,

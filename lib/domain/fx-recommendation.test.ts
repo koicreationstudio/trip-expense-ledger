@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { recommendPaymentMethods } from './fx-recommendation';
+import { recommendPaymentMethods, DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT } from './fx-recommendation';
 import type { FxPaymentMethodInput, FxRateLookup } from './fx-recommendation';
 
 const noConversionNeeded: FxRateLookup = () => {
@@ -244,7 +244,9 @@ describe('recommendPaymentMethods', () => {
       },
     ];
 
-    it('三者费率都是 0% 时收敛到同一个等值数字——不是 bug，是数学上应该如此', () => {
+    // 2026-09-24 Remy 拍板改规则：现金需要换汇且没填加点时，不再当零损耗中间价，
+    // 按换钱店默认损耗（DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT）估算；卡片和同币种现金不受影响。
+    it('0% 费率时：支付宝/同币种现金按中间价，需换汇的现金按换钱店默认损耗估算', () => {
       const results = recommendPaymentMethods({
         amount: 12749, // ≈1000 HKD 换算成 USD notional（分）
         expenseCurrency: 'USD',
@@ -255,8 +257,13 @@ describe('recommendPaymentMethods', () => {
 
       const byId = new Map(results.map((r) => [r.paymentMethodId, r]));
       expect(byId.get('alipay')!.costInCompareCurrency).toBe(99997);
-      expect(byId.get('cash-hkd')!.costInCompareCurrency).toBe(99997);
       expect(byId.get('cash-usd')!.costInCompareCurrency).toBe(99997);
+      const cashHkd = byId.get('cash-hkd')!;
+      expect(cashHkd.cashMarkupEstimated).toBe(true);
+      expect(cashHkd.costInCompareCurrency! / 99997).toBeCloseTo(1 + DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT / 100, 4);
+      expect(byId.get('alipay')!.cashMarkupEstimated).toBe(false);
+      expect(byId.get('cash-usd')!.cashMarkupEstimated).toBe(false);
+      expect(results[results.length - 1]!.paymentMethodId).toBe('cash-hkd');
     });
 
     it('kind 字段原样透传，不同结算币种各自独立标记是否需要换汇', () => {
@@ -281,22 +288,20 @@ describe('recommendPaymentMethods', () => {
       expect(byId.get('cash-hkd')!.requiresConversion).toBe(true);
     });
 
-    it('只要任一支付方式配了非零费率，三者数字就会分开——证明区分度是"数据现状"而非算法失效', () => {
-      const methodsWithRealFee: FxPaymentMethodInput[] = zeroFeeMethods.map((m) =>
-        m.id === 'alipay' ? { ...m, fxMarkupPercent: 1.5 } : m
+    it('现金填了实际加点时用填的数，不再套默认损耗', () => {
+      const methods: FxPaymentMethodInput[] = zeroFeeMethods.map((m) =>
+        m.id === 'cash-hkd' ? { ...m, fxMarkupPercent: 1 } : m
       );
-
       const results = recommendPaymentMethods({
         amount: 12749,
         expenseCurrency: 'USD',
         compareCurrency: 'HKD',
-        paymentMethods: methodsWithRealFee,
+        paymentMethods: methods,
         getMarketRate,
       });
-      const byId = new Map(results.map((r) => [r.paymentMethodId, r]));
-
-      expect(byId.get('alipay')!.costInCompareCurrency).not.toBe(byId.get('cash-hkd')!.costInCompareCurrency);
-      expect(byId.get('cash-hkd')!.costInCompareCurrency).toBe(byId.get('cash-usd')!.costInCompareCurrency);
+      const cashHkd = results.find((r) => r.paymentMethodId === 'cash-hkd')!;
+      expect(cashHkd.cashMarkupEstimated).toBe(false);
+      expect(cashHkd.costInCompareCurrency! / 99997).toBeCloseTo(1.01, 4);
     });
   });
 });
