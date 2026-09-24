@@ -1,5 +1,57 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-24，第六十轮，我的账号页三处优化：身份链接改折叠备用 + 成功提示挪到按钮旁 + PIN 强度引导，claim id=2026-09-24_173400_d430724f，Version ID `e20e0e68-2af3-411e-8f5a-2e27dec50d18`】
+
+背景：Remy 贴截图反馈 `/account` 页面三处问题——①完整身份链接（能免密登录账号的链接）一直摊开显示在页面上，容易被截图带出去泄露 ②`SetPinForm` 提交成功后"已更新/已设置"提示孤零零挂在按钮上方，位置看起来跟这次点击没关系 ③4 位 PIN 全库比对只有 1 万种组合，太弱没有任何强度引导。lifeos-pm 派工时明确要求这轮也走独立 worktree 隔离（当天这个项目有多个并行 session 同时在跑，活动板 `claim.py` 上已经记过一次撞车事故，id=2026-09-24_153705_29408dae）。
+
+改动范围限定在 3 个文件：`app/account/account-identity-link.tsx`、`app/account/set-pin-form.tsx`、`app/account/page.tsx`（page.tsx 实际没改，前两个文件够用）。
+
+### 一、身份链接改折叠备用
+
+`AccountIdentityLink` 加了一个 `expanded` state，默认 `false`。折叠态只显示一行"备用：身份链接 ▸"的 `tap-link` 文字小字，点开才展开完整链接框（原有的 `<code>` 显示+ `.big-cta` 复制按钮逻辑原样保留，只是包进展开态）。折叠/展开这个交互模式项目里没有正式的 disclosure 组件规格可抄（`DESIGN-BRIEF.md`/`DESIGN-SYSTEM-INTERNAL.md` 都没定过），扫了一遍项目里已有的同类交互，直接照搬 `invites-manager.tsx`"直接添加参与者"那处已经在用的"点开才展开"tap-link 模式（同项目里唯一的先例，没有新造样式）。展开态说明文字改成"PIN 优先、身份链接是备用"的措辞，提示新建行程页面（`provision-gate.tsx` 第 137 行）已有的"我设过密码/PIN，直接找回"入口——这条入口是真实存在的，不是我编的（`grep` 确认过）。**底层 `identityToken` 生成/校验/`/id/<token>` 路由这套逻辑完全没动，只改了展示形式。**
+
+### 二、成功提示位置 + 按钮禁用态
+
+`SetPinForm`：
+- "已更新/已设置"提示从紧挨着两个输入框下面，挪到按钮正下方，照抄 `AccountIdentityLink` 的 `copied` state 模式（`setTimeout` 2 秒后自动 `setSuccess(null)`），做成"跟这次点击直接相关的短暂反馈"而不是长期挂着的静态文字。提示样式用了项目里已有的语义色 `text-ok`（`#4C7A50`，`expense-form.tsx` 也用它表示"分摊平衡"这种正向状态），加个"✓"前缀。
+- 按钮禁用态在 `.btn-secondary` 现成的 `disabled:opacity-50` 基础上加了 `disabled:cursor-not-allowed`，跟 `.big-cta` 已有用法对齐（`app/globals.css` 第 77 行），不是只改这一个按钮搞成孤例。
+- **ui-auditor 走查追加发现的真 bug，顺手一起修了**：原按钮 `disabled` 条件只判断 `!pin`，只填第一个 PIN 框、确认框还空着的时候按钮就已经解锁——点了会被 `handleSave` 里 `pin!==confirmPin` 的校验拦下，不是数据风险，纯粹是这次改的"禁用态要明确可信"这个需求点被这个既有 bug 打脸。改成 `saving || !pin || !confirmPin`，两个框都填了才解锁。这个 bug 是这轮改动之前就存在的，不是这轮引入的，但因为直接关联到本轮要修的"禁用态视觉"这个点，判断属于顺手修复范围，没有单独去问 Remy 要不要修。
+
+### 三、PIN 强度引导文案
+
+`set-pin-form.tsx` PIN 输入框下面加了一行 `text-[10px] text-muted`："建议设 6 位以上数字，或者用一串好记的短密码，比 4 位数字更安全。" **没有改 `lib/domain/recovery-pin.ts` 的 `MIN_PIN_LENGTH=4` 这个最短长度限制**——改了会影响已经设过 4 位 PIN 的人，是否要强制升级是产品决策，不是这轮范围，留给 Remy 定，这次只加了引导文案。
+
+### 四、隔离开发 + 部署过程
+
+用独立 worktree（`trip-expense-ledger-worktrees/account-page`，真实 `npm install`，869MB，不是软链接，照 favicon 那轮的教训）隔离开发。过程中经历了两轮 rebase——开发期间另外两个并行 session（一个是"首页加 PIN 登录入口"任务、一个是"round58 汇率比价卡片"任务）各自往 main 推了新 commit，用 `git merge-base --is-ancestor` 确认不是 force-push 之后 `git rebase origin/main` 两次，两次都干净无冲突（改动文件跟其它并行任务没有交集，`git diff` 核对过）。部署前每次都 `pgrep` 确认没有别的 `deploy.sh`/`wrangler deploy`/`wrangler tail` 在跑，走 `./deploy.sh` 五关全过。
+
+先后两次部署：
+- 第一次 Version ID `7b7321f1-9291-4d2e-9801-f11b98903f60`（commit `6dfac3f`，只含身份链接折叠+提示位置+PIN强度提示三点）。
+- ui-auditor 走查抓到按钮提前解锁的 bug 后，修完追加部署第二次 Version ID `e20e0e68-2af3-411e-8f5a-2e27dec50d18`（commit `d6e1946`）。这是这轮最终线上版本。
+
+**代码关**：`npm run lint`（0 警告 0 错误）、`npm run typecheck`（0 错误）、`npm test`（144 个测试全过，这个数字包含了并行 round58 任务新增的测试，不是本轮新增）、`npm run build`/`opennextjs-cloudflare` 打包均过。
+
+### 五、验证方式：真实数据 + ui-auditor 两轮走查
+
+**真实行程**：Remy 真实「🇭🇰2026香港」（`trip_id=f78a6b5e-8612-4097-8bfd-88a5db664045`），真实账号 `a54c9824-c44d-45f7-94b9-5bf3f8fcacc8`（已设过 PIN），身份链接 `/id/aNhfVNPU7ZGosHWFmdLfp5WtUxB_QGBqjNldoMGqaWA`（跟第五十七轮同一条，这次只做只读验证，D1 查证她的真实账号确实 `has_pin=1`）。
+
+**第一轮 ui-auditor**（独立子 agent，不是我自己看）：
+- 用 Remy 真实身份链接登录，只读走查 `/account` 页面——确认默认进入只看到"备用：身份链接 ▸"，**页面上没有任何完整身份链接文字露出**（这是最关键的安全验证点，通过）；确认已设 PIN 状态下文案（"已经设了一个密码/PIN……"/"新密码/PIN"/"更新密码/PIN"）正确；确认 PIN 强度引导文案显示；截图对比按钮 disabled/enabled 视觉。全程**没有点击"更新密码/PIN"提交、没有点"清除已设置的密码/PIN"**，没有对 Remy 真实数据做任何写操作。
+- 另建一个全新测试行程账号（不是 Remy 的），验证展开态（完整链接框+复制按钮）+ 完整 PIN 设置流程（PIN=135790，纯测试数据）。
+- 这轮走查期间机器上恰好有另一个并发 session 也在测试/部署这个项目（wrangler tail + 另一个 playwright 实例），导致提交后的"✓ 已设置"截图没能干净拍到（页面被并发部署打断跳转），已知这不是这轮改动的问题，只是截图时机没抓准，补了第二轮走查。同一轮走查抓到了上面提到的按钮提前解锁 bug。
+- 我自己也 `Read` 了几张关键截图核实过（真实账号折叠态确认无链接泄露、测试账号按钮 disabled/enabled 对比、成功提示样式），不是只信 ui-auditor 文字报告。
+
+**第二轮 ui-auditor**（追加部署按钮修复后的复测，同样独立子 agent）：只用新建的测试账号，确认①按钮禁用态修复生效——只填第一个框仍禁用，两个框都填才解锁（桌面+手机各测两次）②成功提示紧挨按钮下方，3 秒后确认消失（桌面+手机各一组截图）③PIN 强度文案还在④console 0 报错 0 警告。我自己也 `Read` 了关键截图（`02-account-only-first-field-still-disabled-desktop.png`、`07-account-success-toast-parallel-batch-desktop.png`）核实过。
+
+**截图路径**（均在 `~/Desktop/Claude/`）：第一轮 `account-real-desktop-collapsed.png`/`account-real-mobile-collapsed.png`/`account-real-desktop-1280.png`/`account-real-desktop-enabled-btn.png`/`account-real-btn-enabled-zoom.png`/`account-real-btn-disabled-zoom.png`/`account-test-mobile-pinset.png` 等；第二轮 `01-13-account-*.png` 系列（含 disabled/enabled 对比 + 成功提示出现/消失前后对比）。
+
+**没有做/留给 Remy 的**：
+- 按钮提前解锁的 bug 虽然顺手修了，但严格说不在这轮 3 点需求范围内，如果 Remy 觉得这种"顺手扩大范围"不合适，之后可以明确要求"只做清单上列的事"。
+- ui-auditor 两轮报告都提到全站 11 条字体 preload 未及时使用的浏览器性能警告、以及 PIN 输入框不在 `<form>` 标签里的浏览器原生警告——这两条是全站通用的既有状况，不是这轮改动引入的，这轮没有处理，留作背景噪音记录。
+- ui-auditor 第一轮提过 disabled/enabled 按钮视觉对比"存在但偏弱"的审美建议（可以考虑加灰底强化区分），判断是可改可不改的细节，这轮没动，如果 Remy 在意可以下一轮加。
+
+---
+
 ## 【2026-09-24，第五十九轮，第2轮追加反馈 A/B/C/D 落地（支付方式label全站消歧义/汇率比价卡分组/最划算徽章排除同币种/我的钱包缺失占位），claim id=2026-09-24_172302_44bb711c，Version ID `1d00f7dc-6b59-4d32-b382-35c1e0f28f22`】
 
 背景：lifeos-pm 逐张核对过 Remy 贴的 5 张截图后派工，四件事一起做。派给子 agent 在隔离 worktree（`trip-expense-ledger-worktrees/round58-fx-fixes`，真实 npm install）实现，PM 本人复核了全部 diff（不是只信报告）、独立重跑一遍 lint/typecheck/144 个测试确认无误，再亲自合并到 main、push、`./deploy.sh` 部署。
