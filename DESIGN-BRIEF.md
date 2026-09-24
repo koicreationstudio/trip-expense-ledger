@@ -1181,3 +1181,9 @@ round37 commit（`6962d73`）的 commit message 写的是这份文档"原样保�
 **token 命名**：沿用候选D原有的 `gold`/`gold-dk`/`gold-lt` 命名，没有改成 `neutral` 之类的中性命名。这跟上次被抓包"名字叫 gold 颜色却是灰色"不是同一种情况——候选D时期这套命名本来就是这样定的（`gold`/`gold-dk`/`gold-lt` 是延续 remy-thailand 原始色板的 token 名称，历史上灰阶/暖色切换过好几轮，token 名字一直没变过，只是指向的具体色值在变），每个 token 定义旁边都有清楚的颜色注释写明"这轮实际指向的是候选D灰阶值"，不是悄悄换了颜色又不留痕迹。如果 Remy 觉得这套命名本身就该换成中性名字，这是一个独立于本轮"改色"之外的命名规范判断，没有在这轮顺手做，留给她表态。
 
 ## 验证
+
+**部署**：`./deploy.sh` 五关全过（lint/typecheck/113 单测/opennextjs build/wrangler deploy），Version ID `9ed45c80-cfcb-4aed-a591-ed05759c7c5e`，线上地址 `https://trip-expense-ledger.remybali.workers.dev`。部署后独立拉取生产环境实际下发的 CSS bundle（`/_next/static/css/2333d3f1d22996f2.css`）核对，逐字节确认里面出现的是新灰阶 hex（`#373736`/`#6e6e6c`/`#dbdad6`/`#f7f7f6`/`#EBEAE8`/`#B5B4B1`），完全没有旧暖色 hex（`#23232E`/`#FEFCF7`/`#B89E61`/`#7E6630`/`#F0E8D6`）残留——不是只信部署脚本"成功"两个字，是真的去读了生产环境实际吐出来的字节。
+
+**真机走查**：用真实行程「🇭🇰2026香港」（`trip id=f78a6b5e-8612-4097-8bfd-88a5db664045`）——不是新建的 demo 行程，页面里的"咖啡"、"云吞面"、"庙街小食"、"酒店tax"、"taxi"等 11 笔消费、垫付人 remy/htoo 都是真实记录。独立 `ui-auditor` 走查了行程主页、结算页、支付方式页、记一笔消费表单、行程切换下拉面板 5 个页面（桌面+手机 375×812 两种视口），截图存 `audit-diffs/round40-grayscale-verify/`。结论：5 个页面色板全部统一成中性灰阶，没有蓝紫或金黄色相残留；`positive`/`negative`（该收绿/该付红）颜色和快速记账"分摊"三段式的米黄轨道底色（`cream` token）都确认没被误伤；console 全程 0 报错。这轮 PM 本人也另外亲自读了两张走查截图（桌面版行程主页、手机版行程主页）跟 image8 逐屏肉眼核对，色调一致，不是只信 ui-auditor 自述。
+
+ui-auditor 顺带发现两处**不在这轮色板改动范围内**、跟颜色无关的现象，如实记录，没有当场处理（超出这轮任务边界）：①走查中途遇到两次直接跳转 trip URL 被弹回未登录落地页、几秒后重试又恢复正常的偶发现象，怀疑是 session cookie 短暂抖动，不确定是真 bug；②点击行程切换按钮时遇到一次误触发导航（落到了支付方式深链页面而不是打开下拉面板），重新取元素引用后恢复正常，怀疑是页面自动轮询刷新（URL 带 `?cb=时间戳`）跟点击时机撞车的假象。这两条都记录进 `PENDING-DECISIONS-trip-expense-ledger.md`，留给下一轮如果复现再排查，这轮不展开处理。
