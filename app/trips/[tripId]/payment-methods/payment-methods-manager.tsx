@@ -528,23 +528,33 @@ export function PaymentMethodsManager({
           行程里具体每张卡/现金的余额），不是上面账号级 paymentMethods（那份只存费率配置，
           没有余额字段），Artifact 把它画在"支付方式"页只是信息架构上的归类，底层数据没变。 */}
       <section id="set-balance" className="flex flex-col gap-2">
-        {/* fix(2026-09-17 第十九轮)：跟上面同一批"改成 .big-cta 全宽"，颜色沿用 Artifact
-            `style="background:var(--neutral-dk)"`——跟"添加支付方式"那颗纯黑主按钮区分开，
-            是方案里同一颗按钮组件的第二种配色，不是新发明的按钮样式。图标 ⚙（0x2699）
-            核对过就是 Artifact 原文用的字符，不是 ⊙，这次没有改图标本身。
-            fix(2026-09-24，紧凑化第一轮，Remy 截图指出这颗按钮"全宽很重，跟上面添加支付方式
-            抢主次")：查了 reference/artifact-v10-source.html:381 才发现这一屏本来就有一条
-            scoped 覆盖 `#scr-payment .big-cta{padding:6px; font-size:10.5px}`——比通用
-            `.big-cta` 的 7px/11px 更小一档，这条覆盖之前从没被套用过，是真实的规格漏套，
-            不是这次新定的数值。全宽+双色 CTA 的形状本身是 Artifact 原意（第十九轮之前它是
-            "小胶囊+取消文字链接"，被判定跟方案不符改回全宽——历史见上一条注释），这次只补
-            scoped 的更小 padding/字号，形状没变；如果 Remy 看过这版还是觉得该收成非全宽的
-            小按钮，那是一次新的方案偏离判断，不在这轮范围内擅自改，留给她确认。 */}
+        {/* fix(2026-09-17 第十九轮)：曾经改成 .big-cta 全宽（历史：第十九轮之前是"小胶囊+
+            取消文字链接"，被判定跟方案不符改回全宽；第一轮紧凑化又补了 Artifact scoped 的
+            更小 padding/字号 `#scr-payment .big-cta{padding:6px; font-size:10.5px}`）。
+            fix(2026-09-24，紧凑化第二轮，Remy 看过紧凑化第一轮截图后明确拍板)：全宽双色 CTA
+            这个形状字面上确实是 Artifact V10 原意（`reference/artifact-v10-source.html:931`
+            `<button class="big-cta" style="background:var(--neutral-dk)">`），第一轮结尾也
+            如实标注过"如果 Remy 看过这版还是觉得该收成非全宽小按钮，是一次新的方案偏离判断，
+            留给她确认"——现在她确认了：这颗按钮跟上面"添加支付方式"黑色主按钮放在一起，即使
+            换了颜色也还是同等视觉分量的整行 CTA，主次不够分明，要求改成真正的次级小按钮，不占
+            满整行。这是 Remy 本人看真实截图后的新判断，不是这次自己推翻方案，如实记录成
+            "这颗按钮不再跟表单主按钮走同一套 CTA 组件，改用这个 app 已有的次级按钮
+            chokepoint"。挑了 `.btn-secondary`（`app/globals.css`，白底描边 + `min-h-[32px]`
+            触控热区，DESIGN-BRIEF 里明确定义给"不需要抢主按钮风头的动作"用）而不是这份文件
+            自己那处深色 `mini-btn` 风格写法（钱包行"设置"按钮那颗 bg-ink 小胶囊）——因为
+            mini-btn 那套是行内列表里的次要动作，视觉上仍是深色实心，跟主按钮的"黑"还是同一
+            色系分量；而这颗按钮是整节的独立触发器，要的是"一眼看出比上面主按钮轻"，
+            `.btn-secondary` 的白底描边在色重上跟黑色主按钮拉开明显差距，语义（"次要操作
+            按钮"）和视觉分量都更吻合。`self-start` 是这个 app 既有的同款写法（对照
+            `app/account/hard-refresh-button.tsx` "强制刷新最新版本"那颗按钮，同样是
+            `flex flex-col` 容器里的孤零按钮）——不加会被 flex-col 默认的 `align-items:
+            stretch` 撑成全宽，白白抵消掉换 class 的效果。字号 Remy 说了不用再调，保持这次
+            紧凑化之前就有的 10.5px（跟 `.btn-secondary` 自带的 11px 有 0.5px 差异，显式覆盖
+            保留原值，不跟着 class 默认值走）。图标 ⚙ 沿用不变。 */}
         <button
           type="button"
           onClick={() => setBalancePanelOpen((v) => !v)}
-          className="big-cta p-[6px] text-[10.5px]"
-          style={{ backgroundColor: '#6E6E6C' }}
+          className="btn-secondary self-start text-[10.5px]"
         >
           ⚙ 设置当前余额
         </button>
