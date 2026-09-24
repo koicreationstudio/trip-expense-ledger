@@ -9,6 +9,8 @@ import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { formatMoney } from '@/lib/money';
 import { SelectDropdown } from '@/components/select-dropdown';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { disambiguatePaymentMethodLabels } from '@/lib/domain/payment-method-label';
+import { MissingWalletRow, type MissingWalletMethod } from './missing-wallet-row';
 
 export interface WalletItem {
   id: string;
@@ -52,12 +54,19 @@ export function WalletGrid({
   tripId,
   wallets,
   paymentMethods,
+  missingWalletMethods = [],
   variant = 'default',
   defaultCurrency,
 }: {
   tripId: string;
   wallets: WalletItem[];
   paymentMethods: WalletPaymentMethodOption[];
+  // fix(2026-09-24 第五十八轮，Remy 真实反馈"我的钱包区块不显示已启用但没建钱包的
+  // 支付方式")：这趟行程已开启、但还没建对应钱包的支付方式清单——跟
+  // `payment-methods-manager.tsx` 用的是完全同一份判断逻辑（page.tsx 算，两处都吃
+  // 同一个 `missingWalletMethods` 计算结果，见该文件顶部注释），这里只负责渲染，
+  // 不重新判断一次。默认空数组，兼容还没传这个 prop 的老调用点。
+  missingWalletMethods?: MissingWalletMethod[];
   // 'embedded-dark'：塞进方案C 合并卡（深色渐变底）时用，只换钱包胶囊本身的配色
   // （套 DESIGN-BRIEF-hero-wallet-variants.html .wallet-c-chip 规格），不影响「新建钱包」
   // 表单——那段设计稿完全没提规格，继续用现有浅色表单样式渲染在深色卡外面。
@@ -88,6 +97,12 @@ export function WalletGrid({
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const selectedIconLabel = ICON_CHOICES.find((c) => c.emoji === emoji)?.label ?? '';
+
+  // fix(2026-09-24 第五十八轮，Remy 真实反馈"现金/现金分不清是哪个")：这个组件里
+  // 两处直接渲染 `m.label`（下面"已有支付方式"快捷 chip + "绑定支付方式"下拉选项）——
+  // 名下多个支付方式同名时分不清是哪一个，改用 `disambiguatePaymentMethodLabels`
+  // 这个 chokepoint 算一次展示名，唯一的 label 原样返回、不额外加噪音。
+  const displayLabels = disambiguatePaymentMethodLabels(paymentMethods);
 
   async function performDeleteWallet() {
     if (!confirmingWallet) return;
@@ -206,12 +221,18 @@ export function WalletGrid({
               <span>已有支付方式：</span>
               {paymentMethods.map((m, i) => (
                 <span key={m.id}>
+                  {/* fix(2026-09-24 第五十八轮，Remy 截图坐实的真 bug)：这几颗是塞在
+                      flex-wrap 小字号(9px)段落里的"点一下自动填名字"快捷建议，不是需要
+                      32px 触控热区的独立导航链接——`.tap-link` 的 min-h-[32px] 会让这一行
+                      只要换行就变成"32px 高的一条"，跟旁边 9px 文字视觉上极不协调（看起来
+                      像多占一行、行距特别大）。改成不强制高度的小号下划线文字，跟周围文字
+                      自然对齐。 */}
                   <button
                     type="button"
-                    onClick={() => setLabel(m.label)}
-                    className="tap-link text-neutral-dk"
+                    onClick={() => setLabel(displayLabels.get(m.id) ?? m.label)}
+                    className="text-neutral-dk underline underline-offset-2 py-[1px]"
                   >
-                    {m.label}
+                    {displayLabels.get(m.id) ?? m.label}
                   </button>
                   {i < paymentMethods.length - 1 ? '、' : ''}
                 </span>
@@ -254,7 +275,7 @@ export function WalletGrid({
             { value: NO_LINK, label: '不绑定支付方式（可以之后再绑）' },
             ...eligibleMethods.map((m) => ({
               value: m.id,
-              label: `记账选「${m.label}」时自动扣这个钱包`,
+              label: `记账选「${displayLabels.get(m.id) ?? m.label}」时自动扣这个钱包`,
             })),
           ]}
         />
@@ -387,6 +408,24 @@ export function WalletGrid({
             </div>
           ),
         )}
+
+        {/* fix(2026-09-24 第五十八轮，Remy 真实反馈"我的钱包区块看不出还有已启用但
+            没建钱包的支付方式")：这趟行程已开启、但还没建对应钱包的支付方式，跟真实
+            钱包卡片摆在同一条横向滚动带里，用共享组件 `MissingWalletRow`（跟
+            `payment-methods-manager.tsx` 同一套判断/建钱包逻辑，只是这里传
+            'chip-dark'/'chip-light' 变体换外壳）。建好之后没有本地 state 需要更新——
+            `wallets`/`missingWalletMethods` 都是 page.tsx 的服务器端 prop，
+            `router.refresh()` 重新跑一次服务器渲染即可，跟这个文件里其它写操作后
+            刷新的模式一致。 */}
+        {missingWalletMethods.map((m) => (
+          <MissingWalletRow
+            key={`missing-wallet-${m.id}`}
+            tripId={tripId}
+            method={m}
+            variant={isDark ? 'chip-dark' : 'chip-light'}
+            onCreated={() => router.refresh()}
+          />
+        ))}
 
         {!creating && (
           <button

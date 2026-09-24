@@ -6,6 +6,7 @@ import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { SelectDropdown } from '@/components/select-dropdown';
 import { Switch } from '@/components/switch';
+import { MissingWalletRow, type CreatedWalletDto } from '../missing-wallet-row';
 
 interface PaymentMethod {
   id: string;
@@ -72,12 +73,6 @@ export function PaymentMethodsManager({
   const [balanceDate, setBalanceDate] = useState('');
   const [balanceSubmitting, setBalanceSubmitting] = useState(false);
   const [balanceError, setBalanceError] = useState<string | null>(null);
-  // fix(2026-09-24，追加需求——Remy 拍板：本行程已开启、但还没建对应钱包的支付方式，
-  // 这个面板要灰显+给一个「建钱包」按钮，不是"开关一打开就自动建"，要等这里主动点了
-  // 才建。`creatingWalletMethodId` 只用来控制单个按钮的 loading/disabled 态，
-  // `walletCreateError` 是这条专属的错误提示（跟 `balanceError` 分开，两个是不同动作）。
-  const [creatingWalletMethodId, setCreatingWalletMethodId] = useState<string | null>(null);
-  const [walletCreateError, setWalletCreateError] = useState<string | null>(null);
   // fix(2026-09-14 Artifact Version 10 走查补做)：Artifact 里"设置当前余额"是页面
   // 底部一颗按钮，点开才展开钱包余额清单——不是像这里之前那样常驻在页面最上面的一整块。
   const [balancePanelOpen, setBalancePanelOpen] = useState(defaultOpenBalancePanel);
@@ -166,41 +161,15 @@ export function PaymentMethodsManager({
   }
 
   /**
-   * 「建钱包」按钮（2026-09-24 追加需求）——给一个"本行程已开启、但还没建对应钱包"的
-   * 支付方式建一个钱包：币种跟支付方式一致，直接带上 `paymentMethodId`。走的是
-   * `wallet-grid.tsx`「建立钱包」那颗按钮背后同一个 `POST /api/trips/[tripId]/wallets`
-   * 端点，不是另写一条旁路——绑了 `paymentMethodId` 的这条创建路径自带历史消费回溯
-   * 补算（见 `app/api/trips/[tripId]/wallets/route.ts` 第 74-89 行），跟从"我的钱包"
-   * 区块新建一个绑定支付方式的钱包，行为上完全等价。
-   * emoji 挑 `wallet-grid.tsx` 里 `ICON_CHOICES` 已有的两个默认符号（💳信用卡/💵现金），
-   * 不新发明图标。
-   * 建好之后直接把这个新钱包丢进 `startEditBalance`——呼应 Remy 要的"这一行就地变成
-   * 可填余额的正常行"，不用她建完钱包还要再找一次「设置当前余额」按钮。
+   * 「建钱包」按钮建完之后的回调（2026-09-24 第五十八轮，从这里抽到共享组件
+   * `MissingWalletRow` 之前，原本这段逻辑连同请求本身都写在这个文件里；现在请求
+   * 逻辑搬进了那个组件，这里只接住建好的钱包）——刷新钱包列表 + 直接把这个新钱包
+   * 丢进 `startEditBalance`，呼应 Remy 要的"这一行就地变成可填余额的正常行"，
+   * 不用她建完钱包还要再找一次「设置当前余额」按钮。
    */
-  async function handleCreateWalletForMethod(m: PaymentMethod) {
-    setWalletCreateError(null);
-    setCreatingWalletMethodId(m.id);
-    try {
-      const res = await fetch(`/api/trips/${tripId}/wallets`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          label: m.label,
-          currency: m.settlementCurrency,
-          emoji: m.kind === 'card' ? '💳' : '💵',
-          paymentMethodId: m.id,
-        }),
-      });
-      if (!res.ok) {
-        setWalletCreateError(`「${m.label}」建钱包失败，稍后再试。`);
-        return;
-      }
-      const data = (await res.json()) as { wallet: Wallet };
-      await loadWallets();
-      startEditBalance(data.wallet);
-    } finally {
-      setCreatingWalletMethodId(null);
-    }
+  async function handleWalletCreated(w: CreatedWalletDto) {
+    await loadWallets();
+    startEditBalance(w);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -677,42 +646,21 @@ export function PaymentMethodsManager({
                     )}
                   </li>
                 ))}
-                {/* fix(2026-09-24 追加需求，Remy 拍板)：本行程已开启、但还没建对应钱包的
-                    支付方式——灰显 + 「建钱包」按钮，不是开关一打开就自动建，等这里主动
-                    点了才建（走 `handleCreateWalletForMethod`，跟"我的钱包"区块新建一个
-                    绑支付方式的钱包背后同一个 POST 端点，历史消费回溯照样生效）。
-                    fix(2026-09-24，紧凑化第一轮)：同上，从两行的虚线卡片改成跟真实钱包行
-                    同一个 `.list` 里的一行——虚线语义挪到「建钱包」按钮本身的
-                    `border-dashed`，弱化用 `opacity-70`（跟原本一致）；原本占一整行的说明
-                    句子（"这趟行程已开启这个支付方式，但还没建对应的钱包，没法追踪余额"）
-                    改成 `title`/`aria-label`，鼠标悬停或屏幕阅读器还是能拿到完整意思，
-                    只是常态不再占一整行视觉空间——按钮本身的"建钱包"三个字已经把意图说清楚。 */}
+                {/* fix(2026-09-24 第五十八轮)：这一行的判断逻辑 + 建钱包交互整段抽到
+                    共享组件 `MissingWalletRow`（'list-row' 变体，视觉/行为跟改之前
+                    完全一致）——行程主页「我的钱包」区块现在也要出现同一套判断，抽出来
+                    避免两处各自维护一份、以后漂移。 */}
                 {missingWalletMethods.map((m) => (
-                  <li
+                  <MissingWalletRow
                     key={`missing-wallet-${m.id}`}
-                    className="flex items-center gap-[5px] border-b border-sand py-[4px] opacity-70 last:border-b-0"
-                    title="这趟行程已开启这个支付方式，但还没建对应的钱包，没法追踪余额。"
-                  >
-                    <span aria-hidden="true" className="shrink-0">
-                      {m.kind === 'card' ? '💳' : '💵'}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-muted">
-                      {m.label} <span className="font-mono text-[8.5px] text-muted">{m.settlementCurrency}</span>
-                    </span>
-                    <button
-                      type="button"
-                      disabled={creatingWalletMethodId === m.id}
-                      onClick={() => handleCreateWalletForMethod(m)}
-                      aria-label={`「${m.label}」这趟行程已开启，但还没建对应的钱包，点击建钱包`}
-                      className="shrink-0 rounded-full border border-dashed border-sand bg-white px-[8px] py-[3px] text-[9px] font-medium text-ink transition-colors hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      {creatingWalletMethodId === m.id ? '建立中…' : '建钱包'}
-                    </button>
-                  </li>
+                    tripId={tripId}
+                    method={m}
+                    variant="list-row"
+                    onCreated={handleWalletCreated}
+                  />
                 ))}
               </ul>
             )}
-            {walletCreateError && <p className="text-[10px] text-coral">{walletCreateError}</p>}
           </div>
         )}
       </section>
