@@ -8,6 +8,7 @@ import { deriveMidRate } from '@/lib/fx/derive-mid-rate';
 import { resolveHoldCandidates, resolveTargetCandidates, resolveDefaultTarget } from '@/lib/fx/fx-compare-defaults';
 import { SelectDropdown, useDismissableOpen } from '@/components/select-dropdown';
 import { Switch } from '@/components/switch';
+import { findBestOfferIndex } from '@/lib/domain/fx-best-offer';
 
 /**
  * 汇率比价——2026-09-16 第十八轮，Remy 拍板"要根治"：把原本两张独立卡片
@@ -207,6 +208,12 @@ interface CompareRow {
   kind: 'channel' | 'card';
   effectiveRate: number | null; // 目标币种/持有币种，越大越划算；null=缺数据
   amountInTarget: number | null; // 按当前金额算出的目标币种到手数（用于展示）
+  // fix(2026-09-24 第五十八轮，Remy 报真 bug"同币种不该拿最划算徽章")：渠道
+  // （channelRows）一定涉及换汇，恒为 true；「我的支付方式」（cardRows）这个值
+  // 原样带自 FxRecommendationResult.requiresConversion（服务器已经算过，不用
+  // 这里重新判断）。跟 fx-compare-list.tsx 共用同一个 `findBestOfferIndex`
+  // chokepoint 判定"✓最划算"该落在哪一行。
+  requiresConversion: boolean;
 }
 
 export function FxCompareCard({
@@ -475,6 +482,7 @@ export function FxCompareCard({
           kind: 'channel',
           effectiveRate,
           amountInTarget: amount * effectiveRate,
+          requiresConversion: true,
         };
       })
     : [];
@@ -511,6 +519,7 @@ export function FxCompareCard({
             kind: 'card',
             effectiveRate: impliedRate,
             amountInTarget: impliedRate ? amount * impliedRate : null,
+            requiresConversion: r.requiresConversion,
           };
         })
     : [];
@@ -518,6 +527,20 @@ export function FxCompareCard({
   const allRows = [...channelRows, ...cardRows]
     .filter((r) => r.effectiveRate !== null)
     .sort((a, b) => (b.effectiveRate ?? 0) - (a.effectiveRate ?? 0));
+
+  // fix(2026-09-24 第五十八轮，Remy 报真 bug"同币种不该拿最划算徽章")：
+  // "✓最划算"必须是全局比较（哪一行数字最划算就该在哪一行显示），不能因为下面
+  // 改成分组渲染就变成"每组各自的最划算"——`firstEligibleIndex` 在拆分成两组
+  // 之前、按 `allRows` 这个全局排序算好，下面渲染时每一行各自记住自己在 `allRows`
+  // 里的原始位置（`globalIndex`），用这个位置去跟 `firstEligibleIndex` 比对，
+  // 不受分组视觉拆分影响。
+  const firstEligibleIndex = findBestOfferIndex(allRows);
+  const indexedRows = allRows.map((row, globalIndex) => ({ ...row, globalIndex }));
+  // fix(2026-09-24 第五十八轮，Remy 报"渠道换汇/我的支付方式两组数字排在一起容易
+  // 看串"）：从一个扁平列表改成两个视觉上明显分开的分组，各自一个小标题，顺序
+  // 按 Remy 截图里出现的先后——渠道在前、我的支付方式在后。
+  const channelGroupRows = indexedRows.filter((r) => r.kind === 'channel');
+  const cardGroupRows = indexedRows.filter((r) => r.kind === 'card');
 
   // fix(2026-09-23 第三十三轮，方案二)：改名自 toggleChannel，现在管两种 key
   // （channel:xxx / card:xxx），逻辑本身（勾选/取消勾选同一个 Set）没有变化。
@@ -764,39 +787,53 @@ export function FxCompareCard({
               自选比较项都取消勾选了——去上面&ldquo;⚙自选比较项&rdquo;里勾几个看看。
             </p>
           ) : (
-            <ul className="flex flex-col gap-[7px]">
-              {allRows.map((row, i) => (
-                <li
-                  key={row.key}
-                  className="rounded-[14px] border border-sand bg-white px-[10px] py-[8px] text-[11px]"
-                >
-                  <div className="flex items-center justify-between gap-[6px] font-semibold">
-                    <span>
-                      {row.label}
-                      {/* fix(2026-09-23 第三十三轮，方案二，对应 Remy 报的真 bug C)：
-                          来源徽章——渠道比价跟我的支付方式现在合并成同一张列表，
-                          两边都可能出现同名行（比如都叫"Wise"），没有这个标签会
-                          让人以为是重复行。复用 expense-list.tsx 已有的中性徽章
-                          样式（`bg-[rgba(164,163,160,.2)]`），不新开一套配色。 */}
-                      <span className="ml-1.5 inline-flex items-center rounded-full bg-[rgba(164,163,160,.2)] px-[6px] py-[1px] align-middle text-[8.5px] font-medium text-muted">
-                        {row.kind === 'channel' ? '渠道' : '我的方式'}
-                      </span>
-                      {i === 0 && (
-                        <span className="ml-1.5 inline-flex items-center rounded-full bg-ok px-[7px] py-[2px] align-middle text-[9px] font-bold text-white">
-                          ✓最划算
-                        </span>
-                      )}
-                    </span>
-                    <span className="font-serif tabular-nums">
-                      {row.amountInTarget !== null
-                        ? `${FX_SYMBOLS[effectiveTarget] ?? ''}${row.amountInTarget.toFixed(2)}`
-                        : '缺汇率'}
-                    </span>
-                  </div>
-                  <div className="mt-[3px] text-[9.5px] text-neutral-dk">{row.note}</div>
-                </li>
-              ))}
-            </ul>
+            // fix(2026-09-24 第五十八轮，Remy 报真 bug"两组数字排在一起容易看串"，
+            // 视觉/产品判断，取舍见 PENDING-DECISIONS)：原本一个扁平 <ul> 混排渠道跟
+            // 我的支付方式，每行右上角一个小徽章区分来源——光看小徽章还是容易看串
+            // （尤其两边都可能叫"Wise"这种同名行）。改成两个视觉上明显分开的分组，
+            // 各自一个小标题（样式对齐 page.tsx 的 `<h2 className="text-[10px]
+            // font-medium tracking-[0.08em] text-neutral-dk">` 规格，不新发明字号）。
+            // 分组标题本身已经足够清楚"这行是渠道还是我的方式"，原来那个行内来源
+            // 徽章判断为冗余，这次去掉，换取每行少一点视觉噪音（这是这次做的取舍，
+            // 不是必然正确答案）。任一组没有内容时只渲染有内容的那组，不渲染空标题。
+            <div className="flex flex-col gap-3">
+              {[
+                { title: '渠道换汇', rows: channelGroupRows },
+                { title: '我的支付方式', rows: cardGroupRows },
+              ].map(
+                (group) =>
+                  group.rows.length > 0 && (
+                    <div key={group.title} className="flex flex-col gap-[7px]">
+                      <h3 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">{group.title}</h3>
+                      <ul className="flex flex-col gap-[7px]">
+                        {group.rows.map((row) => (
+                          <li
+                            key={row.key}
+                            className="rounded-[14px] border border-sand bg-white px-[10px] py-[8px] text-[11px]"
+                          >
+                            <div className="flex items-center justify-between gap-[6px] font-semibold">
+                              <span>
+                                {row.label}
+                                {row.globalIndex === firstEligibleIndex && (
+                                  <span className="ml-1.5 inline-flex items-center rounded-full bg-ok px-[7px] py-[2px] align-middle text-[9px] font-bold text-white">
+                                    ✓最划算
+                                  </span>
+                                )}
+                              </span>
+                              <span className="font-serif tabular-nums">
+                                {row.amountInTarget !== null
+                                  ? `${FX_SYMBOLS[effectiveTarget] ?? ''}${row.amountInTarget.toFixed(2)}`
+                                  : '缺汇率'}
+                              </span>
+                            </div>
+                            <div className="mt-[3px] text-[9.5px] text-neutral-dk">{row.note}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ),
+              )}
+            </div>
           )}
 
           {/* fix(2026-09-17 第二十二轮)：这条脚注之前明确写"渠道那组是固定参考表，

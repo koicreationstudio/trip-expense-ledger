@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { WalletGrid, type WalletItem, type WalletPaymentMethodOption } from './wallet-grid';
 import { ExchangeForm, type WalletOption } from './exchange/exchange-form';
 import { QuickAddExpense } from './quick-add-expense';
+import type { MissingWalletMethod } from './missing-wallet-row';
 
 interface Participant {
   id: string;
@@ -41,6 +42,7 @@ export function WalletCard({
   participants,
   wallets,
   paymentMethods,
+  missingWalletMethods,
 }: {
   tripId: string;
   baseCurrency: string;
@@ -48,6 +50,7 @@ export function WalletCard({
   participants: Participant[];
   wallets: WalletItem[];
   paymentMethods: WalletPaymentMethodOption[];
+  missingWalletMethods: MissingWalletMethod[];
 }) {
   const SHADE_OPTIONS = ['#1A1A19', '#242422', '#2E2E2C'] as const; // 深 / 中 / 浅(默认)
   const [shade, setShade] = useState<string>(SHADE_OPTIONS[2]);
@@ -91,6 +94,7 @@ export function WalletCard({
         tripId={tripId}
         wallets={wallets}
         paymentMethods={paymentMethods}
+        missingWalletMethods={missingWalletMethods}
         defaultCurrency={baseCurrency}
       />
 

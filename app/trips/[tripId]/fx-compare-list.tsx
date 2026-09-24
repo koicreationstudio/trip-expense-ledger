@@ -2,6 +2,7 @@
 
 import { formatMoney } from '@/lib/money';
 import type { FxRecommendationResult } from '@/lib/domain/fx-recommendation';
+import { findBestOfferIndex } from '@/lib/domain/fx-best-offer';
 
 /**
  * 比价结果的排序渲染，从 expense-form.tsx 抽出来给"记一笔消费"表单的支付方式
@@ -21,10 +22,17 @@ export function FxCompareList({
   selectedPaymentMethodId?: string | null;
   onSelect?: (paymentMethodId: string) => void;
 }) {
+  // fix(2026-09-24 第五十八轮，Remy 真实反馈的真 bug"C")：同币种(无需换汇)的支付
+  // 方式不该拿"✓最划算"徽章，即使它排序上因为数字最小排在第一——现金 1:1 无损
+  // 跟真正经过汇率折算的方式不是同一个可比性质。`recommendations` 本来就按
+  // costInCompareCurrency 升序排好（见 lib/domain/fx-recommendation.ts），所以
+  // "第一个真正有资格的下标"就是该拿徽章的那一行。
+  const firstEligibleIndex = findBestOfferIndex(recommendations);
+
   return (
     <div className="flex flex-col gap-2">
       {recommendations.map((r, index) => {
-        const isBest = index === 0 && !r.unavailable;
+        const isBest = index === firstEligibleIndex;
         const isSelected = selectedPaymentMethodId === r.paymentMethodId;
         return (
           <button

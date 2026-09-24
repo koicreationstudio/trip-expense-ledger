@@ -14,6 +14,7 @@ import { ExchangeRecordList } from './exchange-record-list';
 import { FxCompareCard } from './fx-compare-card';
 import { loadEnabledPaymentMethodIds, paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 import { computeWalletDisplayBalances } from '@/lib/domain/wallet-balance';
+import { disambiguatePaymentMethodLabels } from '@/lib/domain/payment-method-label';
 
 export default async function TripPage({ params }: { params: { tripId: string } }) {
   const identity = await getCurrentIdentity();
@@ -112,13 +113,28 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     .select()
     .from(paymentMethods)
     .where(paymentMethodOwnerFilter(identity));
-  const paymentMethodLabelById = new Map(myPaymentMethods.map((m) => [m.id, m.label]));
+  // fix(2026-09-24 第五十八轮，Remy 真实反馈"现金/现金分不清是哪个")：原本这里是
+  // 原样 `m.label` 的映射，名下多个支付方式同名(比如"现金"HKD结算 + "现金"USD结算)
+  // 时，钱包卡"绑了哪个支付方式"、活动流简写、活动流"支付方式：全部"筛选下拉三处
+  // 全部分不清是哪一个。改用 `disambiguatePaymentMethodLabels` 这个 chokepoint——
+  // 只有这一组里真的重复的 label 才追加币种后缀，唯一的 label 保持原样。
+  const paymentMethodLabelById = disambiguatePaymentMethodLabels(myPaymentMethods);
   // 「本行程启用的支付方式」（2026-09-15 落地 Artifact Version 10 遗留缺口）：钱包卡
   // 「绑定支付方式」下拉/命名提示只给这趟行程勾了启用的选，不是名下全部——已经绑过
   // 某个之后被取消勾选的支付方式的钱包，`paymentMethodLabelById` 这份全量映射还留着，
   // 历史绑定的名字不会因为取消勾选就显示成"未知"。
   const enabledPaymentMethodIds = await loadEnabledPaymentMethodIds(db, params.tripId, identity);
   const enabledPaymentMethods = myPaymentMethods.filter((m) => enabledPaymentMethodIds.has(m.id));
+
+  // 「本行程已开启，但还没建对应钱包」的支付方式（2026-09-24 第五十八轮，Remy 真实
+  // 反馈"我的钱包区块看不出还有已启用但没建钱包的支付方式"）——判断逻辑照抄
+  // `payment-methods-manager.tsx` 的 `missingWalletMethods`（同一条规则，不重新发明），
+  // 卡类/现金类一视同仁不按 `kind` 过滤，理由同该文件那段注释：「钱包」这个概念本来
+  // 就不分卡/现金。
+  const walletPaymentMethodIds = new Set(
+    myWallets.map((w) => w.paymentMethodId).filter((id): id is string => id !== null)
+  );
+  const missingWalletMethods = enabledPaymentMethods.filter((m) => !walletPaymentMethodIds.has(m.id));
 
   return (
     // fix(2026-09-16 第十七轮)：gap-6(24px) 太松——Artifact 卡片间距量出来是 10-14px 这个
@@ -233,6 +249,12 @@ export default async function TripPage({ params }: { params: { tripId: string } 
         paymentMethods={enabledPaymentMethods.map((m) => ({
           id: m.id,
           label: m.label,
+          settlementCurrency: m.settlementCurrency,
+        }))}
+        missingWalletMethods={missingWalletMethods.map((m) => ({
+          id: m.id,
+          label: m.label,
+          kind: m.kind,
           settlementCurrency: m.settlementCurrency,
         }))}
       />
