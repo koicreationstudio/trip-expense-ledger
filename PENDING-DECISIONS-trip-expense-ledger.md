@@ -1,5 +1,29 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-24，第四十五轮，lifeos-pm 派工排查"全 app 点击响应普遍偏卡顿"（Remy 原话："整个 app 到处都有这种感觉"）——只排查未改代码，新 session 开工前必看】
+
+背景：Remy 反馈范围不限结算页，是全站点击都感觉卡。claim `id=2026-09-24_145706_04c20f09`。这轮跟当天并行跑的钱包冷启动修复（round42/44）、结算页样式核实（round42）、根因分析（round43）是分开的独立排查，都用同一份真实行程"🇭🇰2026香港"（trip_id `f78a6b5e-8612-4097-8bfd-88a5db664045`）测试。**这轮严格只读，没有 Edit/Write 任何代码**，理由：最强的根因线索指向基础设施层面（Worker 连接稳定性），不是靠改 tsx 文件能解决的；且当轮排查期间钱包/结算页两条并行任务正在改同一批文件，避免正面撞车。
+
+### 一、根因判断（按证据强度排序，lifeos-pm 已逐条核对代码/截图/自行复测，不是只信排查报告）
+
+1. **Router Cache 缺 `router.refresh()` 这个机制，跟 round43 提出的假设是同一个根因，这轮独立收敛到同一个结论**：项目里 15+ 处 `router.push` 后没配 `router.refresh()`，每次点击导航都可能出现"URL 已跳但内容还在渲染上一屏"的窗口期。**这条线索目前正被 round44 逐处补代码修复中**（`my-trips.tsx` 已修，`claim-form.tsx` round44 也补上了），这次点击卡顿排查不需要重复修，等 round44 那批修完之后建议直接找 Remy 复测一遍"点击卡顿"这个感受有没有缓解，不用再单独立一个任务去查。
+2. **⚠️ 需要注意的张力，留给下一个接手的人判断**：round44 是在给更多地方**加** `router.refresh()`（为了解决"旧缓存内容闪现"这个 bug）；而这次排查的猜想链条是"每次点击都要重新整页请求一次 Worker，Worker 本身连接不稳定，所以点哪里都感觉卡"。如果这个猜想成立，那么 round44 加更多 `router.refresh()` 调用理论上是在**增加**触发那条不稳定连接的次数，两个修复方向不是必然互相印证，有可能一个在治标（消除闪旧内容），一个在生根因上适得其反（增加点击到响应的延迟感）。这轮没有证据强到能下定论谁对谁错，只是发现这个张力点，不擅自判断，如实记录给 Remy/下一轮排查。
+3. **Worker 连接稳定性这条根因，lifeos-pm 亲自抽样复测后要调低原排查报告的确定性措辞**：原排查报告用 25 次 vs 对照组（github.com/remy-api Worker）各 10 次的抽样，称对照组"完全稳定 0 失败"，据此判断"问题精确排除本机网络，落在这个 Worker 自己身上"。lifeos-pm 自己各抽样 5 次复测，trip-expense-ledger `/api/health` 确实出现过一次 9.7s 的慢请求，但**对照组 remy-api Worker 这次复测里也出现了一次 5.47s 的异常值**，不是原报告描述的"完全稳定"。结论调整为：trip-expense-ledger 这个 Worker 的连接耗时确实比对照组均值差、且原报告记录过真实连接失败（`SSL_ERROR_SYSCALL`/`HTTP2 framing error`），这部分观察可信；但"完全排除本机网络/平台通病，问题 100% 精确定位在这个 Worker 自己身上"这句话证据不够扎实，本机/网络路径本身就有一定抖动，不能排除是混合因素。**这条根因方向保留，但确定性从"坐实"降级为"较强线索，需要 Cloudflare 侧用量/日志才能坐实"**，跟原排查报告自己也承认"超出这轮范围，需要额外排查 Cloudflare 侧"是一致的。
+4. **`app/trips/[tripId]/page.tsx` 第 79-83 行 `ensureMyrRatesFresh` 无超时阻塞点，lifeos-pm 已读代码逐行核对属实**：Remy 这条真实行程本位币是 HKD，会触发这段代码；`lib/fx/fetch-rates.ts` 的 `fetchMyrRates()` 打外部 API `open.er-api.com` 完全没有 `AbortController`/超时，缓存过期时（24 小时一次）会阻塞整页渲染。这是一个真实、低风险、可以直接修的点，还没有人动手改。
+5. **`page.tsx` 里约 8-10 处 DB 查询串行 `await`，没用 `Promise.all`，lifeos-pm 已读代码确认属实**——D1 单次查询够快所以不是主凶，是次要可优化项。
+6. **支付方式页"设置当前余额→"深链被右下角常驻 FAB 抢点击热区**，ui-auditor 手机视口这次真机复现（`08_mobile_after_switcher_click.png`），是 memory `reference_fixed_fab_corner_collides_with_row_actions.md` 记录过的老问题这次又撞见，不是新 bug，还没根治。
+7. **存疑不下结论**：ui-auditor 走查还观察到"导航几秒后被静默弹回上一页"复现 3 次以上、无 console 报错，读了 session/cookie/middleware 代码都找不到能解释的机制，报告倾向判断是 Playwright 自动化点击时序假象（跟 PENDING-DECISIONS 之前记录过的"两个悬案 bug"、round36 的疑虑同类），未采信为真实 bug，如实标注不采信。
+
+### 二、这轮没做的事（留给下一轮，都不是这次任务范围内该做的）
+- 没有改任何代码（`ensureMyrRatesFresh` 加超时、`page.tsx` 串行查询改 `Promise.all` 这两条低风险修复都还没做，等 round44 的钱包/结算页并行任务腾出文件锁定空间后再排期，避免撞车）。
+- 没有查 Cloudflare Worker 侧的用量/日志（CPU 时间、subrequest 数量、是否有异常递归调用）——这是坐实"Worker 连接不稳定"这条根因唯一还缺的一块证据，需要额外权限/工具，这轮没有做。
+- 没有等 round44 的 `router.refresh()` 补丁全部上线后回归测试"点击卡顿"这个主观感受有没有缓解——建议下一轮排查从这一步开始，而不是从零重新测。
+
+### 三、证据来源
+- 代码：`app/trips/[tripId]/page.tsx:17-113`、`lib/fx/rate-cache.ts`、`lib/fx/fetch-rates.ts:15-52`（lifeos-pm 亲自读过，逐行核对属实）。
+- 截图：`/Users/linotan/Desktop/Claude/01_trip_home.png` ~ `09_mobile_trip_home.png` 共 9 张，时间戳 2026-09-24 15:01-15:05，跟排查窗口吻合（lifeos-pm 已核对文件存在+时间戳）。
+- Worker 连接稳定性：原报告 curl 25 次抽样 + lifeos-pm 自己另外抽样 5 次复测（结论已按上面第 3 条调整确定性）。
+
 ## 【2026-09-24，第四十四轮，接续第四十二/四十三轮：补完"换 session 后缺 router.refresh()"实际代码修复 + 追加需求"设置当前余额面板显示未建钱包的支付方式"，新 session 开工前必看】
 
 背景：接手 claim `id=2026-09-24_144523_22b45659`（冷启动路径钱包深链 bug）+ 新追加的 claim `id=2026-09-24_150317_2ba5f9ff`（Remy 拍板：面板要显示"已开启但未建钱包"的支付方式）。开工时发现前一轮（round42/43）已经做了大量诊断工作但落地不完整——`app/my-trips.tsx` 的 `router.refresh()` 已经加上了，但 `app/invite/[code]/claim-form.tsx` 只有解释这个修复的**注释**，`router.refresh()` 这行代码实际没写（这次任务本身要提防的正是这一类"结论写了但代码没执行"的坑，round43 那份分析自己也踩了一次，如实记录），新建的守护测试 `lib/auth/session-mint-navigation.test.ts` 也因为 `noUncheckedIndexedAccess` 有一处 TS 编译错误，从没真正跑通过。这轮补完这两处，不是重新做一遍。
