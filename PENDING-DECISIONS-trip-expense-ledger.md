@@ -1,5 +1,41 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-24，第五十四轮，支付方式页「设置当前余额」按钮紧凑化第二轮——从全宽 CTA 改成真正的次级小按钮，claim id=2026-09-24_161425_bf88a1e8】
+
+背景：紧接紧凑化第一轮之后的追加拍板。第一轮把「⚙ 设置当前余额」的 padding/字号补齐了 Artifact `#scr-payment .big-cta` 这条一直没被套用过的 scoped 覆盖（6px/10.5px），但按钮形状本身还是全宽（`.big-cta`）+ 深色背景（`#6E6E6C`），字面上跟"添加支付方式"黑色主按钮同一档视觉分量，只是颜色深浅不同。Remy 看过第一轮真实截图后明确拍板：要改成真正的次级小按钮，不占满整行，主次要一眼分明，字号不用再调。第一轮收尾时已经如实标注过"如果 Remy 看过这版还是觉得该收成非全宽小按钮，是一次新的方案偏离判断，留给她确认"——这轮就是她确认后的执行，**跟 Artifact V10 字面设计稿（`reference/artifact-v10-source.html:931`，这颗按钮本来就是 `class="big-cta" style="background:var(--neutral-dk)"`）不完全一致，但这次是照 Remy 本人看真实截图后的明确指示执行，不是自行推翻方案**，如实记录这个偏离，供下一个读文档的人核对。
+
+### 改了什么
+
+只改了 `app/trips/[tripId]/payment-methods/payment-methods-manager.tsx` 一个文件，一颗按钮：
+```
+- className="big-cta p-[6px] text-[10.5px]"
+- style={{ backgroundColor: '#6E6E6C' }}
++ className="btn-secondary self-start text-[10.5px]"
+```
+挑了这个 app 已有的次级按钮 chokepoint `.btn-secondary`（`app/globals.css`，白底 + `border-sand` 描边 + `min-h-[32px]` 触控热区，DESIGN-BRIEF 明确定义给"不需要抢主按钮风头的动作"用），没有选这份文件里另一处"设置"/"建钱包"按钮用的深色 `mini-btn` 风格写法（`bg-ink` 实心小胶囊）——因为 mini-btn 视觉上仍是深色实心，跟主按钮同色系分量，"次要"感不够明显；`.btn-secondary` 的白底描边在色重上才真正跟黑色主按钮拉开差距。`self-start` 是防止被父容器 `flex-col` 默认的 `align-items: stretch` 撑成全宽（对照 `app/account/hard-refresh-button.tsx` 里"强制刷新最新版本"按钮同样的写法，这个 app 已有的既定模式，不是新发明）。字号保持原来的 10.5px 没动（Remy 说了不用再调），显式覆盖 `.btn-secondary` 自带的 11px 默认值。
+
+### 协作方式：独立 git worktree 隔离
+
+登记团队看板时又撞见同一份文件被另外两条任务占用（钱包深链冷启动排查、session 丢失排查第 6 轮），照上一轮的办法走独立 worktree（`trip-expense-ledger-worktrees/compact-balance-btn`，`npm install` 真实安装非软链接）隔离开发+自测，改完在这个 worktree 里 commit，cherry-pick 单文件合并回主 checkout 的 `main` 分支再推。部署也是从这个 worktree 里跑 `./deploy.sh`（先 `git rebase origin/main` 让 worktree HEAD 对齐刚推上去的 commit），刻意没有在共享主 checkout 里跑部署——因为那时候主 checkout 工作树里还挂着别的并行任务未提交的改动（`wallet-balance.ts`、`exchange-records` 路由等），从隔离的 worktree 部署能保证这次上线的内容精确只有这一个按钮改动，不会带上别人没写完的代码。
+
+### 验证
+
+**代码关**：`npm run lint`（0 警告 0 错误）、`npm run typecheck`（含 `cf-typegen` 先跑一遍生成 `worker-configuration.d.ts`，这个 worktree 是全新 `npm install` 出来的，没有本机残留的生成文件，0 错误）、`npm test`（118 个单测全过，没碰这次改动之外的任何文件）。commit `420d728`（cherry-pick 自 worktree 里的 `9ae94fd`），已推 `origin/main`。`./deploy.sh` 五关全过（含 round50 那批部署互斥锁自检），Version ID `82b471b4-5111-4dcb-ba93-ed0dfd02527d`，`/api/health` 回读 200。
+
+**真机走查（独立 ui-auditor，不是做改动的同一个 agent）**：生产环境，用 Remy 真实行程「🇭🇰2026香港」（`trip_id=f78a6b5e-8612-4097-8bfd-88a5db664045`），身份直连链接登录一次（`/id/aNhfVNPU7ZGosHWFmdLfp5WtUxB_QGBqjNldoMGqaWA`，查 D1 `user` 表确认这个 token 从第三十轮换发后没再轮换过，仍然有效），全程只读，没提交任何写入表单（点开「设置当前余额」面板看展开只是看，没碰面板里的"设置"/"建钱包"按钮）。桌面（1440×900）+手机（390×844）各截一张视口截图（非 fullPage）：
+- 桌面 `~/Desktop/Claude/.playwright-mcp/compact-payment-methods-2026-09-24-round2-desktop.png`、手机 `-round2-mobile.png`——PM 本人也看过这两张图核实，不是只信 ui-auditor 的文字结论：按钮明显不再撑满整行，是一颗左对齐的小按钮，白底描边，跟上方"添加支付方式"全宽黑色主按钮主次分明；手机端 10.5px 字号依然清晰可辨。对比上一轮的 AFTER 截图（`compact-payment-methods-2026-09-24-AFTER-desktop.png`/`-AFTER-mobile.png`，深色满宽块）差异明显。
+- 展开/收起实测：点击按钮面板正常展开（现金 HKD/USD 两个钱包余额清单出现），再点一次正常收起，行为跟改动前一致，没有回归。展开态截图 `-round2-expand-check.png` 留档。
+- console 0 error，26 条字体预加载 warning（跟这次改动无关，是既有问题）。
+- **发现一个改动范围外的现象，没有处理**：走查中点击卡片跳转到 `/trips/[tripId]` 时遇到过一次 `ChunkLoadError`（`layout-f09410f068b6c044.js` 404）导致客户端白屏，刷新恢复正常——大概率是浏览器还带着部署前缓存的旧 JS bundle，请求这次部署后已经改名的 chunk 哈希，属于常见的"部署后 stale chunk"坑，不是这颗按钮改动引入的问题。如实记录，没有深挖，也没有在这轮范围内修。
+
+### 跟 DESIGN-BRIEF.md / Artifact V10 的关系，如实说明
+
+这是这个文件里第二次出现"Remy 本人看真实截图后的判断覆盖了 Artifact V10 字面设计稿"（第一次是 round49 净值卡结构）。这次的具体情况：Artifact 源码这颗按钮字面上就是 `.big-cta`（全宽），第十九轮曾经把它从"小胶囊+取消链接"改回全宽正是为了贴合这条字面规格；这次改成 `.btn-secondary`（非全宽）等于又推翻了第十九轮的判断——但推翻的依据不是重新读代码猜的，是 Remy 本人两轮之内连续看了两版真实截图后给出的明确指示，时间线和依据都记录在案，不是含糊的自我判断。
+
+**claim.py**：`id=2026-09-24_161425_bf88a1e8`，做完已标记 done。
+
+---
+
 ## 【2026-09-24，第五十三轮，冷启动/快速导航 session 不稳定第 6 次排查——这次先定性再动手，找到并修好一个有硬证据的真根因，但更严重的两类现象仍未查清，如实标记未解决，新 session 开工前必看】
 
 背景：接手 backlog `id=2026-09-24_153655_4ba1adbe`（round47 定义的更准问题范围：这趟真实行程范围内任意 trip 子路由快速连续导航都可能出问题，不限钱包深链一处）。round43 的流程根因分析明确要求这轮必须先定性（真丢 cookie 还是渲染读旧态）再动手，且复测要换独立走查实例、不能沿用上一轮测过的路径——这轮完整照办，过程和上四轮的关键区别在于：**这次真的有服务端证据链，不是只信浏览器画面。**
