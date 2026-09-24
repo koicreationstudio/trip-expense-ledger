@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Suspense } from 'react';
 import { Inter, IBM_Plex_Serif, IBM_Plex_Mono } from 'next/font/google';
 import { SessionDebugProbe } from '@/components/session-debug-probe';
+import { PopstateRefresh } from '@/components/popstate-refresh';
 import './globals.css';
 
 // 构建时把字体打包进产物，不在运行时连 Google 服务器——跟这个项目自己标榜的
@@ -65,6 +66,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="zh" className={`${inter.variable} ${plexSerif.variable} ${plexMono.variable}`}>
       <body className="min-h-screen bg-paper font-sans text-ink">
         <div className="mx-auto max-w-3xl px-4 py-8">{children}</div>
+        {/* round48 根因修复：popstate（浏览器后退/前进）强制 router.refresh()，
+            见 components/popstate-refresh.tsx 顶部注释。永久修复，不是诊断代码。 */}
+        <PopstateRefresh />
         {/* round48 临时诊断，见 components/session-debug-probe.tsx 顶部注释，只在 ?diag=1 生效 */}
         <Suspense fallback={null}>
           <SessionDebugProbe />
