@@ -112,10 +112,22 @@ if [ -z "$DEPLOY_URL" ]; then
 fi
 
 echo "▶ [kongsi-trip deploy] ⑤ 回读 $DEPLOY_URL/api/health（经转发层打到 trip-expense-ledger 的真实健康检查）"
-HEALTH_BODY="$(curl -s "$DEPLOY_URL/api/health" --max-time 15)"
-HEALTH_STATUS="$(curl -s -o /dev/null -w '%{http_code}' "$DEPLOY_URL/api/health" --max-time 15 || echo 'curl_failed')"
+# 每次新部署的直连 URL 都是一个全新的唯一子域名（比如 a5dcf0d4.kongsi-trip.pages.dev），
+# 实测过第一次 curl 常常还没传播完（404），几秒后就通——单次 curl 判定太容易假阳性
+# 报失败，改成重试 6 次、每次间隔 5 秒（实测跑过一次真实部署，2-3 次之内必通）。
+HEALTH_STATUS="curl_failed"
+HEALTH_BODY=""
+for attempt in 1 2 3 4 5 6; do
+  HEALTH_STATUS="$(curl -s -o /dev/null -w '%{http_code}' "$DEPLOY_URL/api/health" --max-time 15 || echo 'curl_failed')"
+  if [ "${HEALTH_STATUS:-}" = "200" ]; then
+    HEALTH_BODY="$(curl -s "$DEPLOY_URL/api/health" --max-time 15)"
+    break
+  fi
+  echo "  回读第 $attempt 次拿到 [$HEALTH_STATUS]，不是 200，等 5 秒再试"
+  sleep 5
+done
 if [ "${HEALTH_STATUS:-}" != "200" ]; then
-  echo "✘ 部署成功但 /api/health 回读拿到 [$HEALTH_STATUS]（不是 200），可能是刚部署边缘还没传播完，稍等几秒手动再 curl 一次确认，也可能是 service binding 配置有问题"
+  echo "✘ 部署成功但 /api/health 回读重试 6 次仍拿不到 200（最后一次是 [$HEALTH_STATUS]），可能是 service binding 配置有问题，不只是边缘传播慢——去查 pages-proxy/CLAUDE.md「一个已知坑」那节"
   exit 2
 fi
 echo "回读响应体：$HEALTH_BODY"
