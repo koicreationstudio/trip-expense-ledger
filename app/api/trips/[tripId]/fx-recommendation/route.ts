@@ -69,7 +69,10 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
   const results = recommendPaymentMethods({
     amount: parsed.data.amount,
     expenseCurrency: parsed.data.expenseCurrency,
-    compareCurrency: trip.baseCurrency,
+    // fix(2026-09-25，任务③)：不再写死行程本位币——调用方（汇率比价卡）现在会
+    // 传"我持有"当前选中的币种，两者只有在旧场景（我持有===本位币）才刚好相等。
+    // 不传时退回本位币，兼容还没升级的老调用方。
+    compareCurrency: parsed.data.compareCurrency ?? trip.baseCurrency,
     paymentMethods: methods.map((m) => ({
       id: m.id,
       label: displayLabels.get(m.id) ?? m.label,

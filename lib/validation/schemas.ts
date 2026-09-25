@@ -96,6 +96,11 @@ export const fxRecommendationSchema = z.object({
   expenseCurrency: currencyCode,
   // true = 不管缓存新不新鲜都立刻现抓一次(独立汇率卡片的「刷新」按钮用)
   forceRefresh: z.boolean().optional(),
+  // fix(2026-09-25，任务③)：不传就照旧退回行程本位币（老调用方/老前端不用改）。
+  // fx-compare-card.tsx 这次改成显式传"我持有"当前选中的币种——"我的支付方式"
+  // 这组数字的隐含汇率公式（impliedRate = 目标币种金额 / 成本）只有在
+  // compareCurrency === 我持有 时数学上才是对的，见该文件顶部大注释第 8 点。
+  compareCurrency: currencyCode.optional(),
 });
 
 // fix(2026-09-24，Remy 明确要求)：汇率比价卡片"我持有/目标币种/自选比较项/

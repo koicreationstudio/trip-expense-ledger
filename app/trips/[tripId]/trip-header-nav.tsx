@@ -168,18 +168,15 @@ export function TripHeaderNav({
 
       {/* dropdown-panel：Artifact 里这是 `.topbar-row` 后面紧跟着的普通文档流内容，
           宽度占满整个内容列——改成跟标题行同一个 flex-col 容器里的普通兄弟节点，
-          不再是 `absolute` 悬浮在触发按钮右下角、会在窄屏溢出裁切的悬浮层。 */}
+          不再是 `absolute` 悬浮在触发按钮右下角、会在窄屏溢出裁切的悬浮层。
+          fix(2026-09-26 第七十一轮，Remy 明确要求)：去掉顶部"展开：切到其它行程/
+          管理行程"这句说明文字标题行（面板本身已经通过点击触发按钮打开，不需要
+          额外一句话解释这是什么），"＋ 新建行程"从标题行挪到列表最底部，变成
+          列表的最后一项，视觉上跟其它行程项同一套列表节奏（同样的 border-t 分隔线），
+          只是文字样式换成强调色，表明这是一个"新增"动作而不是"切换"动作。 */}
       {canOpenPanel && open && (
         <div className="w-full rounded-[14px] border border-sand bg-paper p-1 shadow-card">
-          <div className="flex items-center justify-between gap-2 px-[6px] pb-[3px] pt-[2px]">
-            <span className="text-[9.5px] tracking-wide text-neutral">
-              {otherTrips.length > 0 ? '展开：切到其它行程' : '管理行程'}
-            </span>
-            <Link href="/trips/new" className="shrink-0 text-[9.5px] text-neutral-dk underline underline-offset-2">
-              ＋ 新建行程
-            </Link>
-          </div>
-          {error && <p className="px-[6px] pb-1 text-[10px] text-coral">{error}</p>}
+          {error && <p className="px-[6px] pb-1 pt-[2px] text-[10px] text-coral">{error}</p>}
           <ul className="flex flex-col">
             <li className="flex items-center gap-[6px] rounded-[8px] bg-[#EBEAE8] px-[6px] py-[4px]">
               <span className="w-[9px] shrink-0 text-center text-[7px] leading-none text-ink" aria-hidden="true">
@@ -231,6 +228,17 @@ export function TripHeaderNav({
                 )}
               </li>
             ))}
+            <li className="border-t border-[rgba(55,55,54,.07)] px-[6px] py-[4px]">
+              <Link
+                href="/trips/new"
+                className="flex items-center gap-[6px] text-[11px] font-medium text-neutral-dk underline underline-offset-2"
+              >
+                <span className="w-[9px] shrink-0 text-center text-[10px] leading-none" aria-hidden="true">
+                  ＋
+                </span>
+                新建行程
+              </Link>
+            </li>
           </ul>
         </div>
       )}

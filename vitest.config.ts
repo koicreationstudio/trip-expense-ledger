@@ -11,6 +11,16 @@ export default defineConfig({
     // 仍是全部 *.test.ts 文件的默认值，`**/*.test.tsx` 只是把 include 范围打开，
     // 每个 .tsx 测试文件自己声明要用哪个环境。
     include: ['**/*.test.ts', '**/*.test.tsx'],
+    // fix(2026-09-26 第七十一轮)：`trip-expense-ledger-worktrees/` 是历史遗留的
+    // worktree 目录，就嵌在主 checkout 内部（不是平级目录）。默认 exclude 只挡
+    // `**/node_modules/**`，挡不住这个目录自己的 `.test.tsx` 文件——同一份逻辑
+    // 测试文件（比如 expense-form.test.tsx）在主 checkout 和这个嵌套 worktree
+    // 里各有一份，vitest 两份都会跑，各自解析到自己那份 node_modules 里的 React
+    // 副本，组件测试渲染时两份 React 实例互不认识，报
+    // "Cannot read properties of null (reading 'useState')"。显式排除这个目录
+    // （以及同类的 `audit-diffs/` 历史产物目录，纯 html/图片不含测试但保险起见
+    // 一并排除）根治，不是掩盖真实测试失败。
+    exclude: ['**/node_modules/**', 'trip-expense-ledger-worktrees/**', 'audit-diffs/**'],
     // 涉及 D1 的测试要靠 wrangler getPlatformProxy() 起一个本地 miniflare
     // 子进程模拟真实 binding，冷启动比普通单测慢很多，默认 5s 撑不住。
     testTimeout: 20000,

@@ -35,6 +35,11 @@ export interface FxRecommendationResult {
   paymentMethodId: string;
   label: string;
   kind: 'card' | 'cash';
+  // fix(2026-09-25，任务③"我持有≠本位币也要列出结算币种匹配的支付方式")：
+  // 原样带回这张支付方式自己的结算币种，调用方（fx-compare-card.tsx）要拿这个
+  // 去跟"我持有"比对，筛出"结算币种===我持有"的那几张卡——之前这个字段完全没
+  // 传出来，前端没办法在不额外查一次支付方式列表的情况下做这个筛选。
+  settlementCurrency: string;
   /** compareCurrency 下的等值成本（最小货币单位），unavailable 时为 null */
   costInCompareCurrency: number | null;
   effectiveRate: number | null;
@@ -69,6 +74,7 @@ export function recommendPaymentMethods(params: {
           paymentMethodId: method.id,
           label: method.label,
           kind: method.kind,
+          settlementCurrency: method.settlementCurrency,
           costInCompareCurrency: null,
           effectiveRate: null,
           requiresConversion,
@@ -94,6 +100,7 @@ export function recommendPaymentMethods(params: {
           paymentMethodId: method.id,
           label: method.label,
           kind: method.kind,
+          settlementCurrency: method.settlementCurrency,
           costInCompareCurrency: null,
           effectiveRate,
           requiresConversion,
@@ -107,6 +114,7 @@ export function recommendPaymentMethods(params: {
       paymentMethodId: method.id,
       label: method.label,
       kind: method.kind,
+      settlementCurrency: method.settlementCurrency,
       costInCompareCurrency: Math.round(costInCompareCurrency),
       effectiveRate,
       requiresConversion,

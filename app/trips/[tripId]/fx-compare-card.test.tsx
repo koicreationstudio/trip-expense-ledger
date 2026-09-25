@@ -39,7 +39,16 @@ const SAVED_PREFERENCE = {
   amountYuan: 1000,
 };
 
-function mockFetch(putSpy: (url: string, body: string) => void, preference: unknown = SAVED_PREFERENCE) {
+function mockFetch(
+  putSpy: (url: string, body: string) => void,
+  preference: unknown = SAVED_PREFERENCE,
+  // fix(2026-09-26 第七十一轮，任务③)：`settlementCurrency` 是这轮新加的字段——
+  // fx-compare-card.tsx 现在拿它跟"我持有"比对来决定要不要列出这张卡。默认给
+  // 'MYR'，配 SAVED_PREFERENCE 默认 holdCurrency='MYR'，让这份 mock 在"round66/
+  // round67/round68 那批既有测试"里维持原来的行为（能看到 DIAG测试卡），需要
+  // 测"结算币种不匹配"场景的用例自己传别的值覆盖。
+  cardSettlementCurrency = 'MYR'
+) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     const method = (init?.method ?? 'GET').toUpperCase();
@@ -63,6 +72,7 @@ function mockFetch(putSpy: (url: string, body: string) => void, preference: unkn
               paymentMethodId: PAYMENT_METHOD_ID,
               label: 'DIAG测试卡',
               kind: 'card',
+              settlementCurrency: cardSettlementCurrency,
               costInCompareCurrency: 100000,
               unavailable: false,
               requiresConversion: true,
@@ -305,7 +315,7 @@ describe('FxCompareCard — 第六十八轮任务 K：可比支付方式 0 行�
     expect(putSpy).not.toHaveBeenCalled();
   });
 
-  it('情况②「我持有」的币种不是行程本位币（持有 USD，本位币 MYR）——即使配置过支付方式，挂载即看到渠道参考价，且 0 次 PUT', async () => {
+  it('情况②「我持有」的币种不是行程本位币（持有 USD，本位币 MYR）且没有一张卡结算币种是 USD——挂载即看到渠道参考价，且 0 次 PUT（第七十一轮起：这条不再是因为"hold≠base 一律不给看卡"，是因为这张 mock 卡结算币种是 MYR，跟持有的 USD 对不上，见下面新增的"结算币种匹配"用例验证 hold≠base 时也能看到卡）', async () => {
     const putSpy = vi.fn();
     const preferenceHoldNotBase = {
       holdCurrency: 'USD',
@@ -313,6 +323,8 @@ describe('FxCompareCard — 第六十八轮任务 K：可比支付方式 0 行�
       enabledCompareKeys: ['channel:wise', 'channel:tng', 'channel:atm', 'channel:moneychanger', 'channel:alipay'],
       amountYuan: 1000,
     };
+    // 故意保持默认 cardSettlementCurrency='MYR'——这张卡结算币种跟"我持有 USD"对
+    // 不上，cardGroupRows 应该还是 0 行，这个断言在第七十一轮改动前后都成立。
     vi.stubGlobal('fetch', mockFetch(putSpy, preferenceHoldNotBase));
 
     render(
@@ -347,5 +359,107 @@ describe('FxCompareCard — 第六十八轮任务 K：可比支付方式 0 行�
     fireEvent.click(screen.getByText('看换汇渠道参考价 ▾'));
     await waitFor(() => expect(screen.getByText('Wise')).toBeTruthy());
     expect(screen.getByText('收起换汇渠道参考价 ▲')).toBeTruthy();
+  });
+});
+
+describe('FxCompareCard — 第七十一轮任务③：我持有≠本位币也要列出结算币种匹配的支付方式', () => {
+  it('持有 USD（本位币 MYR），有一张卡结算币种也是 USD——这张卡要出现在"我的支付方式"组里，不再因为 hold≠base 被排除', async () => {
+    const putSpy = vi.fn();
+    const preferenceHoldUSD = {
+      holdCurrency: 'USD',
+      targetCurrency: 'THB',
+      enabledCompareKeys: ['channel:wise', 'card:pm-round66-test'],
+      amountYuan: 1000,
+    };
+    // 这次让 mock 卡的结算币种也是 'USD'，正好匹配"我持有 USD"。
+    vi.stubGlobal('fetch', mockFetch(putSpy, preferenceHoldUSD, 'USD'));
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB', 'USD']} />
+    );
+
+    expect(await screen.findByText('DIAG测试卡')).toBeTruthy();
+    // 结算币种匹配、卡组非空 ⇒ 不再是"0 行强制展开渠道"那条路径，默认渠道组
+    // 收起（还能看到"看换汇渠道参考价"这个展开入口）。
+    expect(screen.getByText('看换汇渠道参考价 ▾')).toBeTruthy();
+
+    // 文案说明区要如实提到这几张卡是按"我持有"筛出来的，不是全量。
+    expect(screen.getByText(/结算币种是/)).toBeTruthy();
+  });
+
+  it('顶部结论行：展开渠道组后，"最划算"跨渠道+我的支付方式全体比较，不再收窄在卡片组内部', async () => {
+    const putSpy = vi.fn();
+    // 把这张卡的成本压得很差（costInCompareCurrency 故意设一个很大的数字，implied
+    // rate 会很低），保证真实的"最划算"落在某个渠道行上，用来证明徽章/结论没有被
+    // 收窄成"只在卡片组里选"。
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const method = (init?.method ?? 'GET').toUpperCase();
+        if (url.includes('/fx-compare-preference') && method === 'GET') {
+          return new Response(JSON.stringify({ preference: SAVED_PREFERENCE }), { status: 200 });
+        }
+        if (url.includes('/fx-compare-preference') && method === 'PUT') {
+          putSpy();
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        }
+        if (url.includes('/fx-mid-rates')) return new Response('fail', { status: 500 });
+        if (url.includes('/fx-recommendation') && method === 'POST') {
+          return new Response(
+            JSON.stringify({
+              recommendations: [
+                {
+                  paymentMethodId: PAYMENT_METHOD_ID,
+                  label: 'DIAG测试卡（故意划不来）',
+                  kind: 'card',
+                  settlementCurrency: 'MYR',
+                  costInCompareCurrency: 100000000, // 故意很贵，implied rate 很差
+                  unavailable: false,
+                  requiresConversion: true,
+                  cashMarkupEstimated: false,
+                },
+              ],
+            }),
+            { status: 200 }
+          );
+        }
+        throw new Error(`未预期的请求：${method} ${url}`);
+      })
+    );
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB']} />
+    );
+
+    await waitFor(() => expect(screen.getByText('DIAG测试卡（故意划不来）')).toBeTruthy());
+    // 展开渠道组，让 Wise/TNG 等渠道行也进入"当前可见"范围。
+    fireEvent.click(screen.getByText('看换汇渠道参考价 ▾'));
+    await waitFor(() => expect(screen.getByText('Wise')).toBeTruthy());
+
+    // 顶部结论行出现，且指向的是"Wise"（渠道组里最划算的一行），不是那张故意划不来
+    // 的卡——证明比较范围跨了组，不再收窄在"我的支付方式"内部。
+    const conclusion = await screen.findByText(/最划算：Wise/);
+    expect(conclusion).toBeTruthy();
+
+    // 徽章也应该落在 Wise 那一行，不是卡片那一行。
+    const wiseRow = screen.getByText('Wise').closest('li');
+    expect(wiseRow?.textContent).toContain('✓最划算');
+    const cardRow = screen.getByText('DIAG测试卡（故意划不来）').closest('li');
+    expect(cardRow?.textContent).not.toContain('✓最划算');
+  });
+
+  it('渠道组标题标注"（参考价）"，跟真实持有的支付方式做区分', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy, SAVED_PREFERENCE));
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB']} />
+    );
+    await waitFor(() => expect(screen.getByText('DIAG测试卡')).toBeTruthy());
+    fireEvent.click(screen.getByText('看换汇渠道参考价 ▾'));
+
+    expect(await screen.findByText('渠道换汇（参考价）')).toBeTruthy();
+    expect(screen.getByText('我的支付方式')).toBeTruthy();
   });
 });
