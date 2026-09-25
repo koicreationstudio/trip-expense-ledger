@@ -2,6 +2,7 @@
 
 import { useRef, useState, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { COMMON_CATEGORIES } from '@/lib/domain/categories';
 import { equalSplit, rescaleSplitToBaseCurrency } from '@/lib/domain/split';
@@ -21,12 +22,18 @@ interface Participant {
   displayName: string;
 }
 
+interface QuickAddPaymentMethodOption {
+  id: string;
+  label: string;
+}
+
 const API_ERROR_LABEL: Record<string, string> = {
   fx_rate_required: '币种不是本位币，要填汇率才能提交',
   invalid_payer: '代垫人不在这个行程里',
   duplicate_split_participant: '分摊名单里有人重复了',
   invalid_split_participant: '分摊名单里有人不在这个行程里',
   splits_do_not_sum_to_total: '自定义分摊金额总和要等于消费总金额',
+  payment_method_required: '要选一个支付方式才能保存',
 };
 
 type SplitMode = 'onlyMe' | 'equal' | 'custom';
@@ -50,17 +57,25 @@ const SPLIT_MODE_OPTIONS: { value: SplitMode; label: string }[] = [
  * 全额（等价于 equalSplit(amountBaseCurrency, [myParticipantId])，equalSplit 单人
  * 时本来就是全额，split.test.ts 已经覆盖这个行为）。「平分」不传 splits，交给后端
  * equalSplit 自动分。「自定义分摊」点开才展出逐人勾选 + 金额输入。
+ *
+ * fix(2026-09-26 第七十一轮，任务⑦)：这个组件代垫人恒等于「我自己」（见上面
+ * "代垫人固定为「我自己」"那段），所以支付方式必填这条规则在这里没有"代垫给别人
+ * 不强制"的例外——每一笔都要选。跟 expense-form.tsx 用同一套判断口径（后端
+ * `payerParticipantId === identity.participantId` 时拒绝空 paymentMethodId），
+ * 这里前端提前拦一次，行为跟完整表单保持一致。
  */
 export function QuickAddExpense({
   tripId,
   baseCurrency,
   myParticipantId,
   participants,
+  paymentMethods,
 }: {
   tripId: string;
   baseCurrency: string;
   myParticipantId: string;
   participants: Participant[];
+  paymentMethods: QuickAddPaymentMethodOption[];
 }) {
   const router = useRouter();
 
@@ -86,6 +101,7 @@ export function QuickAddExpense({
   const [currency, setCurrency] = useState(baseCurrency);
   const [merchant, setMerchant] = useState('');
   const [fxRateUsed, setFxRateUsed] = useState('');
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,6 +136,10 @@ export function QuickAddExpense({
     0
   );
   const splitMismatch = splitMode === 'custom' && splitCentsTotal !== amountCentsTotal;
+  // fix(第七十一轮，任务⑦)：代垫人恒等于自己（见组件顶部大注释），支付方式没有
+  // "代垫给别人不强制"这条例外，永远必填。`paymentMethods.length===0` 时选不出
+  // 任何值，这里天然为 true，提交按钮保持禁用，UI 另外给一句引导去配置。
+  const paymentMethodMissing = !selectedPaymentMethodId;
 
   function handleEqualizeSplit() {
     if (includedParticipants.length === 0) return;
@@ -148,6 +168,7 @@ export function QuickAddExpense({
     setCurrency(baseCurrency);
     setMerchant('');
     setFxRateUsed('');
+    setSelectedPaymentMethodId(null);
     setSplitMode('equal');
     setSplitIncluded(Object.fromEntries(participants.map((p) => [p.id, true])));
     setSplitAmounts({});
@@ -168,6 +189,12 @@ export function QuickAddExpense({
     }
     if (needsManualFxRate && !fxRateUsed) {
       setError(`币种不是本位币 ${baseCurrency}，要填汇率（1 ${currency} = 多少 ${baseCurrency}）`);
+      return;
+    }
+    // fix(第七十一轮，任务⑦)：提交按钮虽然已经在 paymentMethodMissing 时禁用，跟
+    // expense-form.tsx 一样再拦一层防御性校验，防止按钮判断哪天被改漏。
+    if (paymentMethodMissing) {
+      setError('要选一个支付方式才能保存');
       return;
     }
 
@@ -204,6 +231,7 @@ export function QuickAddExpense({
           amount: amountCents,
           currency,
           fxRateUsed: needsManualFxRate ? Number(fxRateUsed) : undefined,
+          paymentMethodId: selectedPaymentMethodId ?? undefined,
           category: category.trim(),
           merchant: merchant.trim() || undefined,
           expenseDate: new Date().toISOString(),
@@ -288,7 +316,7 @@ export function QuickAddExpense({
           />
           <button
             type="submit"
-            disabled={submitting || splitMismatch}
+            disabled={submitting || splitMismatch || paymentMethodMissing}
             className="inline-flex min-h-[28px] shrink-0 items-center justify-center rounded-full bg-white px-3 text-[11px] font-medium text-ink transition-colors hover:bg-white/90 disabled:opacity-50"
           >
             {submitting ? '记中…' : '记'}
@@ -306,6 +334,31 @@ export function QuickAddExpense({
           aria-label="商家名称"
           className="field-input-dark"
         />
+
+        {/* fix(2026-09-26 第七十一轮，任务⑦)：快速记账的代垫人恒等于自己，支付方式
+            必填，没有"代垫给别人不强制"这条例外——跟 expense-form.tsx 同一套 UI
+            模式（有得选就下拉，没配置过就给一句引导去设置页，不能让用户卡在一个
+            选不出任何值、也不知道为什么按钮点不动的表单前）。 */}
+        {paymentMethods.length > 0 ? (
+          <SelectDropdown
+            value={selectedPaymentMethodId ?? ''}
+            onChange={(next) => setSelectedPaymentMethodId(next || null)}
+            ariaLabel="支付方式"
+            triggerClassName="field-input-dark w-full"
+            options={[
+              { value: '', label: '选支付方式' },
+              ...paymentMethods.map((m) => ({ value: m.id, label: m.label })),
+            ]}
+          />
+        ) : (
+          <p className="text-[10px] text-hero-label">
+            这趟行程还没设置支付方式，先去{' '}
+            <Link href={`/trips/${tripId}/payment-methods`} className="tap-link underline">
+              支付方式设置
+            </Link>{' '}
+            配一个，记得勾选「本行程启用」，之后才能在这里记账。
+          </p>
+        )}
 
         {needsManualFxRate && (
           <input

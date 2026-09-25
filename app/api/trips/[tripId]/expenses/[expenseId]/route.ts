@@ -9,6 +9,7 @@ import { updateExpenseSchema } from '@/lib/validation/schemas';
 import { validateSplits } from '@/lib/http/expense-validation';
 import { deleteReceipt } from '@/lib/storage/receipts';
 import { findDirectDebitWallet } from '@/lib/domain/wallet-balance';
+import { loadEnabledPaymentMethodIds } from '@/lib/domain/payment-method-scope';
 
 interface Context {
   params: { tripId: string; expenseId: string };
@@ -69,10 +70,16 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
   // fix(2026-09-25 第七十轮)：跟 POST 同一条规则——编辑后代垫人如果是记录人自己，
   // 支付方式不能是空的。PATCH 是部分更新语义，body 里没传的字段要按"维持原值"
   // 算最终结果，再判断这个最终结果是否合规，不能只看这次请求body 里有没有传。
+  // fix(2026-09-26 第七十一轮)：跟 POST 同一处补丁——这趟行程压根没启用任何支付
+  // 方式时不能死堵编辑操作（不然连改个备注都会被"必须选支付方式"卡住），只在
+  // 真的有支付方式可选时才要求必选。
   const nextPayerParticipantId = body.payerParticipantId ?? existing.payerParticipantId;
   const nextPaymentMethodId = body.paymentMethodId !== undefined ? body.paymentMethodId : existing.paymentMethodId;
   if (nextPayerParticipantId === identity.participantId && !nextPaymentMethodId) {
-    return NextResponse.json({ error: 'payment_method_required' }, { status: 400 });
+    const enabledIds = await loadEnabledPaymentMethodIds(db, params.tripId, identity);
+    if (enabledIds.size > 0) {
+      return NextResponse.json({ error: 'payment_method_required' }, { status: 400 });
+    }
   }
 
   const amountOrCurrencyChanged = body.amount !== undefined || body.currency !== undefined;
@@ -106,9 +113,11 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
     if (splitError) return splitError;
   }
 
-  const nextPayerParticipantId = body.payerParticipantId ?? existing.payerParticipantId;
-  const nextPaymentMethodId =
-    body.paymentMethodId !== undefined ? body.paymentMethodId : existing.paymentMethodId;
+  // fix(2026-09-26 第七十一轮)：`nextPayerParticipantId`/`nextPaymentMethodId` 已经
+  // 在上面第 72-73 行为"支付方式必填"校验算过一次（同一个部分更新合并规则：body
+  // 里没传就维持 existing 原值），这里直接复用，不重复声明——这两组值在整个 PATCH
+  // 函数里只有一个真实含义（"这次更新完成后最终会是什么"），不该有两份独立算出来
+  // 却又必须永远保持一致的副本。
 
   // fix(第七十轮，"编辑改支付方式旧钱包不退回"bug 根治)：老注释在这里写的是
   // "编辑时改支付方式只更新标记字段，不回溯调整钱包余额"——这是真实事故的根因：

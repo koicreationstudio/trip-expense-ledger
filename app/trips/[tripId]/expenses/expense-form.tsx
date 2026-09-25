@@ -894,7 +894,7 @@ export function ExpenseForm({
       <div className="flex flex-col items-center gap-2">
         <button
           type="submit"
-          disabled={submitting || splitMismatch}
+          disabled={submitting || splitMismatch || paymentMethodMissing}
           className="big-cta"
         >
           {submitting ? '保存中…' : isEdit ? '保存修改' : '记这笔账'}
