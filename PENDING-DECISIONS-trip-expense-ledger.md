@@ -2,7 +2,7 @@
 
 ## 【2026-09-25，第六十八轮，J：约 14 处金额输入框统一加千分位（重新 grep 后落地 10 处） + K：汇率比价卡可比支付方式 0 行时渠道参考价自动展开，claim id=2026-09-25_081517_49d566f5（J）+ 2026-09-25_081519_3d4ebee0（K），commit `dd759b7`，Version ID `d00007cd-f671-4a1b-8c56-aeed051fc352`】
 
-**先说明一个交接缺口**：这轮开工前发现第六十七轮（任务 H"兑换金额输入框加千分位"+ 任务 I"说明文字断行优化"，commit `ae15f24`+`5cb1122`）从来没有补写进这份文档——commit message 里有记录，但没有对应的 PENDING-DECISIONS 章节。这轮没有花时间补写那个历史空档（不在这次任务范围内），如实记录这个缺口，提醒下一轮如果要查 H/I 的完整验收记录，得去 git log 里翻 commit message，这份文档里目前查不到。
+**先说明一个交接缺口（2026-09-25 补记：已解决）**：这轮开工前发现第六十七轮（任务 H"兑换金额输入框加千分位"+ 任务 I"说明文字断行优化"，commit `ae15f24`+`5cb1122`）从来没有补写进这份文档——commit message 里有记录，但没有对应的 PENDING-DECISIONS 章节。这轮没有花时间补写那个历史空档（不在这次任务范围内），如实记录这个缺口。**后续更新**：kongsi-trip 转发层任务（claim id `2026-09-25_165045_670f0109`）开工时，工作树里发现这段第六十七轮记录其实一直存在于本地磁盘、只是没被提交进 git（大概率是 round67 那次 session 写完文档忘了 commit），已经补提交并按时间顺序插回文档正确位置（本节下方），不用再去 git log 翻 commit message 查了。
 
 延续同一批交付，复用同一个 worktree（`trip-expense-ledger-worktrees/wallet-deeplink-and-form-reset`，分支 `fix/wallet-deeplink-and-form-reset`）。开工前用 `git fetch` 确认没有新的并行提交（HEAD 跟 origin/main 一致，`5cb1122`）。
 
@@ -129,6 +129,58 @@ claim 板两条（`2026-09-25_081517_49d566f5` J / `2026-09-25_081519_3d4ebee0` 
 6. **K"顺带去掉死按钮"这个新判断**——这轮独立验收没有涉及这个产品判断本身对不对，维持"需要 Remy 确认认不认可"的待办状态，没有变。
 
 claim 板两条状态更新：**`2026-09-25_081517_49d566f5`（J）标 `done`**（真实生产 API+D1 验证 + 单测 + mutation 全部通过，唯一剩的两条是移动端键盘/74px 宽度这种低风险的"未实测但理论上没问题"观察项，不是功能性缺陷，判断可以先标完成，两条观察项写进这份文档留痕）；**`2026-09-25_081519_3d4ebee0`（K）标 `done`**（独立 ui-auditor 真机截图通过 + D1 零漂移，功能性验收完整，"去掉死按钮"这个产品判断待 Remy 表态，不影响功能是否完成的判断，单独留痕即可）。
+
+## 【2026-09-25，第六十七轮，汇率比价卡兑换金额千分位(H)+说明文字断行优化(I)，claim id=2026-09-25_071748_4ea4d9bd(H)+2026-09-25_071750_71b1c55c(I)，commit `ae15f24`(代码)+`5cb1122`(截图)，Version ID `158bdc83-8d70-4c71-a44d-20dffe4c0481`】
+
+背景：同一个 worktree（`trip-expense-ledger-worktrees/wallet-deeplink-and-form-reset`，分支 `fix/wallet-deeplink-and-form-reset`）继续用，开工前 `git fetch` 确认跟 origin/main 完全同步（无落后无超前）。全程只用新建的测试账号/测试行程操作，Remy 真实「🇭🇰2026香港」行程（`trip_id=f78a6b5e-8612-4097-8bfd-88a5db664045`）只在最后用临时插入的 `session` 行只读打开看过一次，没有点任何控件、没有碰金额输入框。
+
+### H. 汇率比价卡兑换金额输入框加千分位
+
+`app/trips/[tripId]/fx-compare-card.tsx` 的 `#fx-compare-amount` 输入框。
+
+**格式化逻辑摆在哪一层**：新增 `lib/format-thousands.ts`，纯函数、不碰任何 state 形状。`amountYuan` state 保持原样（不带逗号的纯数字字符串，`amount = Number(amountYuan) || 0`、`saved.amountYuan`、PUT payload 全部不变），`<input>` 的 `value` 改成 `formatThousands(amountYuan)`，`type` 从 `"number"` 换成 `"text"` + `inputMode="decimal"`（`type="number"` 原生不支持显示逗号），去掉 `min`/`step`（对 text 无效），改用正则 `/^\d*\.?\d*$/` 校验。`onChange` 里：先从 `e.target.value`（浏览器已经原生插入这次按键之后的字符串）算出"光标之前有几个有意义字符（数字/小数点，逗号不算）"，再用 `stripThousands` 剥逗号拿到候选值，正则校验不过直接 `return`（不 setState、不调用 `markUserInteracted()`，非法输入等于没发生）；校验过了才 `markUserInteracted()` + `setAmountYuan(候选值)`，同时把"有意义字符计数"记进 `pendingCursorMeaningfulCountRef`。**光标定位**单独一个 `useLayoutEffect`（依赖 `amountYuan`），只在这个 ref 不是 null 时才用 `positionForMeaningfulCount` 在新的格式化字符串里换算回光标位置、调用 `setSelectionRange`，用完立刻清空 ref——组件挂载、从 D1 恢复存档这些派生 setState 路径根本不会碰这个 ref，天然不会触发意外的光标跳动或重定位。
+
+**跟 round66"零交互不写 D1"根治的关系**：`hasUserInteractedRef` 的四个真实交互入口一个没多也一个没少，兑换金额 onChange 这个入口位置没变，只是里面判断逻辑从"直接 setState"变成"先校验再 setState"——非法输入被拦下时既不碰 `hasUserInteractedRef` 也不碰 state，行为上等同"什么都没发生"，不会绕开这层保护。
+
+**单测清单**（`lib/format-thousands.test.ts` 14 条 + `fx-compare-card.test.tsx` 新增 6 条，共 20 条新增）：
+- 格式化/解析往返：100/1000/12500.5/0/空字符串/1234567 全覆盖，`formatThousands`↔`stripThousands` 互逆。
+- 小数点边界："1234."（刚打完点还没接小数位）原样保留、"1234.50" 尾随零保留。
+- 光标定位配对：`countMeaningfulCharsBefore`/`positionForMeaningfulCount` 往返一致 + 一个完整的"从 `1,234` 中间插入一位数字"模拟场景（断言新光标落在刚打的那个字符后面，不是被逗号插入挤到别处）+ 末尾打字场景 + 越界/负数兜底。
+- 组件级：挂载后展示 `1,000`（不是裸 `1000`）、打字即时格式化、粘贴带逗号数字"12,500"能剥出 12500 不是 NaN、清空展示为空、"1234.5"格式化成"1,234.5"不在小数点后乱加逗号、非法字符（字母/负号/多个小数点）静默拒绝且不触发 PUT。
+
+**挂载后 0 次 PUT 验证**：复用 round66 现成的两条回归测试（挂载→载入存档→新卡默认勾选之后必须 0 次 PUT；用户真实操作后必须恰好 1 次 PUT），这次改动之后重新跑了一遍，两条都还是绿的，证明新的格式化代码路径没有引入新的意外调用点。另外单独写了一条临时 sanity 测试（未提交进仓库，验完即删）专门确认"在兑换金额输入框里真的打字"这一个入口本身依然能触发 1 次带正确数值（`amountYuan: 2500`，不是带逗号的字符串）的 PUT，证明 H 这次改动没有意外把这唯一一个交互入口的写入能力也一起拦掉。
+
+**mutation 验证**：①注释掉正则校验那一行 → 10 条测试里 1 条真的红（非法字符测试）；②把 `formatThousands` 里的分组正则改成直接返回不分组的 `intPart` → 11 条测试红（往返测试+组件千分位展示测试全灭）。两次都在验完后原样恢复。
+
+**横扫同类**：`grep type="number"` 扫到还有 `quick-add-expense.tsx`（快速记账金额、手动汇率、自定义分摊每人金额）、`expenses/expense-form.tsx`（消费金额、汇率、参与人分摊金额）、`payment-methods/payment-methods-manager.tsx`（汇率加点%/境外手续费%/固定费/返现%/钱包当前余额）、`exchange/exchange-form.tsx`（拿出多少/本次汇率/换到多少×2/存款手续费）共 4 个文件、约 14 处金额类输入框都缺千分位。这轮**一个都没有动**：范围明显不是"一两个文件"，而且至少两处牵连历史联动逻辑——`expense-form.tsx` 的参与人分摊金额输入框有"恰好 2 人时填一个另一个自动算余数"的联动（`onChange` 里读 `amountCentsTotal` 反算），`quick-add-expense.tsx` 有 `resetForm()` 生命周期耦合（这个 worktree 本身分支名就叫 `wallet-deeplink-and-form-reset`，表单重置是这个文件的历史敏感区）——照原计划应该"发现牵连历史逻辑就不擅自动手，只如实报告"，留给下一轮单独评估要不要做、按什么优先级做。
+
+### I. 汇率比价卡说明文字 390px 断行优化
+
+同一个文件，文案内容一个字没改，给下面几处术语短语包 `<span className="whitespace-nowrap">`：「支付方式」页、"⚙自选比较项"（连引号一起包，出现两处）、"我持有 {baseCurrency}"（连引号一起包）、「我持有」、本位币（{baseCurrency}）、换汇渠道、我的支付方式、「我持有/目标币种」。
+
+**改前改后截图对比**（`audit-diffs/fx-compare-text-wrap/`，全部用新建测试行程，390×844 视口）：
+- `before/after-390-payment-setup-cta.png`——"先去 支付方式设置 加几张卡/现金，"我持有 MYR"时就能一起比较刷卡划不划算。"（无支付方式态）。这条在这次测的具体文案长度下，改前改后在 390px 的实际断行位置**一样**（自然换行点本来就落在术语边界上，没有触发本来会拦腰截断的场景）；nowrap 包装这次是防御性补强（防以后文案变长、字体变大、iOS 系统字体缩放等场景下才会显形的截断），不是这条文案本身有肉眼可见的改善。
+- `before/after-390-pm-configured.png`——"你在「支付方式」页配置的支付方式已经并入上面"⚙自选比较项"，取消勾选哪张卡它就会从下面列表消失（用的是真实汇率加点/手续费）。"（有支付方式态）。同样，这个具体宽度下改前改后断行位置一样，属于防御性补强。
+- `before/after-390-hold-not-base.png`——"「我持有」选的不是这趟行程本位币（MYR）时，只比较换汇渠道，不比较我的支付方式——两者的钱是从不同基准算出来的，混在一起比不公平。"这条改前改后断行位置也一样（都在"不比较"和"我的支付方式"之间断，没有拦腰截断"我的支付方式"或"「我持有」"这几个术语），nowrap 同样是防御性补强。
+- `after-390-no-compare-keys.png`——"自选比较项都取消勾选了——去上面"⚙自选比较项"里勾几个看看。"，确认这条短句本身不换行，不受影响。
+
+**如实说明**：这几条具体文案在 390px 这个测试宽度下，改前就没有出现题目描述里预期的"拦腰截断术语"这种明显问题（可能是因为字号/容器宽度的具体组合刚好让自然换行点落在了术语边界上），所以这次能拿出的是"防御性加固 + 确认没有回归"的证据，而不是一组"改前明显难看、改后明显变好看"的对比照。如果 Remy 记得的具体难看场景是某个特定的浏览器字体设置、某个特定手机型号、或者某条我没测到的文案，需要她指出具体是哪一条/哪个场景，好针对性复核。
+
+### 生产验收
+
+- 本地：`npx tsc --noEmit`（0 错误）、`npx eslint .`（0 警告 0 错误）、`npx vitest run`（33 个文件 211 个测试全过，改动前 33 个文件 191 个，这轮新增 20 个）。
+- `git fetch` 确认无新并行提交 → `safe_commit.py` 提交代码（commit `ae15f24`）→ `git push origin HEAD:main` fast-forward 成功 → `./deploy.sh` 五关（工作树干净+已推/lint/typecheck/test/build+wrangler deploy/回读）全过，Version ID `158bdc83-8d70-4c71-a44d-20dffe4c0481`，`/api/health` 回读 200。
+- **生产真机验收**：三个新建的测试账号+测试行程（`7e06c4ca-d3fc-43cb-9643-bdf9e2644ec8`/`cb216f92-980f-4252-8629-3ab64066816b`/`4d15c8bc-de5c-45ed-aec6-bda746cbefb8`，其中一个带一张测试支付方式"测试现金"）验证了千分位展示（`1,000`）、光标定位、四种文案分支的断行，全部符合预期。
+- **Remy 真实「🇭🇰2026香港」行程验收**：直接往 `session` 表插入一条临时行（`user_agent='round67-QA-temp-readonly-verify'`，绑到行程 owner participant，仿照第六十四轮"插临时 session 只读验收"的做法），浏览器额外加了一层 Playwright 请求拦截（除导航本身 GET/HEAD 外，任何非 GET 请求一律 abort），390px 视口打开行程主页，只看不点：确认兑换金额输入框显示 `1,000`（不是裸 `1000`），确认"「我持有」选的不是这趟行程本位币（HKD）时，只比较换汇渠道，不比较我的支付方式……"这条文案渲染正常、术语没有被拦腰截断。全程拦截网络日志显示两条 `fx-recommendation` POST 被主动 abort（`net::ERR_FAILED`，这是页面自动的比价请求，被我方拦截网络挡掉，不是"点了什么"触发的），**没有任何一条 `fx-compare-preference` PUT 请求**，也没有点击任何控件、没有输入任何字符。截图 `hk-real-trip-390-readonly.png`（执行时临时目录，未进仓库，只是核对用）。验收完立刻 `DELETE FROM session WHERE id='668beb73-...'` 删除这条临时行并回读 `COUNT(*)=0` 确认。
+- **D1 三个基准数字，验收前后对照**：`expense` 表 `trip_id=f78a6b5e...` 行数 11 → 11（没变）；`wallet` 表行数 3 → 3（没变）；`fx_compare_preference.updated_at` 1790266709619 → 1790266709619（一个字没变）。
+- **测试数据清理**：三个测试行程 + 一张测试支付方式 + 两个测试账号，`DELETE FROM trip WHERE id IN (...)`（级联清掉 participant/expense/wallet/fx_compare_preference/trip_payment_method_enabled/session）+ `DELETE FROM user WHERE id IN (...)`（级联清掉 user_session/payment_method），删完逐表 `SELECT COUNT(*)` 核对 `trip_c`/`user_c`/`participant_c`/`pm_c`/`user_session_c`/`fxpref_c` 全部归零。
+- **没有做/留给下一轮判断的事**：
+  1. H 的横扫同类（`quick-add-expense.tsx`/`expense-form.tsx`/`payment-methods-manager.tsx`/`exchange-form.tsx` 共 4 个文件约 14 处金额输入框缺千分位）这轮完全没做，需要排期判断优先级，其中 `expense-form.tsx` 分摊金额联动和 `quick-add-expense.tsx` 的 `resetForm()` 耦合建议单独仔细设计再动手。
+  2. I 的四条文案在这次测试的宽度/内容组合下，改前就没有观察到题目描述的"拦腰截断"现象，如实记录成"防御性加固+确认无回归"，不是"肉眼可见的改善对比"；如果 Remy 记得具体是哪个场景断得难看，需要她指出来针对性复核。
+  3. 没有在这一轮碰到"我持有 MYR 时汇率比价卡默认一行价格都看不到"这个已知待定问题——这次访问真实行程时"我持有"默认是 MYR，比价列表本来就应该按这个已知行为不显示任何一行（`showCards` 为 false 且 `channelGroupExpanded` 默认收起），跟这轮改动无关，没有额外触碰或调查这个问题。
+  4. `ui-auditor` 独立真机走查这轮没有做（按 PM 交代，这一步由 lifeos-pm 之后单独派发）。
+
+---
 
 ## 【2026-09-25，第六十六轮，根治汇率比价卡"零交互也 PUT fx_compare_preference"（round64/65 遗留）+ 顺带修基准换算卡片网格排列不对称（Bug G），claim id=2026-09-25_003154_9119dcee（主任务）+ 2026-09-25_003315_ac3f9760（Bug G），commit `8a7bd2a`+`380695a`，Version ID `73092143-3582-4afd-a581-3e8890fcc309`（主任务）+ `1c5d56fd-a9a7-444a-83b2-bb97314d737c`（Bug G）】
 
