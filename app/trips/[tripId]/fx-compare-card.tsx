@@ -8,7 +8,7 @@ import { deriveMidRate } from '@/lib/fx/derive-mid-rate';
 import { resolveHoldCandidates, resolveTargetCandidates, resolveDefaultTarget } from '@/lib/fx/fx-compare-defaults';
 import { SelectDropdown, useDismissableOpen } from '@/components/select-dropdown';
 import { Switch } from '@/components/switch';
-import { findBestCardOfferGlobalIndex } from '@/lib/domain/fx-best-offer';
+import { findBestOfferIndex } from '@/lib/domain/fx-best-offer';
 import { isSameFxComparePreference, type FxComparePreferenceSnapshot } from '@/lib/domain/fx-compare-preference-diff';
 import { quickBaseGridClassName } from '@/lib/domain/quick-base-grid';
 import {
@@ -110,6 +110,19 @@ import {
  *    四个新增基准行 + 给已有行补上 PHP/LKR 两列，PHP/LKR 的数值是拿 open.er-api
  *    同源的 USD 基准换算（1 USD≈62.76 PHP、1 USD≈329.13 LKR，2026-09-23 查证），
  *    再用这张表已有的 USD→其它币种汇率交叉推算出来的，不是凭空编的。
+ * 8. fix(2026-09-26 第七十一轮，任务③，Remy 明确要求"我持有≠本位币也要列出我的
+ *    支付方式")：推翻上面第 1 点"只有我持有===本位币才显示我的支付方式"这条规则。
+ *    现在只要 `hasPaymentMethods` 为真就有资格显示这组卡，具体列哪几张卡改成用
+ *    `settlementCurrency === effectiveHold` 筛（不是任意场景都可比，是"结算币种
+ *    刚好是我此刻持有的这个币种"的那几张卡）。数学前提：`/api/trips/{tripId}/
+ *    fx-recommendation` 现在显式传 `compareCurrency: effectiveHold`（不再依赖
+ *    服务器端默认退回 trip.baseCurrency），`impliedRate = 目标币种金额 / 成本`
+ *    这个隐含汇率公式只有在 compareCurrency===我持有 时数学上才成立——这次改动
+ *    从"隐式刚好相等（因为两个都固定等于本位币）"变成"显式传我持有"，公式前提
+ *    没有被破坏，只是覆盖范围从"我持有必须是本位币"放宽到"我持有可以是任意
+ *    支持的币种"。"✓最划算"徽章也从第 65 轮"只在我的支付方式内部比"改回跨
+ *    当前可见的全部行比较（渠道+卡，只要是用户此刻真的看得到的行），见下面
+ *    `findBestOfferIndex`/`visibleForBestOffer` 的用法。
  */
 
 // fix(2026-09-17 第二十二轮)：这张表从"唯一数据来源"降级成"实时汇率抓不到时的
@@ -347,10 +360,13 @@ export function FxCompareCard({
   const [liveRatesFetchedAt, setLiveRatesFetchedAt] = useState<string | null>(null);
   const [liveRatesFailed, setLiveRatesFailed] = useState(false);
 
-  // fix(2026-09-23 第三十三轮，方案二)：这里只判断"有没有资格比较我的卡"（配置过
-  // 支付方式 + 我持有等于行程本位币两条业务规则），不再叠加 includeMyCards 总开关——
-  // "要不要显示某一张具体的卡"这件事下放给下面 enabledCompareKeys 逐卡过滤。
-  const showCards = hasPaymentMethods && effectiveHold === baseCurrency;
+  // fix(2026-09-23 第三十三轮，方案二)：这里只判断"有没有资格比较我的卡"，不再
+  // 叠加 includeMyCards 总开关——"要不要显示某一张具体的卡"这件事下放给下面
+  // enabledCompareKeys 逐卡过滤。
+  // fix(2026-09-26 第七十一轮，任务③)：去掉"我持有必须等于本位币"这条门槛——
+  // 只要这趟行程配置过支付方式，就有资格显示这组卡，具体哪几张卡跟"我持有"
+  // 匹配由下面 cardRows 的 settlementCurrency 过滤负责，不在这里判断。
+  const showCards = hasPaymentMethods;
 
   const fallbackMyrRates: Record<string, number> = { MYR: 1, ...FX_RATES_FALLBACK.MYR };
   const usingFallbackRates = liveRates === null;
@@ -508,10 +524,18 @@ export function FxCompareCard({
       // 换算只是为了决定"体验上大概花多少目标币种"，卡片本身的实际成本数字
       // 还是服务器用实时汇率算的，不是这里估的。
       const notionalTargetAmount = Math.round(amount * midRate * 100); // 分
+      // fix(2026-09-26 第七十一轮，任务③)：显式传 compareCurrency=effectiveHold，
+      // 不再依赖服务器端默认退回 trip.baseCurrency——见文件顶部大注释第 8 点，
+      // impliedRate 公式的数学前提就是靠这个显式传参保证的。
       const res = await fetch(`/api/trips/${tripId}/fx-recommendation`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ amount: notionalTargetAmount, expenseCurrency: effectiveTarget, forceRefresh }),
+        body: JSON.stringify({
+          amount: notionalTargetAmount,
+          expenseCurrency: effectiveTarget,
+          forceRefresh,
+          compareCurrency: effectiveHold,
+        }),
       });
       if (!res.ok) {
         setCardsError('我的支付方式比价失败，检查一下网络');
@@ -566,6 +590,11 @@ export function FxCompareCard({
 
   const cardRows: CompareRow[] = showCards
     ? (cardRecommendations ?? [])
+        // fix(2026-09-26 第七十一轮，任务③)：只列出结算币种刚好是"我持有"这个币种
+        // 的卡——不是任意一张卡都能跟"我持有多少 XX 币"这件事挂钩，比如我持有 MYR，
+        // 只有结算币种也是 MYR 的卡/现金才有意义比较，结算币种是 THB 的卡拿来跟
+        // "我持有 MYR" 比没有数学意义。
+        .filter((r) => r.settlementCurrency === effectiveHold)
         .filter((r) => enabledCompareKeys.has(`card:${r.paymentMethodId}`))
         .map((r) => {
           const notionalTargetAmountYuan = midRate ? amount * midRate : null;
@@ -583,14 +612,18 @@ export function FxCompareCard({
           // PENDING-DECISIONS 这一轮的记录），文案至少要如实说明"这笔是不需要
           // 换汇的"，不能让人误以为算法没有考虑币种差异。
           const paymentModeLabel = r.kind === 'cash' ? '现金支付' : '刷卡支付';
+          // fix(2026-09-26 第七十一轮，任务③)：这行文案原来硬编码 baseCurrency——
+          // costYuan 现在是"花掉多少我持有的 effectiveHold"（compareCurrency 已经
+          // 显式传成 effectiveHold，不再总是等于 baseCurrency），文案要跟着改用
+          // effectiveHold，不然 hold≠base 时数字单位跟文案说的币种对不上。
           const note =
             r.unavailable || costYuan === null
               ? '汇率缺失，建议手动核对'
               : r.requiresConversion
                 ? r.cashMarkupEstimated
-                  ? `现金去换钱店换 · 按约 ${DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT.toFixed(1)}% 损耗估算，折合花 ${costYuan.toFixed(2)} ${baseCurrency}（可在支付方式里填实际加点）`
-                  : `${paymentModeLabel} · 折合花 ${costYuan.toFixed(2)} ${baseCurrency}`
-                : `${paymentModeLabel} · 同币种可直接用，无需换汇，约合 ${costYuan.toFixed(2)} ${baseCurrency}`;
+                  ? `现金去换钱店换 · 按约 ${DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT.toFixed(1)}% 损耗估算，折合花 ${costYuan.toFixed(2)} ${effectiveHold}（可在支付方式里填实际加点）`
+                  : `${paymentModeLabel} · 折合花 ${costYuan.toFixed(2)} ${effectiveHold}`
+                : `${paymentModeLabel} · 同币种可直接用，无需换汇，约合 ${costYuan.toFixed(2)} ${effectiveHold}`;
           return {
             key: `card-${r.paymentMethodId}`,
             label: r.label,
@@ -610,20 +643,15 @@ export function FxCompareCard({
   // fix(2026-09-24 第五十八轮，Remy 报真 bug"同币种不该拿最划算徽章")：
   // 每一行各自记住自己在 `allRows`（全局排序后）里的原始位置（`globalIndex`），
   // 渲染时用这个位置去跟"该拿徽章的那一行"比对，不受分组视觉拆分影响。
-  // fix(第六十五轮，Remy 明确要求)："✓最划算"这次进一步收窄——只在「我的支付
-  // 方式」内部比，不跟「渠道换汇」参考价掺在一起比（渠道那组是固定点差表估算，
-  // 不是 Remy 手上真有的付款方式），改用 `findBestCardOfferGlobalIndex` 这个
-  // 专门收窄到 kind==='card' 子集里找的 chokepoint，不再是全局 `findBestOfferIndex`。
   const indexedRows = allRows.map((row, globalIndex) => ({ ...row, globalIndex }));
-  const firstEligibleIndex = findBestCardOfferGlobalIndex(indexedRows);
   // fix(2026-09-24 第五十八轮，Remy 报"渠道换汇/我的支付方式两组数字排在一起容易
   // 看串"）：从一个扁平列表改成两个视觉上明显分开的分组，各自一个小标题，顺序
   // 按 Remy 截图里出现的先后——渠道在前、我的支付方式在后。
   const channelGroupRows = indexedRows.filter((r) => r.kind === 'channel');
   const cardGroupRows = indexedRows.filter((r) => r.kind === 'card');
   // fix(第六十八轮，任务 K，Remy 明确要求)："我的支付方式"这组可比较的行数是 0
-  // 时（两种情况：①「我持有」的币种不是这趟行程的本位币，②这趟行程根本没配置
-  // 任何支付方式——`showCards`/`cardRows` 在这两种情况下本来就已经是空，
+  // 时（两种情况：①这趟行程根本没配置任何支付方式，②配了但没有一张结算币种
+  // 匹配当前"我持有"——`showCards`/`cardRows` 在这两种情况下本来就已经是空，
   // `cardGroupRows.length === 0` 天然覆盖这两种情况，不用另外判断），用户此刻
   // 完全看不到任何"我的支付方式"数据，"渠道换汇"是唯一能看的参考数据，不该还
   // 要求他们多点一下才能看到——这里把它跟手动的 `channelGroupExpanded` 状态
@@ -631,13 +659,34 @@ export function FxCompareCard({
   // 跟 round66"零交互也不该 PUT"的原则完全不冲突（`channelGroupExpanded` 本身
   // 的写入路径一个字没动，见下面 fx-compare-card.test.tsx 新增的 0 PUT 用例）。
   const effectiveChannelExpanded = channelGroupExpanded || cardGroupRows.length === 0;
+  // fix(2026-09-26 第七十一轮，任务③-②，Remy 明确要求)："✓最划算"徽章推翻第
+  // 六十五轮"只在我的支付方式内部比"这条收窄，改回跨用户当前**实际看得到**的
+  // 全部行比较——渠道组折叠时用户根本看不到那几行，让它们参与"当前最划算"的
+  // 判定没有意义（点开之后才重新算进来，`visibleForBestOffer` 依赖
+  // `effectiveChannelExpanded`，折叠状态一变这个列表自然跟着变）。用回全局
+  // 通用的 `findBestOfferIndex`（不再是收窄到 kind==='card' 子集的
+  // `findBestCardOfferGlobalIndex`），在筛出来的可见子集里找第一个有资格的行，
+  // 再把子集内的下标换算回 `globalIndex`（`indexedRows` 全局排序的原始位置），
+  // 保证跟 `groups`/`row.globalIndex === firstEligibleIndex` 这套渲染判断兼容。
+  const visibleForBestOffer = indexedRows.filter((r) => r.kind === 'card' || effectiveChannelExpanded);
+  const posWithinVisible = findBestOfferIndex(visibleForBestOffer);
+  const bestRow = posWithinVisible >= 0 ? visibleForBestOffer[posWithinVisible]! : null;
+  const firstEligibleIndex = bestRow ? bestRow.globalIndex : -1;
+  // 顶部一行结论要用的"第二名"——跟最划算比一比省了多少，纯展示，找不到第二名
+  // （只有一行可比）就不显示这段比较文字，只显示"最划算是谁"。资格判断跟
+  // `findBestOfferIndex` 同一套（未标记 unavailable + 需要经过换汇），从
+  // `bestRow` 之后接着找，不是随便找一行"另一行"——要的是真正的排名第二。
+  const secondBestRow =
+    bestRow !== null
+      ? (visibleForBestOffer.slice(posWithinVisible + 1).find((r) => r.requiresConversion) ?? null)
+      : null;
   // fix(第六十五轮，Remy 明确要求)："渠道换汇"这组默认收起（`channelGroupExpanded`
   // 初始 false），只有展开时才算进"可见分组"列表。`visibleGroups` 只用来决定要不要
   // 渲染组标题——只剩一组可见时（最常见的默认态：只有"我的支付方式"）标题是多余的，
   // 两组都可见（用户点开"看换汇渠道参考价"之后）才各自需要标题区分。
   const groups: { key: string; title: string; rows: typeof indexedRows }[] = [
     ...(effectiveChannelExpanded && channelGroupRows.length > 0
-      ? [{ key: 'channel', title: '渠道换汇', rows: channelGroupRows }]
+      ? [{ key: 'channel', title: '渠道换汇（参考价）', rows: channelGroupRows }]
       : []),
     ...(cardGroupRows.length > 0 ? [{ key: 'card', title: '我的支付方式', rows: cardGroupRows }] : []),
   ];
@@ -889,7 +938,12 @@ export function FxCompareCard({
             />
           </div>
 
-          {hasPaymentMethods && effectiveHold === baseCurrency ? (
+          {/* fix(2026-09-26 第七十一轮，任务③，推翻第三十三轮/第三十七轮这里原本
+              "我持有必须===本位币"那条判断)：现在三选一看的是"有没有配支付方式"+
+              "配的卡里有没有结算币种匹配我此刻持有的这个币种"（cardGroupRows），
+              不再看我持有是不是等于本位币——我持有 MYR、本位币 HKD，只要有张卡
+              结算币种也是 MYR，一样能列进来比。 */}
+          {hasPaymentMethods && cardGroupRows.length > 0 ? (
             // fix(2026-09-23 第三十三轮，方案二)：原本这里是"一起比较我的支付方式"
             // 总开关（includeMyCards），现在退休——每张卡自己的勾选框已经并进上面
             // "⚙自选比较项"下拉，不需要再单独一个总开关重复控制同一件事。
@@ -900,33 +954,28 @@ export function FxCompareCard({
             <p className="text-[10px] text-neutral-dk">
               你在<span className="whitespace-nowrap">「支付方式」页</span>配置的支付方式已经并入上面
               <span className="whitespace-nowrap">&ldquo;⚙自选比较项&rdquo;</span>
-              ，取消勾选哪张卡它就会从下面列表消失（用的是真实汇率加点/手续费）。
+              ，取消勾选哪张卡它就会从下面列表消失（只列出结算币种是
+              <span className="whitespace-nowrap">「{effectiveHold}」</span>
+              的那几张，用的是真实汇率加点/手续费）。
+            </p>
+          ) : !hasPaymentMethods ? (
+            <p className="text-[10px] text-neutral-dk">
+              先去{' '}
+              <Link href={`/trips/${tripId}/payment-methods`} className="tap-link whitespace-nowrap">
+                支付方式设置
+              </Link>{' '}
+              加几张卡/现金，就能一起比较刷卡划不划算。
             </p>
           ) : (
-            !hasPaymentMethods && (
-              <p className="text-[10px] text-neutral-dk">
-                先去{' '}
-                <Link
-                  href={`/trips/${tripId}/payment-methods`}
-                  className="tap-link whitespace-nowrap"
-                >
-                  支付方式设置
-                </Link>{' '}
-                加几张卡/现金，
-                <span className="whitespace-nowrap">
-                  &ldquo;我持有 {baseCurrency}&rdquo;
-                </span>
-                时就能一起比较刷卡划不划算。
-              </p>
-            )
-          )}
-          {hasPaymentMethods && effectiveHold !== baseCurrency && (
             <p className="text-[9.5px] text-neutral-dk">
-              <span className="whitespace-nowrap">「我持有」</span>选的不是这趟行程
-              <span className="whitespace-nowrap">本位币（{baseCurrency}）</span>
-              时，只比较<span className="whitespace-nowrap">换汇渠道</span>
-              ，不比较<span className="whitespace-nowrap">我的支付方式</span>
-              ——两者的钱是从不同基准算出来的，混在一起比不公平。
+              你目前没有结算币种是
+              <span className="whitespace-nowrap">「{effectiveHold}」</span>
+              的支付方式，先只看下面<span className="whitespace-nowrap">换汇渠道</span>
+              参考价——去{' '}
+              <Link href={`/trips/${tripId}/payment-methods`} className="tap-link whitespace-nowrap">
+                支付方式设置
+              </Link>{' '}
+              加一张，或者换一个<span className="whitespace-nowrap">「我持有」</span>的币种。
             </p>
           )}
 
@@ -961,6 +1010,23 @@ export function FxCompareCard({
             // 变 true，两组各自要标题区分。展开/收起链接摆在整个列表最下面（渠道/
             // 卡片两组下方，脚注说明文字上方）。
             <div className="flex flex-col gap-3">
+              {/* fix(2026-09-26 第七十一轮，任务③-③，Remy 明确要求"顶部要有一行
+                  结论")：在逐行列表之前先给一句人话结论，不用用户自己扫一遍卡片
+                  找哪个有徽章。跟下面卡片上的"✓最划算"徽章共用同一个 `bestRow`
+                  （同一套 `visibleForBestOffer`/`findBestOfferIndex` 算出来的），
+                  两处不会说法不一致。没有任何一行有资格拿"最划算"时（比如唯一
+                  可比的一行是同币种不需要换汇）不渲染这句话，不硬凑文案。 */}
+              {bestRow && (
+                <p className="rounded-[10px] bg-[rgba(58,138,90,.1)] px-[10px] py-[7px] text-[11px] font-medium text-[#2f6b45]">
+                  💡 最划算：{bestRow.label}
+                  {secondBestRow && secondBestRow.effectiveRate && bestRow.effectiveRate
+                    ? `，比 ${secondBestRow.label} 多换 ${(
+                        ((bestRow.effectiveRate - secondBestRow.effectiveRate) / secondBestRow.effectiveRate) *
+                        100
+                      ).toFixed(1)}%`
+                    : ''}
+                </p>
+              )}
               {groups.map((group) => (
                 <div key={group.key} className="flex flex-col gap-[7px]">
                   {showGroupTitles && (
