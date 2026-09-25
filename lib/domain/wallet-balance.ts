@@ -1,4 +1,4 @@
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { exchangeRecords, expenses, wallets } from '../db/schema';
 
@@ -33,7 +33,15 @@ type WalletRow = typeof wallets.$inferSelect;
  *            − Σ(记录日期当天及以后、这个钱包转出的换汇金额)
  *
  *   "匹配这个钱包"跟 expenses/route.ts POST 现有的自动扣款判断口径完全一致：
- *   `enteredByParticipantId = 钱包主人` + `paymentMethodId = 钱包绑定的支付
+ *   `payerParticipantId = 钱包主人`（第七十轮改：以前误用
+ *   `enteredByParticipantId`——这个字段是"谁把这笔记录敲进系统"，Remy 一个人
+ *   帮全部参与者代录，这个字段几乎永远是 Remy 自己，用它来判断"钱包该不该被扣"
+ *   等于"只要 Remy 录的、支付方式+币种对上就扣"，完全不管这笔钱实际是谁掏的。
+ *   真正该看的是`payerParticipantId`——只有钱包主人自己是付款人，这笔钱才真的
+ *   从这个钱包里出去了；别人代垫的消费即使是 Remy 帮忙录入、即使选了看起来
+ *   匹配的支付方式，也不该扣 Remy 自己的钱包。真实事故：htoo 垫付"归还钱"
+ *   US$7,500，payer=htoo，被错误从 Remy 的 USDT 钱包扣掉，见 PENDING-DECISIONS
+ *   第七十轮记录） + `paymentMethodId = 钱包绑定的支付
  *   方式` + `currency = 钱包币种`。"记录日期当天及以后"用 `expenseDate`/
  *   `exchangeDate`（消费/换汇的真实日期字段，不是 `createdAt` 这个系统写入
  *   时间）跟 `balanceUpdatedAt` 比较，边界是 `>=`（当天算在"以后"这一段里），
@@ -60,7 +68,7 @@ export async function computeWalletDisplayBalance(db: Db, wallet: WalletRow): Pr
       .where(
         and(
           eq(expenses.tripId, wallet.tripId),
-          eq(expenses.enteredByParticipantId, wallet.participantId),
+          eq(expenses.payerParticipantId, wallet.participantId),
           eq(expenses.paymentMethodId, wallet.paymentMethodId),
           eq(expenses.currency, wallet.currency),
           gte(expenses.expenseDate, anchor)
@@ -110,4 +118,43 @@ export async function withDisplayBalance<T extends WalletRow>(
   wallet: T
 ): Promise<T & { currentBalance: number }> {
   return { ...wallet, currentBalance: await computeWalletDisplayBalance(db, wallet) };
+}
+
+/**
+ * chokepoint（第七十轮新增）：判断一笔消费（付款人 + 支付方式 + 币种）是不是
+ * 该实时影响某个参与者名下"还没设置过当前余额"的钱包（旧的直接写入累加模式，
+ * `balanceUpdatedAt` 仍是 null——已经设置过的钱包走上面 computeWalletDisplayBalance
+ * 的锚点+推导公式，两套机制互斥，不能同一个钱包两边都写）。
+ *
+ * 记一笔消费 POST 的即时扣款、编辑 PATCH 的新旧钱包回滚重算、删除 DELETE 的
+ * 回滚，三处都要用同一套判断口径，原本这三处（其实只有 POST 一处真的写了，
+ * PATCH/DELETE 从没写过，就是第七十轮要修的"编辑改支付方式旧钱包不退回"那个
+ * bug）各自维护一份容易漂移，这次统一收进这一个函数。
+ *
+ * 判断标准：①这笔消费的付款人就是钱包主人本人（别人代垫的钱不出自这个钱包，
+ * 判断字段是 `payerParticipantId`，不是 `enteredByParticipantId`——原因见上面
+ * computeWalletDisplayBalance 顶部注释里那段"第七十轮改"的说明）②支付方式 ID
+ * 精确匹配③币种精确匹配④钱包还没做过"设置当前余额"。
+ */
+export async function findDirectDebitWallet(
+  db: Db,
+  args: {
+    tripId: string;
+    ownerParticipantId: string;
+    payerParticipantId: string;
+    paymentMethodId: string | null;
+    currency: string;
+  }
+): Promise<WalletRow | undefined> {
+  if (!args.paymentMethodId) return undefined;
+  if (args.payerParticipantId !== args.ownerParticipantId) return undefined;
+  return db.query.wallets.findFirst({
+    where: and(
+      eq(wallets.tripId, args.tripId),
+      eq(wallets.participantId, args.ownerParticipantId),
+      eq(wallets.paymentMethodId, args.paymentMethodId),
+      eq(wallets.currency, args.currency),
+      isNull(wallets.balanceUpdatedAt)
+    ),
+  });
 }
