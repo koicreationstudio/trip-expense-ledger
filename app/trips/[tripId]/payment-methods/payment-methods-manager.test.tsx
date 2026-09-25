@@ -134,19 +134,21 @@ describe('PaymentMethodsManager — 第六十八轮任务 J：钱包"设置当�
   });
 });
 
-describe('PaymentMethodsManager — 第七十一轮：滚动占位块从固定 h-screen 改成按需动态计算', () => {
-  it('内容很短时，占位块高度是按缺口算出来的具体数字，不是整屏(innerHeight)那么大', async () => {
+describe('PaymentMethodsManager — 第七十一轮第二版：不再靠人造占位块解决滚动不到位，改滚真实文档底部', () => {
+  it('内容很短（目标之后剩余真实内容 < 一屏）时，不渲染任何占位 div，改用 window.scrollTo 滚到真实文档底部', async () => {
     // jsdom 没实现 scrollIntoView，手动打桩；rAF 同步跑回调，跳过真实动画帧等待。
     const scrollIntoViewSpy = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoViewSpy;
+    const scrollToSpy = vi.fn();
+    vi.stubGlobal('scrollTo', scrollToSpy);
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       cb(0);
       return 0;
     });
     vi.stubGlobal('cancelAnimationFrame', () => {});
-    // 模拟"内容本来很短"这个第三十九轮踩过的场景：视口 800px，目标区块距页面顶部
-    // 900px（比一屏还深），但页面总高度只有 1000px（可滚动余量只有 200px），远不够
-    // 把目标顶到视口最上面——缺口 = 900 - (1000-800) = 700，加 24px 安全余量 = 724。
+    // 同第三十九轮踩过的场景：视口 800px，目标区块距页面顶部 900px，页面总高度只有
+    // 1000px——目标之后剩余真实内容只有 1000-900=100px，远小于一屏，触发"滚到真实
+    // 底部"分支，而不是 scrollIntoView。
     Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
     Object.defineProperty(document.documentElement, 'scrollHeight', { value: 1000, configurable: true });
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
@@ -160,28 +162,27 @@ describe('PaymentMethodsManager — 第七十一轮：滚动占位块从固定 h
     render(<PaymentMethodsManager tripId={TRIP_ID} defaultOpenBalancePanel />);
     await waitFor(() => expect(screen.getByText('现金钱包')).toBeTruthy());
 
-    await waitFor(() => expect(scrollIntoViewSpy).toHaveBeenCalled());
-
-    const placeholder = document.querySelector('div[aria-hidden="true"][style]') as HTMLElement | null;
-    expect(placeholder).not.toBeNull();
-    const heightPx = Number(placeholder!.style.height.replace('px', ''));
-    expect(heightPx).toBe(724);
-    // 核心断言：占位高度是按缺口算出来的具体值，不是整屏 800px（更不是写死的一个
-    // 固定常量），证明这次改动真的不再是无脑补一整屏。
-    expect(heightPx).not.toBe(window.innerHeight);
+    await waitFor(() => expect(scrollToSpy).toHaveBeenCalledWith({ top: 200 })); // 1000-800=200，滚到真实文档底部
+    // 核心断言：这条路径完全没调用 scrollIntoView（不强求顶到视口最上面），也没有
+    // 在 DOM 里留下任何占位 div——彻底不制造人造空白。
+    expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+    expect(document.querySelector('div[aria-hidden="true"][style]')).toBeNull();
 
     vi.restoreAllMocks();
   });
 
-  it('内容已经够长（缺口<=0）时，完全不渲染占位块', async () => {
-    Element.prototype.scrollIntoView = vi.fn();
+  it('内容已经够长（目标之后剩余真实内容 >= 一屏）时，维持第三十九轮原本的 scrollIntoView({block:"start"})，不受影响', async () => {
+    const scrollIntoViewSpy = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewSpy;
+    const scrollToSpy = vi.fn();
+    vi.stubGlobal('scrollTo', scrollToSpy);
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       cb(0);
       return 0;
     });
     vi.stubGlobal('cancelAnimationFrame', () => {});
-    // 视口 800，页面总高度 2000（可滚动余量 1200），目标区块只在 500px 处——早就
-    // 够得到，不需要任何额外占位。
+    // 视口 800，页面总高度 2000，目标区块在 500px 处——目标之后剩余真实内容
+    // 2000-500=1500px，大于一屏，走 scrollIntoView 这条老路径。
     Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
     Object.defineProperty(document.documentElement, 'scrollHeight', { value: 2000, configurable: true });
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
@@ -194,8 +195,9 @@ describe('PaymentMethodsManager — 第七十一轮：滚动占位块从固定 h
     vi.stubGlobal('fetch', mockFetch({}));
     render(<PaymentMethodsManager tripId={TRIP_ID} defaultOpenBalancePanel />);
     await waitFor(() => expect(screen.getByText('现金钱包')).toBeTruthy());
-    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    await waitFor(() => expect(scrollIntoViewSpy).toHaveBeenCalledWith({ block: 'start' }));
 
+    expect(scrollToSpy).not.toHaveBeenCalled();
     expect(document.querySelector('div[aria-hidden="true"][style]')).toBeNull();
 
     vi.restoreAllMocks();

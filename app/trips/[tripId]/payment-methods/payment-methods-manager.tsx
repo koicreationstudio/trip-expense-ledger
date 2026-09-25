@@ -128,46 +128,43 @@ export function PaymentMethodsManager({
   // 接近页面末尾的区块顶到视口最上面，但页面剩余的"可滚动余量"物理上不够，浏览器只能
   // 滚到底就不动了，不管重试几次、时机多准都没用。已用同一份生产代码实测验证：往
   // `document.body` 尾部插一个 100vh 占位块，同一次 `scrollIntoView` 调用立刻能精确
-  // 滚到 `elTop≈0`。下面 `<section id="set-balance">` 之后新增的占位 `div`
-  // （`h-screen`，只在 `defaultOpenBalancePanel && balancePanelOpen` 时渲染）就是
-  // 照这个思路补的"可滚动余量"，保证不管这趟行程有几个钱包/几张支付方式（内容多短都一样）
-  // 这个 effect 永远有足够空间把目标滚到视口顶部。这个 effect 本身的逻辑（等两份数据都
-  // 到齐、`{block:'start'}`）不用改，问题不在这里。
-  // fix(2026-09-26 第七十一轮，Remy 明确要求"手机端往下拉会多出一大片空白，别再
-  // 写死 h-screen")：上面第三十九轮那版根因分析（纯几何限制，浏览器滚动距离上限
-  // 不够）本身没有错，这次不推翻它，只是把"补多少可滚动余量"从固定 100vh 改成
-  // 按实际缺口动态算——量出"要把 #set-balance 顶到视口最上面还差多少可滚动距离"，
-  // 只补这么多（+24px 安全余量防四舍五入差一点点又卡住），不再无脑补一整屏。
-  // 这一步必须在补高度的占位 div 还没撑开页面之前测量（`scrollHeadroomPx` 初始
-  // 是 0，首次渲染时占位 div 高度就是 0，测量到的 `currentScrollHeight` 是"不算
-  // 这块占位"的真实页面高度），算完写进 state 触发重渲染。
-  const [scrollHeadroomPx, setScrollHeadroomPx] = useState(0);
-  useEffect(() => {
-    if (!defaultOpenBalancePanel || wallets === null || methods === null) return;
-    const target = document.getElementById('set-balance');
-    if (!target) return;
-    const targetAbsoluteTop = target.getBoundingClientRect().top + window.scrollY;
-    const viewportHeight = window.innerHeight;
-    const currentScrollHeight = document.documentElement.scrollHeight;
-    const currentMaxScrollY = Math.max(0, currentScrollHeight - viewportHeight);
-    // deficit>0：现在页面滚到底也够不到"目标顶部=视口顶部"这个位置，还差这么多
-    // 可滚动余量；deficit<=0：内容本来就够长，完全不需要额外占位。
-    const deficit = targetAbsoluteTop - currentMaxScrollY;
-    setScrollHeadroomPx(deficit > 0 ? Math.ceil(deficit) + 24 : 0);
-  }, [defaultOpenBalancePanel, wallets, methods]);
-
-  // 第二步：等上面算出来的 `scrollHeadroomPx` 真的写进 DOM、撑开了页面高度之后
-  // （这个 effect 把 scrollHeadroomPx 也列进依赖数组，占位 div 高度变化触发的
-  // 重渲染提交后这个 effect 才会重新跑一次），再执行滚动——用 requestAnimationFrame
-  // 让浏览器先完成一次布局/绘制，保证 `scrollIntoView` 看到的是补完余量之后的
-  // 真实可滚动范围，不是补之前的旧状态。
+  // 滚到 `elTop≈0`——这条"内容短+block:'start' 就是滚不到位"的根因诊断本身完全正确，
+  // 下面第七十一轮第二版沿用这个诊断，只是不再用"造一块占位"来解决它（原因见下）。
+  // fix(2026-09-26 第七十一轮第二版，ui-auditor 真机走查抓到"占位块方案本身就有
+  // 结构性缺陷"——第一版把补多少可滚动余量从写死 100vh 改成"按缺口精算"，缺口本身
+  // 算得对（比如实测场景算出 724px，不是无脑一整屏），但只要这趟行程内容够短（这个
+  // 面板本身就是最后一节，后面没有别的内容了），"缺口"这个数字**本来就等于**
+  // "要凭空造出多少像素的空白才能把目标顶到视口最上面"——不管这个数字算得多精确，
+  // 造出来的空间除了让 `scrollIntoView({block:'start'})` 有地方可滚之外，没有任何
+  // 真实内容填充，滚动结束后原样留在页面底下变成一整块空白，真机走查实测跟第一版
+  // 之前的 h-screen 版本是同一类问题，只是块头小一点、没那么离谱。
+  //
+  // 真正的修法不是"更精确地造空白"，是**不造空白**：只有当目标区块之后剩余的
+  // 真实内容本来就够长（>= 一屏）时，`block:'start'` 才用得上（这时候滚到"目标
+  // 顶部=视口顶部"，视口下方全是真实内容，没有空白问题，维持第三十九轮原本的
+  // 处理方式）；内容本来就短（这趟行程钱包/支付方式配得少）时，改成直接滚到
+  // **页面真实的最底部**（不额外撑高文档，`window.scrollTo` 用的是当下真实的
+  // `scrollHeight`，没有任何占位 div），这样目标区块自然会尽量往视口上方走、
+  // 但不会把目标顶到视口最顶端那个精确位置——这是有意的取舍：目标"能看到、看到
+  // 全部"比"精确顶到最顶端"更重要，两者在内容够短时没法同时满足，第一版为了强求
+  // 后者才引入了不可避免的人造空白。
   useEffect(() => {
     if (!defaultOpenBalancePanel || wallets === null || methods === null) return;
     const frame = requestAnimationFrame(() => {
-      document.getElementById('set-balance')?.scrollIntoView({ block: 'start' });
+      const target = document.getElementById('set-balance');
+      if (!target) return;
+      const viewportHeight = window.innerHeight;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const targetTop = target.getBoundingClientRect().top + window.scrollY;
+      const realContentBelowTarget = scrollHeight - targetTop;
+      if (realContentBelowTarget >= viewportHeight) {
+        target.scrollIntoView({ block: 'start' });
+      } else {
+        window.scrollTo({ top: Math.max(0, scrollHeight - viewportHeight) });
+      }
     });
     return () => cancelAnimationFrame(frame);
-  }, [defaultOpenBalancePanel, wallets, methods, scrollHeadroomPx]);
+  }, [defaultOpenBalancePanel, wallets, methods]);
 
   async function loadMethods() {
     // 走行程范围的端点（不是账号范围的 /api/payment-methods）：这份响应每条支付方式
@@ -750,18 +747,6 @@ export function PaymentMethodsManager({
           </div>
         )}
       </section>
-
-      {/* fix(2026-09-24 第三十九轮，第四版)：纯几何占位，不是视觉内容——保证上面那两个
-          `useEffect` 在把 `#set-balance` 滚到视口顶部时，页面底下有足够的
-          "可滚动余量"，不会因为这趟行程钱包/支付方式配得少、页面本来就不够长而滚不动
-          （根因见上面 effect 里的完整分析）。fix(2026-09-26 第七十一轮)：高度从写死
-          `h-screen`（100vh）改成 `scrollHeadroomPx`（按实际缺口动态算出来的最小
-          够用高度），不再在手机端往下拉出一整屏空白。只在深链自动展开这个场景渲染——
-          平时手动点"⚙设置当前余额"展开不需要这块空白，面板收起时也跟着收掉，不会在
-          页面底下永久留一块空白区域。`aria-hidden` 防屏幕阅读器读到一个空 div。 */}
-      {defaultOpenBalancePanel && balancePanelOpen && scrollHeadroomPx > 0 && (
-        <div aria-hidden="true" style={{ height: scrollHeadroomPx }} />
-      )}
 
       <ConfirmDialog
         open={confirmingId !== null}
