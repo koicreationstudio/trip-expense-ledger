@@ -44,6 +44,22 @@ request.url)`）、PIN 找回后的跳转（`/id/[token]/route.ts`）、账号�
 这个 app 没有 service worker、`app/manifest.ts` 的 `start_url` 是相对路径
 `/`，所以换域名不存在 PWA 缓存卡旧域名的风险。
 
+## 一个已知坑：service binding 实际上不是靠 wrangler.toml 生效的
+
+`wrangler.toml` 里写了 `[[services]]`，看起来该由它配置 binding，但这个仓库结构
+（根目录有 Worker 本体自己的 `wrangler.jsonc`，`pages-proxy/` 子目录又有独立的
+`wrangler.toml`）踩中一个已知的 wrangler 上游 bug
+（[cloudflare/workers-sdk#5711](https://github.com/cloudflare/workers-sdk/issues/5711)）：
+`wrangler pages deploy` 会往上找到仓库根目录那份 `wrangler.jsonc`，判定它不是合法
+Pages 配置就整个忽略掉，连带忽略了本该生效的 `pages-proxy/wrangler.toml`。Pages
+不支持用 `--config` 指定路径绕开。
+
+实际的 service binding 是直接调 Cloudflare API 一次性设到 `kongsi-trip` 这个
+Pages 项目本身的配置（`deployment_configs.production.services.ORIGIN`），项目级、
+常驻，不会被"没读到 wrangler.toml"的日常部署清空。`wrangler.toml` 留着当文档、
+留着以后 wrangler 修掉这个 bug 时用，但不能指望改它就能改 binding。详细踩坑记录
+和重建步骤见 `deploy.sh` 顶部注释。
+
 ## 部署
 
 一律走 `./deploy.sh`（这个目录自己的，不是仓库根目录那份），不能裸
