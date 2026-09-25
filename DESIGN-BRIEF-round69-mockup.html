@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>trip-expense-ledger 记账本改版提案 — 第69轮逐屏对照</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#373736; --paper:#F7F7F6; --sand:#DBDAD6; --neutral:#A4A3A0;
+    --neutral-lt:#EDECE9; --neutral-dk:#6E6E6C; --muted:#6E6E6C;
+    --coral:#991B14; --negative:#A63926; --positive:#3D6141;
+    --negative-dk:#E6B1A8; --positive-dk:#B7D1A8;
+    --ok:#4C7A50; --ok-bg:#E3ECE0; --live:#3E7787; --live-bg:#DFEAEC;
+    --cream:#F3E9D2; --accent-700:#373736; --accent-800:#252524;
+    --hero-label: color-mix(in srgb, var(--sand) 70%, white);
+    --font-sans:'Inter',system-ui,sans-serif;
+    --font-serif:'IBM Plex Serif',serif;
+    --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:var(--font-sans); background:#EFEEEA; color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  .topbar{
+    background:var(--ink); color:#fff; padding:18px 28px;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  .topbar h1{margin:0; font-size:18px; font-weight:700;}
+  .topbar p{margin:0; font-size:12px; color:var(--hero-label); line-height:1.6; max-width:920px;}
+  .layout{display:flex; align-items:flex-start; min-height:100vh;}
+  /* -------- 左侧屏幕清单 -------- */
+  .sidebar{
+    width:230px; flex-shrink:0; background:#fff; border-right:1px solid var(--sand);
+    min-height:100vh; padding:14px 0; position:sticky; top:0;
+  }
+  .sidebar-group-label{
+    font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--neutral-dk);
+    font-weight:600; padding:10px 16px 4px;
+  }
+  .nav-btn{
+    display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer;
+    padding:9px 16px; font-size:12.5px; font-family:var(--font-sans); color:var(--ink);
+    border-left:3px solid transparent; line-height:1.4;
+  }
+  .nav-btn small{display:block; font-size:9.5px; color:var(--muted); margin-top:1px; font-weight:400;}
+  .nav-btn:hover{background:var(--neutral-lt);}
+  .nav-btn.active{background:var(--neutral-lt); border-left:3px solid var(--ink); font-weight:600;}
+  /* -------- 主内容区 -------- */
+  .main{flex:1; padding:26px 32px 80px; min-width:0;}
+  .screen{display:none;}
+  .screen.active{display:block;}
+  .screen-head{margin-bottom:16px;}
+  .screen-head h2{font-size:17px; margin:0 0 4px;}
+  .screen-head .tag{
+    display:inline-block; font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px;
+    background:var(--live-bg); color:var(--live); margin-right:6px; vertical-align:middle;
+  }
+  .screen-body{display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;}
+  /* -------- 手机 mockup 外框 -------- */
+  .phone-col{display:flex; flex-direction:column; gap:10px; flex-shrink:0;}
+  .phone-label{font-size:10.5px; font-weight:600; color:var(--neutral-dk); text-align:center;}
+  .phone{
+    width:390px; background:var(--paper); border-radius:34px; border:8px solid #1c1c1c;
+    box-shadow:0 14px 30px rgba(0,0,0,.18); overflow:hidden; position:relative;
+  }
+  .phone-screen{
+    max-height:720px; overflow-y:auto; padding:14px 14px 20px;
+  }
+  .compare-row{display:flex; gap:16px; flex-wrap:wrap;}
+  /* -------- 说明卡 -------- */
+  .note-card{
+    flex:1; min-width:320px; max-width:460px; background:#fff; border:1px solid var(--sand);
+    border-radius:14px; padding:16px 18px; box-shadow:0 1px 2px rgba(55,55,54,.06);
+  }
+  .note-card h3{font-size:12.5px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.06em; color:var(--neutral-dk); font-weight:700;}
+  .note-card h4{font-size:11.5px; margin:14px 0 6px; color:var(--ink); font-weight:700;}
+  .note-card p{font-size:11.5px; line-height:1.7; margin:0 0 8px; color:var(--ink);}
+  .note-card ul{margin:0 0 8px; padding-left:18px;}
+  .note-card li{font-size:11.5px; line-height:1.7; margin-bottom:4px;}
+  .note-card ol{margin:0 0 8px; padding-left:18px;}
+  .note-card ol li{font-size:11.5px; line-height:1.7; margin-bottom:4px;}
+  .fact-box{
+    border:1px dashed var(--sand); background:#fff; border-radius:8px; padding:8px 10px;
+    font-size:11px; line-height:1.7; color:var(--ink); margin-bottom:8px;
+  }
+  .clear-filter-link{font-size:10px; color:var(--coral); text-decoration:underline; text-underline-offset:2px; margin-left:6px;}
+  .note-card .diff{
+    background:var(--neutral-lt); border-radius:8px; padding:8px 10px; margin-bottom:8px;
+    font-size:11px; line-height:1.7;
+  }
+  .note-card .diff del{color:var(--coral); opacity:.75; text-decoration:line-through;}
+  .note-card .diff b{color:var(--positive); font-weight:700;}
+  .note-card .quote{
+    border-left:3px solid var(--neutral); background:var(--neutral-lt); padding:8px 10px;
+    font-size:10.5px; line-height:1.7; color:var(--neutral-dk); margin-bottom:8px; border-radius:0 6px 6px 0;
+  }
+  .note-card .open-q{
+    background:var(--ok-bg); border:1px solid var(--ok); border-radius:8px; padding:8px 10px;
+    font-size:11px; line-height:1.7; color:var(--ink); margin-top:10px;
+  }
+  .note-card .open-q b{color:var(--ok);}
+  .badge-real{
+    display:inline-block; font-size:9px; font-weight:600; padding:1px 7px; border-radius:999px;
+    background:var(--cream); color:#7a5f13; margin-left:4px;
+  }
+  code{font-family:var(--font-mono); font-size:10px; background:var(--neutral-lt); padding:1px 4px; border-radius:4px;}
+
+  /* ============ 复刻的 app 组件样式（对齐当前灰阶色板 token） ============ */
+  .field-label{font-size:9px; font-weight:500; color:var(--ink); display:block; margin-bottom:2px;}
+  .field-input{
+    width:100%; border-radius:10px; border:1px solid var(--sand); padding:5px 7px; font-size:10px;
+    font-family:var(--font-sans); background:#fff; color:var(--ink);
+  }
+  .field-input.serif{font-family:var(--font-serif); font-weight:500;}
+  .field-input.new{border-color:var(--ok); box-shadow:0 0 0 1px var(--ok) inset;}
+  .field-input.err{border-color:var(--coral);}
+  .helper{font-size:8.5px; line-height:1.5; color:var(--muted); margin-top:3px;}
+  .helper.ok-note{color:var(--ok);}
+  .helper.err-note{color:var(--coral);}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .card-box{border:1px solid var(--sand); background:var(--paper); border-radius:12px; padding:10px;}
+  .link-icon{
+    display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--neutral-dk);
+    margin:2px 0;
+  }
+  .form-block{display:flex; flex-direction:column; gap:8px; margin-bottom:10px;}
+  .big-cta{
+    display:block; width:100%; background:var(--accent-700); color:#fff; border-radius:999px;
+    padding:7px; text-align:center; font-size:11px; font-weight:500; border:none; margin-top:6px;
+  }
+  .checkbox-row{
+    display:flex; gap:8px; align-items:flex-start; border:1px solid var(--sand); background:var(--paper);
+    border-radius:12px; padding:12px; margin-bottom:10px;
+  }
+  .removed{position:relative; opacity:.55;}
+  .removed::after{
+    content:'已移除'; position:absolute; top:6px; right:8px; font-size:9px; font-weight:700;
+    color:var(--coral); background:#fff; padding:1px 6px; border-radius:999px; border:1px solid var(--coral);
+  }
+  .switch-track{width:32px; height:18px; border-radius:999px; background:var(--sand); position:relative; flex-shrink:0;}
+  .switch-track.on{background:var(--accent-700);}
+  .switch-dot{width:14px; height:14px; border-radius:999px; background:#fff; position:absolute; top:2px; left:2px; box-shadow:0 1px 2px rgba(0,0,0,.2);}
+  .switch-track.on .switch-dot{left:16px;}
+  .pill-row{display:flex; flex-wrap:wrap; gap:5px;}
+  .pill{
+    display:inline-flex; align-items:center; border-radius:999px; padding:5px 7px; font-size:10px;
+    font-weight:500; background:#fff; border:1px solid transparent; color:var(--ink);
+  }
+  .pill.on{background:var(--ink); color:#fff;}
+
+  /* 快速记账 深色卡 */
+  .dark-card{background:var(--ink); border-radius:22px; padding:14px; color:#fff;}
+  .qa-cap{font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--hero-label); display:block; margin-bottom:6px;}
+  .field-input-dark{
+    border-radius:8px; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.08);
+    padding:5px 7px; font-size:10px; color:#fff; width:100%;
+  }
+  .field-input-dark.new{border-color:var(--positive-dk);}
+  .helper-dark{font-size:8.5px; color:rgba(255,255,255,.5); line-height:1.5; margin-top:3px;}
+
+  /* fx compare card */
+  .fx-card{border:1px solid var(--sand); background:var(--paper); border-radius:22px; padding:14px;}
+  .fx-head{font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--neutral-dk); margin-bottom:8px;}
+  .fx-chip-row{display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px;}
+  .fx-chip{border-radius:999px; background:var(--neutral-lt); padding:5px 9px; font-size:10px; font-weight:500; color:var(--neutral-dk);}
+  .fx-group-title{font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--neutral-dk); margin:10px 0 4px;}
+  .fx-row{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-top:1px solid rgba(55,55,54,.08);}
+  .fx-row:first-of-type{border-top:none;}
+  .fx-row-left{display:flex; flex-direction:column; gap:2px; min-width:0;}
+  .fx-row-name{font-size:11.5px; font-weight:600; display:flex; align-items:center; gap:5px;}
+  .fx-row-note{font-size:9.5px; color:var(--muted); line-height:1.4;}
+  .fx-row-amt{font-family:var(--font-serif); font-size:12.5px; font-weight:500; text-align:right; flex-shrink:0;}
+  .src-badge{font-size:8px; font-weight:600; padding:1px 5px; border-radius:999px; background:rgba(164,163,160,.2); color:var(--muted);}
+  .settle-badge{font-size:8px; font-weight:600; padding:1px 5px; border-radius:999px; background:var(--cream); color:#7a5f13;}
+  .best-badge{font-size:9px; font-weight:700; padding:1px 6px; border-radius:999px; background:#D0F0E5; color:#1f7a5c;}
+  .grey-note{font-size:10px; color:var(--muted); line-height:1.6; background:var(--neutral-lt); border-radius:8px; padding:8px 9px; margin-top:8px;}
+  .grey-note del{opacity:.6;}
+
+  /* trip switcher */
+  .switcher-panel{border:1px solid var(--sand); background:var(--paper); border-radius:14px; box-shadow:0 1px 2px rgba(55,55,54,.06); overflow:hidden;}
+  .switcher-panel.before{padding:4px;}
+  .switcher-panel.after{padding:3px;}
+  .sw-head{display:flex; align-items:center; justify-content:space-between; padding:2px 6px 3px 6px;}
+  .sw-head.after{padding:1px 5px 2px 5px;}
+  .sw-head span:first-child{font-size:9.5px; color:var(--neutral);}
+  .sw-head.after span:first-child{font-size:8.5px; color:var(--neutral); opacity:.85;}
+  .sw-head a{font-size:9.5px; color:var(--neutral-dk); text-decoration:underline;}
+  .sw-row{display:flex; align-items:center; gap:6px; padding:4px 6px;}
+  .sw-row.after{padding:3px 6px; gap:5px;}
+  .sw-row.current{background:#EBEAE8; border-radius:8px;}
+  .sw-row.after.current{border-radius:7px;}
+  .sw-row.other{border-top:1px solid rgba(55,55,54,.07);}
+  .sw-row.after.other{border-top:1px solid rgba(55,55,54,.05);}
+  .sw-dot{width:9px; text-align:center; font-size:7px; color:#B5B4B1; flex-shrink:0;}
+  .sw-name{flex:1; min-width:0; font-size:11px; color:var(--ink);}
+  .sw-name.current{font-weight:700;}
+  .sw-check{font-size:10px; color:var(--ink); flex-shrink:0;}
+  .sw-trash{flex-shrink:0; font-size:10px;}
+  .sw-trash.before{min-height:32px; display:inline-flex; align-items:center; color:var(--coral); text-decoration:underline; text-underline-offset:2px;}
+  .sw-trash.after{min-height:20px; min-width:20px; display:inline-flex; align-items:center; justify-content:center; color:var(--neutral-dk); text-decoration:none;}
+  .row-h{font-size:9px; color:var(--neutral-dk); font-family:var(--font-mono);}
+
+  /* activity list */
+  .exp-row{display:flex; align-items:center; gap:7px; padding:7px 2px; border-top:1px solid var(--sand);}
+  .exp-row:first-child{border-top:none;}
+  .exp-handle{width:18px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+  .exp-handle-dots{display:grid; grid-template-columns:repeat(2,3px); grid-template-rows:repeat(3,3px); gap:2px;}
+  .exp-handle-dots span{width:3px; height:3px; border-radius:999px; background:var(--neutral-dk);}
+  .exp-icon{width:24px; text-align:center; font-size:15px; flex-shrink:0;}
+  .exp-mid{flex:1; min-width:0; display:flex; flex-direction:column;}
+  .exp-name{font-size:12px; font-weight:500;}
+  .exp-meta{font-size:9.5px; color:var(--muted);}
+  .exp-approx{font-family:var(--font-serif); font-size:9.5px; color:var(--muted);}
+  .exp-amt{font-family:var(--font-serif); font-size:12.5px; font-weight:600; flex-shrink:0;}
+  .exp-row.dragging{background:#fff; box-shadow:0 6px 14px rgba(55,55,54,.18); border-radius:10px; transform:scale(1.02); border-top:none;}
+  .exp-ph{height:44px; border:1.5px dashed var(--sand); border-radius:10px; margin:4px 0; background:rgba(219,218,214,.25);}
+  .sort-row{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;}
+  .sort-chip{border-radius:999px; border:1px solid var(--sand); background:#fff; padding:0 9px; font-size:10px; font-weight:500; color:var(--ink); min-height:26px; display:inline-flex; align-items:center;}
+  .sort-chip.active{background:var(--ink); color:#fff; border-color:var(--ink);}
+  .tip-text{font-size:9.5px; line-height:1.6; color:var(--muted); margin-bottom:8px; display:block;}
+
+  .before-after-label{
+    display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    padding:2px 8px; border-radius:999px; margin-bottom:6px;
+  }
+  .before-after-label.before{background:rgba(153,27,20,.1); color:var(--coral);}
+  .before-after-label.after{background:rgba(76,122,80,.12); color:var(--ok);}
+  footer.pagefoot{padding:20px 32px; font-size:10.5px; color:var(--neutral-dk); border-top:1px solid var(--sand); margin-top:10px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>trip-expense-ledger 记账本改版提案 — 第69轮逐屏对照（只出稿，不动代码）</h1>
+  <p>方向已经跟 Remy 在主会话对齐，这份稿子是把 7 项改动画成具体的「改前/改后」给她定版——数值/文案定下来之后才进代码。示例数据取自 Remy 真实在用的「🇭🇰2026香港」行程（trip id f78a6b5e-8612-4097-8bfd-88a5db664045，本位币 HKD，参与者 remy / htoo），全程只读查询 D1，没有打开过这个行程的真实页面、没有做任何写操作。色板用的是 2026-09-24 第四十一轮定案的灰阶 token（ink #373736 / paper #F7F7F6 / sand #DBDAD6 / neutral-dk #6E6E6C），不是更早那版暖色。这是这 7 项改动的第一版稿子，还没有"上一轮反馈落实"这件事要对照。⑥⑦两项是 Remy 在①-⑤定稿之后追加的，同一轮任务，一并出稿；这两项额外查了「🇸🇬 2026新加坡柔佛」行程（trip id e7b781a5-41cd-4b2a-927c-3250cda2c540）的真实 D1 数据核对边界情况，具体发现写在对应屏的说明卡里。</p>
+</div>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-group-label">记账表单</div>
+    <button class="nav-btn active" data-target="s1">① 汇率自动带入
+      <small>expense-form.tsx</small></button>
+    <button class="nav-btn" data-target="s2">① 快速记账同款改动
+      <small>quick-add-expense.tsx</small></button>
+    <button class="nav-btn" data-target="s3">② 去掉"不计分摊"勾选框
+      <small>expense-form.tsx</small></button>
+    <button class="nav-btn" data-target="s8">⑦ 支付方式改必填
+      <small>expense-form.tsx / quick-add-expense.tsx</small></button>
+    <div class="sidebar-group-label">汇率比价</div>
+    <button class="nav-btn" data-target="s4">③ 持有≠本位币也显示我的卡
+      <small>fx-compare-card.tsx</small></button>
+    <div class="sidebar-group-label">行程 / 活动流</div>
+    <button class="nav-btn" data-target="s5">④ 行程切换下拉紧凑化
+      <small>trip-header-nav.tsx</small></button>
+    <button class="nav-btn" data-target="s6">⑤ 手动排序可拖拽
+      <small>expense-list.tsx</small></button>
+    <button class="nav-btn" data-target="s7">⑥ 排序/筛选跨设备同步
+      <small>expense-list.tsx</small></button>
+  </nav>
+
+  <main class="main">
+
+    <!-- ============ SCREEN 1 ============ -->
+    <section class="screen active" id="s1">
+      <div class="screen-head">
+        <h2>① 记账表单 — 汇率自动带入 + 当地金额框</h2>
+        <span class="tag">功能改动</span>
+        <span class="tag" style="background:var(--cream);color:#7a5f13;">需要后端配合</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改前</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="form-block">
+                <div class="grid2">
+                  <div><label class="field-label">金额</label><input class="field-input serif" value="18.67" readonly></div>
+                  <div><label class="field-label">币种</label><input class="field-input" value="MYR ▾" readonly></div>
+                </div>
+                <div>
+                  <label class="field-label">汇率（1 MYR = 多少 HKD）</label>
+                  <input class="field-input err" placeholder="手动输入，比价拉不到当日汇率也不影响记账" readonly>
+                  <p class="helper err-note">必填 · 不填直接拦提交："币种不是本位币 HKD，要填汇率"</p>
+                </div>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后 · 市场汇率自动填好</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="form-block">
+                <div class="grid2">
+                  <div><label class="field-label">金额</label><input class="field-input serif" value="18.67" readonly></div>
+                  <div><label class="field-label">币种</label><input class="field-input" value="MYR ▾" readonly></div>
+                </div>
+                <div class="grid2">
+                  <div>
+                    <label class="field-label">汇率（1 MYR = ? HKD）</label>
+                    <input class="field-input serif new" value="1.9227" readonly>
+                  </div>
+                  <div>
+                    <label class="field-label">当地金额（HKD）</label>
+                    <input class="field-input serif new" value="35.91" readonly>
+                  </div>
+                </div>
+                <p class="helper ok-note">↕ 按当天市场价自动估算（1 MYR=1.9227 HKD，更新于 09-24 22:13），改任一个框另一个自动重算，不改也能直接提交。</p>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后 · 改成账单实付（HSBC 真实例子）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="form-block">
+                <div class="grid2">
+                  <div><label class="field-label">金额</label><input class="field-input serif" value="18.67" readonly></div>
+                  <div><label class="field-label">币种</label><input class="field-input" value="MYR ▾" readonly></div>
+                </div>
+                <div class="grid2">
+                  <div>
+                    <label class="field-label">汇率（1 MYR = ? HKD）</label>
+                    <input class="field-input serif new" value="1.8747" readonly>
+                  </div>
+                  <div>
+                    <label class="field-label">当地金额（HKD）</label>
+                    <input class="field-input serif new" value="35.00" readonly>
+                  </div>
+                </div>
+                <p class="helper ok-note">改「当地金额」到账单上的 35.00 → 汇率自动倒推成 1.8747，存进本位币的金额<b>必须精确等于 3500 分</b>，不能因为反算又四舍五入回 3499/3501。</p>
+              </div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note-card" style="max-width:900px; margin-top:18px;">
+        <h3>改了什么</h3>
+        <div class="diff">
+          <del>汇率框空白 + 必填 + 抓不到当日汇率也不给默认值，用户得自己拿计算器/账单查汇率再手打</del><br>
+          <b>汇率框默认读 <code>GET /api/trips/{tripId}/fx-mid-rates</code>（这个接口已经存在，现在只有比价卡在用，2026-09-17 第二十二轮接进实时汇率）自动填今天的市场中间价，4 位小数，仍可编辑，不再是必填死磕</b>
+        </div>
+        <div class="diff">
+          <del>只有一个"汇率"框，用户要自己心算"18.67×汇率=多少港币"，填错了当场看不出来</del><br>
+          <b>新增「当地金额（{baseCurrency}）」框，跟汇率框<b>双向联动</b>：改当地金额 → 汇率＝当地金额÷原始金额；改汇率 → 当地金额＝原始金额×汇率。两个框都是 <code>font-serif tabular-nums</code>、<code>class="field-input"</code>（<code>rounded-[10px] border border-sand px-[7px] py-[5px] text-[10px]</code>），跟金额/币种同一行网格并排 <code>grid grid-cols-2 gap-[10px]</code>，摆在原来那个单独汇率框的位置</b>
+        </div>
+        <div class="diff">
+          <del>抓不到市场汇率时用户面对一个空白必填框，不知道该填多少</del><br>
+          <b>抓不到市场汇率（接口失败/还没缓存过这个币种对）时退回原来的行为：汇率框保持空白、必填、红框 <code>border-coral</code> 提示——不是新增风险，是明确的降级路径</b>
+        </div>
+        <h4>需要动到的后端逻辑（这轮只画不改代码，先标注清楚，免得实现时漏掉）</h4>
+        <p>当前提交逻辑是 <code>amountBaseCurrency = Math.round(amountCents * fxRateUsed)</code>（expense-form.tsx 第 283 行 / quick-add-expense.tsx 第 175 行），从"汇率"反推本位币金额，浮点乘法+四舍五入有舍入误差风险。改成双向联动之后，当用户是通过「当地金额」框直接输入实付数字时，应该<b>直接把这个数字转成分存进 amountBaseCurrency</b>，汇率只是派生出来存档用的展示值，不能反过来拿汇率乘一遍再存——这样才能保证 HSBC 例子里存的是精确的 3500 分，不是算出来的 3499/3501。实现阶段要为这条写单测锁死。</p>
+        <div class="open-q"><b>需要 Remy 确认：</b>两个框在窄屏（390px）上是并排网格（如上图）还是改成上下堆叠？并排的好处是跟"金额/币种"那行视觉呼应、不多占垂直空间；堆叠的好处是每个框能给到更宽的输入区域。这版先画的是并排，如果觉得数字挤可以改堆叠。</div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 ============ -->
+    <section class="screen" id="s2">
+      <div class="screen-head">
+        <h2>① 快速记账（我的钱包卡内嵌表单）同款改动</h2>
+        <span class="tag">功能改动</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改前</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="dark-card">
+                <span class="qa-cap">⚡ 快速记账</span>
+                <div style="display:flex; gap:6px; margin-bottom:6px;">
+                  <input class="field-input-dark" value="🍜 餐饮" readonly style="flex:1;">
+                  <input class="field-input-dark" value="MYR" readonly style="width:60px;">
+                  <input class="field-input-dark serif" value="42.53" readonly style="width:70px;">
+                </div>
+                <input class="field-input-dark" value="椰汁饮料 King of Coconut" readonly style="margin-bottom:6px;">
+                <input class="field-input-dark err" placeholder="汇率（1 MYR = 多少 HKD）" readonly>
+                <p class="helper-dark" style="color:#E6B1A8;">必填，留空提交直接被挡</p>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="dark-card">
+                <span class="qa-cap">⚡ 快速记账</span>
+                <div style="display:flex; gap:6px; margin-bottom:6px;">
+                  <input class="field-input-dark" value="🍜 餐饮" readonly style="flex:1;">
+                  <input class="field-input-dark" value="MYR" readonly style="width:60px;">
+                  <input class="field-input-dark serif" value="42.53" readonly style="width:70px;">
+                </div>
+                <input class="field-input-dark" value="椰汁饮料 King of Coconut" readonly style="margin-bottom:6px;">
+                <div style="display:flex; gap:6px;">
+                  <input class="field-input-dark serif new" value="1.9227" readonly style="flex:1;">
+                  <input class="field-input-dark serif new" value="80.86" readonly style="flex:1;">
+                </div>
+                <p class="helper-dark" style="color:var(--positive-dk);">↕ 汇率（1MYR=?HKD） / 当地金额（HKD），市场价自动带入、可改、双向联动</p>
+              </div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+      <div class="note-card" style="max-width:900px; margin-top:18px;">
+        <h3>改了什么</h3>
+        <div class="diff">
+          <del>汇率单独一整行 <code>field-input-dark</code>，必填，空的默认值</del><br>
+          <b>换成两个各占一半宽度的框（<code>display:flex; gap:6px</code>，各 <code>flex:1</code>），同一套市场价自动填入 + 双向联动逻辑，深色卡专属样式 <code>.field-input-dark</code> 不变（<code>rounded-lg border border-white/[.14] bg-white/[.08]</code>），新增态描边改用 <code>positive-dk #B7D1A8</code>（深底专用的浅绿，不是浅色页面那套 <code>--ok</code>）</b>
+        </div>
+        <p>这里跟屏幕①逻辑完全一样（同一个 <code>needsManualFxRate</code> 判断、同一个 fx-mid-rates 接口），只是外观要套深色卡的输入框变体，不是重新设计一遍交互。</p>
+        <p>用真实数据核对过一个例子："椰汁饮料"这笔 Remy 记的是 MYR 11.70 → 当时存的本位币是 HKD 22.00（隐含汇率≈1.880），跟今天的市场价 1.9227 不是同一天的汇率，这是正常的（汇率每天变），新框只是让"今天大概多少钱"这件事不用再自己算。</p>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 3 ============ -->
+    <section class="screen" id="s3">
+      <div class="screen-head">
+        <h2>② 去掉「这笔不计入跟同行人的分摊总额」勾选框</h2>
+        <span class="tag">简化</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改前</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="form-block">
+                <div class="checkbox-row">
+                  <input type="checkbox" checked disabled style="margin-top:2px;">
+                  <div>
+                    <span class="field-label" style="font-size:9px;">这笔不计入跟同行人的分摊总额</span>
+                    <p class="helper" style="margin-top:2px;">业务/个人成本（比如机票、宝石采购），照常记账，只是不算进行程主页「我承担」的合计数字里……选了「✈️ 机票」或「💎 宝石」分类会自动帮你勾上，你也可以手动改。</p>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <span class="field-label" style="font-size:9.5px;">跟其他人 split 这笔</span>
+                  <div class="switch-track on"><div class="switch-dot"></div></div>
+                </div>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="form-block">
+                <div class="checkbox-row removed" style="opacity:.35; pointer-events:none;">
+                  <input type="checkbox" checked disabled style="margin-top:2px;">
+                  <div>
+                    <span class="field-label" style="font-size:9px;">这笔不计入跟同行人的分摊总额</span>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <span class="field-label" style="font-size:9.5px;">跟其他人 split 这笔</span>
+                  <div class="switch-track on"><div class="switch-dot"></div></div>
+                </div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note-card" style="max-width:900px; margin-top:18px;">
+        <h3>改了什么</h3>
+        <div class="diff">
+          <del>表单里有两个独立开关："跟其他人 split 这笔"（决定这笔实际怎么分给谁）+ "这笔不计入跟同行人的分摊总额"勾选框（决定这笔算不算进 Hero 卡「我承担」合计），两者语义容易搞混</del><br>
+          <b>只留「跟其他人 split 这笔」一个开关，整块 <code>checkbox-row</code>（expense-form.tsx 第 489-506 行）连同它的说明文字一起删除</b>
+        </div>
+        <div class="diff">
+          <del>机票/宝石分类默认自动勾选、其它分类默认不勾，用户还能手动改</del><br>
+          <b>业务逻辑不变，只是从「用户可见可改的 UI」降级成「提交时自动判断的后台规则」：<code>excludeFromSplit = AUTO_EXCLUDE_CATEGORIES.has(category)</code>（机票/宝石固定为 true），提交 payload 里这个字段照样传，用户看不见也改不了</b>
+        </div>
+        <h4>首页「我承担」区块——这里没变</h4>
+        <p>真实数据核对过，这条行程目前 <code>exclude_from_split=1</code> 的记录有 8 笔（Woody House 住宿 MYR 613.54≈HKD 1184.13、Acesite Knutsford Hotel MYR 376.49≈HKD 726.63、MTR 三笔交通、MCD、椰汁饮料、Woody House Tax），首页 Hero 卡「我承担」单独列这些的展示逻辑完全不受这轮改动影响：</p>
+        <div class="diff" style="background:#fff; border:1px dashed var(--sand);">
+          <span style="font-size:10px; color:var(--neutral-dk); font-weight:600;">我承担的业务成本（不计分摊）</span><br>
+          <span style="font-size:10.5px;">🏨 Woody House · HK$1,184.13　🏨 Acesite Knutsford Hotel · HK$726.63　🚗 MTR ×3 · HK$161.40　🍜 MCD · HK$38.50　🍜 椰汁饮料 · HK$22.00　🏨 Woody House Tax · HK$42.00</span>
+        </div>
+        <div class="open-q"><b>待确认的理解</b>（这条 PENDING-DECISIONS 里标注过"待 Remy 确认"，这轮没有替她拍板，原样带过来）：excludeFromSplit 只影响 Hero 卡「我承担」合计要不要算这笔，不影响下面 splits 怎么分给参与者——也就是说一笔标了"不计分摊"的消费，理论上下面依然可以勾"跟其他人 split"、正常分给同行人，两件事互不影响。这个理解如果不对，请指出来，这次去掉 UI 之后这条隐藏规则更不容易被看见，需要确认清楚。</div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 4 ============ -->
+    <section class="screen" id="s4">
+      <div class="screen-head">
+        <h2>③ 汇率比价卡 — 「我持有」≠本位币时也列出「我的支付方式」</h2>
+        <span class="tag" style="background:rgba(153,27,20,.1); color:var(--coral);">推翻已有规则</span>
+        <span class="tag" style="background:var(--cream);color:#7a5f13;">需要后端配合，比预期大</span>
+      </div>
+
+      <div class="quote">
+        <b>原规则的出处</b>（fx-compare-card.tsx 顶部大注释 + PENDING-DECISIONS 第十八轮"汇率两卡合并，要根治"）：「只有当"我持有"这个基准正好选中这趟行程的本位币（trip.baseCurrency）时，才把"我的支付方式"也并进同一张比价清单；选别的持有币种时只显示渠道比价，不显示我的卡——因为"我的卡"这组数字本来就是按"花本位币买目标币种东西"算的，脱离本位币语境比较没有意义，不该硬凑数字进同一个列表制造虚假精度。」界面上的原文提示：「「我持有」选的不是这趟行程本位币（HKD）时，只比较换汇渠道，不比较我的支付方式——两者的钱是从不同基准算出来的，混在一起比不公平。」
+      </div>
+
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改前 · 我持有 MYR（≠本位币 HKD）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="fx-card">
+                <div class="fx-head">💱 汇率比价 → HKD</div>
+                <div class="fx-chip-row">
+                  <span class="fx-chip">💰 我持有 MYR</span>
+                  <span class="fx-chip">🎯 目标币种</span>
+                  <span class="fx-chip">⚙ 自选比较项 ▾</span>
+                </div>
+                <div class="fx-group-title">渠道换汇</div>
+                <div class="fx-row"><div class="fx-row-left"><div class="fx-row-name">Wise</div><div class="fx-row-note">接近中间价 · 约 0.7% 手续费</div></div><div class="fx-row-amt">1.9089</div></div>
+                <div class="fx-row"><div class="fx-row-left"><div class="fx-row-name">TNG 跨境</div><div class="fx-row-note">DuitNow 跨境 · 约 -1.5%</div></div><div class="fx-row-amt">1.8936</div></div>
+                <div class="fx-row"><div class="fx-row-left"><div class="fx-row-name">换钱店</div><div class="fx-row-note">市区 Superrich · 约 -2.5%</div></div><div class="fx-row-amt">1.8745</div></div>
+                <div class="grey-note">「我持有」选的不是这趟行程本位币（HKD）时，只比较换汇渠道，不比较我的支付方式——两者的钱是从不同基准算出来的，混在一起比不公平。</div>
+                <p style="font-size:9.5px; color:var(--coral); margin-top:8px;">⚠ Remy 真实场景：这次她持有 MYR，用「HSBC 大马 Visa Signature」（结算币种 MYR）刷卡付了这趟的港币消费——这张真实的卡完全比不进来，只能看到抽象的换汇渠道。</p>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后 · 我持有 MYR，我的支付方式也显示</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="fx-card">
+                <div class="fx-head">💱 汇率比价 → HKD</div>
+                <div class="fx-chip-row">
+                  <span class="fx-chip">💰 我持有 MYR</span>
+                  <span class="fx-chip">🎯 目标币种</span>
+                  <span class="fx-chip">⚙ 自选比较项 ▾</span>
+                </div>
+                <div class="fx-group-title">渠道换汇</div>
+                <div class="fx-row"><div class="fx-row-left"><div class="fx-row-name">Wise <span class="src-badge">渠道</span></div><div class="fx-row-note">接近中间价 · 约 0.7% 手续费</div></div><div class="fx-row-amt">1.9089</div></div>
+                <div class="fx-row"><div class="fx-row-left"><div class="fx-row-name">TNG 跨境 <span class="src-badge">渠道</span></div><div class="fx-row-note">DuitNow 跨境 · 约 -1.5%</div></div><div class="fx-row-amt">1.8936</div></div>
+                <div class="fx-group-title">我的支付方式</div>
+                <div class="fx-row"><div class="fx-row-left"><div class="fx-row-name">Maybank 2 Visa Platinum <span class="src-badge">我的方式</span> <span class="settle-badge">结算 MYR</span> <span class="best-badge">✓最划算</span></div><div class="fx-row-note">刷卡支付 · 加点 0% · 折合花 1,000.00 MYR / 1,922.70 HKD</div></div><div class="fx-row-amt">1.9227</div></div>
+                <div class="fx-row"><div class="fx-row-left"><div class="fx-row-name">HSBC 大马 Visa Signature <span class="src-badge">我的方式</span> <span class="settle-badge">结算 MYR</span></div><div class="fx-row-note">刷卡支付 · 加点 1% · 折合花 1,000.00 MYR / 1,903.47 HKD</div></div><div class="fx-row-amt">1.9035</div></div>
+                <div class="grey-note"><del>「我持有」选的不是这趟行程本位币时，只比较换汇渠道，不比较我的支付方式……</del><br>渠道和「我的方式」现在统一按「我持有 MYR」这个基准换算，来源徽章区分是估算（渠道）还是真实费率（我的方式）；卡片旁的「结算 MYR」标签说明这张卡本身也是用 MYR 结算的，换算路径跟渠道一致。</div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note-card" style="max-width:900px; margin-top:18px;">
+        <h3>改了什么</h3>
+        <div class="diff">
+          <del><code>const showCards = hasPaymentMethods && effectiveHold === baseCurrency;</code>（fx-compare-card.tsx 第 353 行）</del><br>
+          <b><code>const showCards = hasPaymentMethods;</code> —— 资格判断只看"有没有配置过支付方式"，不再叠加"我持有是不是等于本位币"这条</b>
+        </div>
+        <div class="diff">
+          <del>灰字提示："「我持有」选的不是这趟行程本位币（{baseCurrency}）时，只比较换汇渠道，不比较我的支付方式——两者的钱是从不同基准算出来的，混在一起比不公平。"</del><br>
+          <b>这句提示整段删除；每行「我的支付方式」旁新增一个结算币种徽章（<code>class="settle-badge"</code>，<code>bg-cream #F3E9D2 / 深字 #7a5f13</code，<code>text-[8px] font-semibold px-[5px] py-[1px] rounded-full</code>），标"结算 MYR"/"结算 HKD"，让用户自己看得出这张卡是不是跟"我持有"同一个币种，不靠隐藏来避免"精度不一样"的疑虑，靠透明标注</b>
+        </div>
+        <h4>为什么原规则不只是"审美判断"，推翻它牵涉真实的计算逻辑（这条必须如实说清楚）</h4>
+        <p>读了 <code>/api/trips/{'{'}tripId{'}'}/fx-recommendation/route.ts</code> 第 65 行：<code>compareCurrency: trip.baseCurrency</code>——这个值<b>写死是行程本位币</b>，从来不是"我持有"选的币种。而 <code>fx-compare-card.tsx</code> 第 573 行算"我的支付方式"这一行的隐含汇率：<code>impliedRate = notionalTargetAmountYuan / costYuan</code>，这个公式只有在 <code>compareCurrency === effectiveHold</code> 时数学上才是对的（分子是目标币种金额，分母必须是"持有币种"的成本，才能算出"1 持有币种=?目标币种"）。原规则把 showCards 锁死在"持有=本位币"，恰好让这两者永远相等，这不只是"怕精度不一样"的主观判断，是在保护一个真实存在的公式前提。</p>
+        <p><b>结论：单独放开 <code>showCards</code> 这一行不够，还要把 <code>fx-recommendation</code> 路由的 <code>compareCurrency</code> 参数从写死的 <code>trip.baseCurrency</code>，改成前端传来的 <code>effectiveHold</code>（"我持有"当前选中的币种），后端每张卡的成本才会真的按"我持有"这个基准算，不是继续用本位币算出来的数字硬凑一个"看起来对"的比率。</b>这版截图上的数字（HSBC 1.9035 / Maybank 1.9227）是按"如果 compareCurrency 改成 MYR"重新手算的示意值，不是从生产环境截的——生产环境现在还没做这个改动，数字会不一样。</p>
+        <h4>反例排查——这条推翻有没有站不住脚的地方？</h4>
+        <p>没有找到能推翻"应该显示"这个方向的反例；但找到一个需要 Remy 拍板的分支：Remy 名下 4 个支付方式里，「HSBC 大马 Visa」「Maybank 2 Visa」结算币种是 MYR（跟这次「我持有 MYR」一致），但「现金 HKD」「现金 USD」结算币种是 HKD/USD（跟"我持有 MYR"不一致）。</p>
+        <div class="open-q">
+          <b>需要 Remy 确认：</b>「我持有 MYR」时，结算币种不是 MYR 的那两个现金支付方式（现金 HKD / 现金 USD）要不要也列进「我的支付方式」这组？<br>
+          <b>方案 A（这版截图画的）</b>：只列结算币种等于"我持有"的那几个（这里是 HSBC + Maybank），逻辑最干净，跟渠道比价"从我持有的钱换算"这个语境最贴合。<br>
+          <b>方案 B</b>：不管结算币种，只要配置过就全部列出来（现金 HKD/USD 也列），每行都靠「结算 XX」徽章说明"这张卡本来就不需要从 MYR 换"，信息量更全但列表会变长，且"现金 HKD 0% 加点"这类几乎必然排第一名，可能会让真正跟"我持有 MYR"相关的比较被挤到后面。<br>
+          这版稿子先按 A 画，B 只是记录下来的备选，不是我替她定的答案。
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 5 ============ -->
+    <section class="screen" id="s5">
+      <div class="screen-head">
+        <h2>④ 行程切换下拉改紧凑</h2>
+        <span class="tag">纯视觉/间距</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改前 <span class="row-h">(3 行程 ≈ 128px 高)</span></div>
+            <div class="phone"><div class="phone-screen">
+              <div class="switcher-panel before">
+                <div class="sw-head"><span>展开：切到其它行程</span><a>＋ 新建行程</a></div>
+                <div class="sw-row current">
+                  <span class="sw-dot" style="color:var(--ink);">●</span>
+                  <span class="sw-name current">🇭🇰2026香港</span>
+                  <span class="sw-check">✓</span>
+                  <span class="sw-trash before">🗑</span>
+                </div>
+                <div class="sw-row other">
+                  <span class="sw-dot">●</span>
+                  <span class="sw-name">2026曼谷出差</span>
+                  <span class="sw-trash before">🗑</span>
+                </div>
+                <div class="sw-row other">
+                  <span class="sw-dot">●</span>
+                  <span class="sw-name">2025台北家族旅行</span>
+                  <span class="sw-trash before">🗑</span>
+                </div>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后 <span class="row-h">(3 行程 ≈ 84px 高，约省 34%)</span></div>
+            <div class="phone"><div class="phone-screen">
+              <div class="switcher-panel after">
+                <div class="sw-head after"><span>切到其它行程</span><a>＋ 新建</a></div>
+                <div class="sw-row after current">
+                  <span class="sw-name current">🇭🇰2026香港</span>
+                  <span class="sw-check">✓</span>
+                  <span class="sw-trash after">🗑</span>
+                </div>
+                <div class="sw-row after other">
+                  <span class="sw-name">2026曼谷出差</span>
+                  <span class="sw-trash after">🗑</span>
+                </div>
+                <div class="sw-row after other">
+                  <span class="sw-name">2025台北家族旅行</span>
+                  <span class="sw-trash after">🗑</span>
+                </div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note-card" style="max-width:900px; margin-top:18px;">
+        <h3>改了什么</h3>
+        <div class="diff">
+          <del>外层面板 <code>p-1</code>(4px)，标题行 <code>px-[6px] pb-[3px] pt-[2px]</code>，文案「展开：切到其它行程」10 个字 + <code>text-[9.5px]</code></del><br>
+          <b>外层面板 <code>p-[3px]</code>(3px)，标题行 <code>px-[5px] pb-[2px] pt-[1px]</code>，文案缩成「切到其它行程」6 个字（去掉"展开："，已经点开了不用再提醒） + <code>text-[8.5px]</code>，右边"＋新建行程"也缩成"＋新建"</b>
+        </div>
+        <div class="diff">
+          <del>每行 <code>px-[6px] py-[4px] gap-[6px]</code>，前面挂一个装饰性圆点 <code>●</code>（<code>w-[9px] text-[7px]</code>），当前行圆点是 ink 色、其它行是 <code>#B5B4B1</code></del><br>
+          <b>每行 <code>px-[6px] py-[3px] gap-[5px]</code>，<b>圆点整个去掉</b>——当前行已经有底色 <code>#EBEAE8</code> + ✓ 勾号能区分，其它行的圆点纯装饰不带信息，两种情况都不需要</b>
+        </div>
+        <div class="diff">
+          <del>删除图标用全局 <code>.tap-link</code> class：<code>min-h-[32px]</code> 触控热区 + <code>underline underline-offset-2</code> + <code>text-coral</code>，视觉上是一个"又大又带红下划线"的按钮，在这个信息密度高的小面板里显得很重</del><br>
+          <b>改成本地专属小图标按钮：<code>min-h-[20px] min-w-[20px]</code>，颜色降级成 <code>text-neutral-dk #6E6E6C</code>（不常驻用警示色，删除本身已经有确认弹窗兜底），<b>去掉下划线</b>，字号维持 <code>text-[10px]</code></b>
+        </div>
+        <div class="diff">
+          <del>分隔线 <code>border-t border-[rgba(55,55,54,.07)]</code></del><br>
+          <b>分隔线淡化到 <code>border-t border-[rgba(55,55,54,.05)]</code></b>
+        </div>
+        <p>三行加起来预估从约 128px 收到约 84px（触控热区收窄主要来自删除按钮从 32px 降到 20px，这是最大的一块；标题行+间距收紧贡献剩下部分）。行程名字号（11px/11px bold）、当前行底色、✓ 勾号完全不动。</p>
+        <div class="open-q"><b>需要 Remy 确认：</b>标题这行是按上面稿子「缩小字号保留」，还是想直接整行去掉、把"＋新建行程"单独挪到列表最下面一行？稿子先按"缩"画，这是任务描述里给的两个选项之一，没有替她选。</div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 6 ============ -->
+    <section class="screen" id="s6">
+      <div class="screen-head">
+        <h2>⑤ 活动流「手动」排序下可拖拽调整顺序</h2>
+        <span class="tag">交互改动</span>
+        <span class="tag" style="background:var(--cream);color:#7a5f13;">需要 schema 迁移</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改前 · 排序=手动</div>
+            <div class="phone"><div class="phone-screen">
+              <span class="tip-text">💡 排序里「手动」是维持记账时的原始顺序（不能长按拖拽调整），「日期」/「金额」重排是真的会动；下面的分类/垫付人/日期/支付方式筛选也是真的会按条件隐藏不符合的记录，不是摆设。</span>
+              <div class="sort-row">
+                <span class="sort-chip active">排序：手动</span>
+                <span class="sort-chip">排序：日期</span>
+                <span class="sort-chip">排序：金额</span>
+              </div>
+              <div>
+                <div class="exp-row">
+                  <span class="exp-icon">🚗</span>
+                  <div class="exp-mid"><span class="exp-name">MTR</span><span class="exp-meta">remy · 09-17 · 交通</span></div>
+                  <span class="exp-amt">RM12.06</span>
+                </div>
+                <div class="exp-row">
+                  <span class="exp-icon">🍜</span>
+                  <div class="exp-mid"><span class="exp-name">庙街小食</span><span class="exp-meta">remy · 09-16 · 餐饮</span></div>
+                  <span class="exp-amt">HK$212.00</span>
+                </div>
+                <div class="exp-row">
+                  <span class="exp-icon">☕</span>
+                  <div class="exp-mid"><span class="exp-name">咖啡</span><span class="exp-meta">remy · 09-16 · 咖啡</span><span class="exp-approx">≈RM42.53</span></div>
+                  <span class="exp-amt">HK$80.00</span>
+                </div>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后 · 排序=手动，拖拽中</div>
+            <div class="phone"><div class="phone-screen">
+              <span class="tip-text">💡 排序里「手动」可以长按（手机）或按住拖动（电脑）左侧 ⠿ 调整顺序；切到「日期」/「金额」时顺序由系统重新计算，拖拽手柄会隐藏。下面的分类/垫付人/日期/支付方式筛选也是真的会按条件隐藏不符合的记录，不是摆设。</span>
+              <div class="sort-row">
+                <span class="sort-chip active">排序：手动</span>
+                <span class="sort-chip">排序：日期</span>
+                <span class="sort-chip">排序：金额</span>
+              </div>
+              <div>
+                <div class="exp-row">
+                  <span class="exp-handle"><span class="exp-handle-dots"><span></span><span></span><span></span><span></span><span></span><span></span></span></span>
+                  <span class="exp-icon">🍜</span>
+                  <div class="exp-mid"><span class="exp-name">庙街小食</span><span class="exp-meta">remy · 09-16 · 餐饮</span></div>
+                  <span class="exp-amt">HK$212.00</span>
+                </div>
+                <div class="exp-ph"></div>
+                <div class="exp-row dragging">
+                  <span class="exp-handle"><span class="exp-handle-dots"><span></span><span></span><span></span><span></span><span></span><span></span></span></span>
+                  <span class="exp-icon">🚗</span>
+                  <div class="exp-mid"><span class="exp-name">MTR</span><span class="exp-meta">remy · 09-17 · 交通</span></div>
+                  <span class="exp-amt">RM12.06</span>
+                </div>
+                <div class="exp-row">
+                  <span class="exp-handle"><span class="exp-handle-dots"><span></span><span></span><span></span><span></span><span></span><span></span></span></span>
+                  <span class="exp-icon">☕</span>
+                  <div class="exp-mid"><span class="exp-name">咖啡</span><span class="exp-meta">remy · 09-16 · 咖啡</span><span class="exp-approx">≈RM42.53</span></div>
+                  <span class="exp-amt">HK$80.00</span>
+                </div>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后 · 排序=日期（拖拽手柄隐藏）</div>
+            <div class="phone"><div class="phone-screen">
+              <span class="tip-text">💡 排序里「手动」可以长按（手机）或按住拖动（电脑）左侧 ⠿ 调整顺序；切到「日期」/「金额」时顺序由系统重新计算，拖拽手柄会隐藏。下面的分类/垫付人/日期/支付方式筛选也是真的会按条件隐藏不符合的记录，不是摆设。</span>
+              <div class="sort-row">
+                <span class="sort-chip">排序：手动</span>
+                <span class="sort-chip active">排序：日期</span>
+                <span class="sort-chip">排序：金额</span>
+              </div>
+              <div>
+                <div class="exp-row">
+                  <span class="exp-icon">🚗</span>
+                  <div class="exp-mid"><span class="exp-name">MTR</span><span class="exp-meta">remy · 09-17 · 交通</span></div>
+                  <span class="exp-amt">RM12.06</span>
+                </div>
+                <div class="exp-row">
+                  <span class="exp-icon">🍜</span>
+                  <div class="exp-mid"><span class="exp-name">庙街小食</span><span class="exp-meta">remy · 09-16 · 餐饮</span></div>
+                  <span class="exp-amt">HK$212.00</span>
+                </div>
+                <div class="exp-row">
+                  <span class="exp-icon">☕</span>
+                  <div class="exp-mid"><span class="exp-name">咖啡</span><span class="exp-meta">remy · 09-16 · 咖啡</span></div>
+                  <span class="exp-amt">HK$80.00</span>
+                </div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note-card" style="max-width:900px; margin-top:18px;">
+        <h3>改了什么</h3>
+        <div class="diff">
+          <del>提示文案（expense-list.tsx 第 184 行）："💡 排序里「手动」是维持记账时的原始顺序（不能长按拖拽调整）……"</del><br>
+          <b>"💡 排序里「手动」可以长按（手机）或按住拖动（电脑）左侧 ⠿ 调整顺序；切到「日期」/「金额」时顺序由系统重新计算，拖拽手柄会隐藏。……"（后半句筛选说明原文不动）</b>
+        </div>
+        <div class="diff">
+          <del>行结构：图标(24px) + 名称/meta + 金额，<code>py-[7px] pl-[2px] pr-[4px]</code>，整行可点展开编辑/删除（仅"手动"模式）</del><br>
+          <b>手动模式下行首新增拖拽手柄，<code>18px</code> 宽 2×3 点阵（每点 <code>3px</code> 圆点、<code>2px</code> 间距、<code>neutral-dk #6E6E6C</code>），跟图标之间留 <code>7px</code> gap（复用现有 <code>gap-[7px]</code>）——只在这个手柄区域响应拖拽手势，行内其余区域点击行为（展开编辑/删除）完全不变，两个手势不抢坐标</b>
+        </div>
+        <div class="diff">
+          <del>（无）</del><br>
+          <b>拖动中的行：<code>bg-white</code> + <code>box-shadow:0 6px 14px rgba(55,55,54,.18)</code> + <code>scale(1.02)</code> + 去掉上边框；松开位置留一个虚线占位框（<code>border:1.5px dashed sand</code>，高 <code>44px</code>，<code>border-radius:10px</code>）</b>
+        </div>
+        <div class="diff">
+          <del>（无）</del><br>
+          <b>切到「日期」「金额」排序时，拖拽手柄整体隐藏，行首 <code>18px</code> 空间收回，图标紧贴左边界（跟原来一样），因为这两种排序下顺序是算出来的，拖了也没意义</b>
+        </div>
+        <h4>交互细节（手机 vs 电脑）</h4>
+        <p>电脑：鼠标在手柄上按住不放直接开始拖动。手机：手柄区域长按约 200ms 触发拖拽态（配合轻微震动反馈，如果平台支持），短按/轻触手柄不触发拖拽也不触发编辑展开（避免误触）。这条手势跟第二十轮"评估过跨设备滑动手势风险，选点击展开而不是滑动"是两回事——那次否决的是"整行滑动=展开操作"（跟横向滚动手势冲突），这次是"专门一个 18px 小手柄=拖拽排序"，手柄区域窄、意图明确，冲突风险小很多。</p>
+        <h4>这轮不画的部分（需要 schema 迁移，下一轮单独走护栏流程）</h4>
+        <p>要让"手动顺序"真的能保存，<code>expense</code> 表需要新增一个排序字段（比如 <code>manual_order</code>），并按当前每条记录的既有顺序回填初始值——这是一次真实的数据库迁移，这轮只画交互和视觉，不涉及 schema 改动。实现阶段这块要单独过一遍 deploy.sh 五关 + Remy 铁律要求的真实行程验证，不能因为这版稿子画完了就默认迁移也一起做了。</p>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 7 ============ -->
+    <section class="screen" id="s7">
+      <div class="screen-head">
+        <h2>⑥ 活动流排序/筛选状态 — 按账号×行程云端同步</h2>
+        <span class="tag">功能改动</span>
+        <span class="tag" style="background:var(--cream);color:#7a5f13;">需要新表 + D1 迁移</span>
+      </div>
+
+      <div class="quote">
+        <b>方向定案说明：</b>这项最早 Remy 说存本机 localStorage 就够，后来明确改口要求"同一账号在手机/电脑打开同一趟行程，要看到同一套排序+筛选状态"——这版稿子画的是<b>云端同步最终方案</b>，不是本机版，之前的说法作废。
+      </div>
+
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改前 · 手机上筛好了「现金」</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="sort-row">
+                <span class="sort-chip active">排序：手动</span>
+                <span class="sort-chip">排序：日期</span>
+                <span class="sort-chip">排序：金额</span>
+              </div>
+              <div class="pill-row" style="margin-bottom:8px; align-items:center;">
+                <span class="pill on">💳 支付方式：现金 ✕</span>
+                <a class="clear-filter-link">清除筛选</a>
+              </div>
+              <div>
+                <div class="exp-row">
+                  <span class="exp-icon">🍜</span>
+                  <div class="exp-mid"><span class="exp-name">庙街小食</span><span class="exp-meta">remy · 09-16 · 现金</span></div>
+                  <span class="exp-amt">HK$212.00</span>
+                </div>
+                <div class="exp-row">
+                  <span class="exp-icon">☕</span>
+                  <div class="exp-mid"><span class="exp-name">咖啡</span><span class="exp-meta">remy · 09-16 · 现金</span></div>
+                  <span class="exp-amt">HK$80.00</span>
+                </div>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改前 · 换到电脑打开同一行程</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="sort-row">
+                <span class="sort-chip active">排序：手动</span>
+                <span class="sort-chip">排序：日期</span>
+                <span class="sort-chip">排序：金额</span>
+              </div>
+              <p class="tip-text" style="color:var(--coral);">（未筛选，回到默认「全部」——看不到手机上刚筛好的结果）</p>
+              <div>
+                <div class="exp-row">
+                  <span class="exp-icon">🚗</span>
+                  <div class="exp-mid"><span class="exp-name">MTR</span><span class="exp-meta">remy · 09-17 · 交通</span></div>
+                  <span class="exp-amt">RM12.06</span>
+                </div>
+                <div class="exp-row">
+                  <span class="exp-icon">🍜</span>
+                  <div class="exp-mid"><span class="exp-name">庙街小食</span><span class="exp-meta">remy · 09-16 · 现金</span></div>
+                  <span class="exp-amt">HK$212.00</span>
+                </div>
+                <div class="exp-row">
+                  <span class="exp-icon">☕</span>
+                  <div class="exp-mid"><span class="exp-name">咖啡</span><span class="exp-meta">remy · 09-16 · 现金</span></div>
+                  <span class="exp-amt">HK$80.00</span>
+                </div>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后 · 电脑打开同一行程</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="sort-row">
+                <span class="sort-chip active">排序：手动</span>
+                <span class="sort-chip">排序：日期</span>
+                <span class="sort-chip">排序：金额</span>
+              </div>
+              <div class="pill-row" style="margin-bottom:4px; align-items:center;">
+                <span class="pill on">💳 支付方式：现金 ✕</span>
+                <a class="clear-filter-link">清除筛选</a>
+              </div>
+              <p class="tip-text" style="color:var(--positive);">☁ 已从云端同步（09-25 21:40）</p>
+              <div>
+                <div class="exp-row">
+                  <span class="exp-icon">🍜</span>
+                  <div class="exp-mid"><span class="exp-name">庙街小食</span><span class="exp-meta">remy · 09-16 · 现金</span></div>
+                  <span class="exp-amt">HK$212.00</span>
+                </div>
+                <div class="exp-row">
+                  <span class="exp-icon">☕</span>
+                  <div class="exp-mid"><span class="exp-name">咖啡</span><span class="exp-meta">remy · 09-16 · 现金</span></div>
+                  <span class="exp-amt">HK$80.00</span>
+                </div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note-card" style="max-width:900px; margin-top:18px;">
+        <h3>改了什么</h3>
+        <div class="diff">
+          <del>sortMode / categoryFilter / payerFilter / dateFilter / paymentMethodFilter（expense-list.tsx 第 99/138 行）只活在纯 <code>useState</code> 里，刷新页面或换设备直接清零，手机筛好的状态电脑完全看不到</del><br>
+          <b>按登录账号（访客按 participant）× 行程存一份到 D1，跟下面查到的 <code>fx_compare_preference</code> 同一套双轨 owner 模式，手机/电脑打开同一账号同一行程看到同一套状态</b>
+        </div>
+
+        <h4>现有 schema 调查结论</h4>
+        <p>查了 <code>lib/db/schema.ts</code>（第 500-531 行），项目里已经有一张几乎同形的先例表 <code>fx_compare_preference</code>（2026-09-24 刚建，同样是"按 <code>user_id</code>/<code>participant_id</code> × <code>trip_id</code> 存一份 JSON 偏好，两个 partial-unique index 分流有账号/访客两条轨道"这套模式）——这不是要凭空设计一套新机制，是有现成范本可以照抄。</p>
+        <div class="fact-box">
+          <b>建议：新建一张同形的表</b>（比如 <code>activity_list_preference</code>：<code>sortMode</code> text + <code>filterState</code> json + <code>updatedAt</code>），<b>不建议</b>直接在 <code>fx_compare_preference</code> 里加字段——两个功能语义不同（一个是汇率比价的选项，一个是消费列表的排序筛选），混进同一张表会让它变成"两个不相关功能的字段大杂烩"，以后谁改其中一个功能的字段容易误伤另一个。分开建表、复用同一套 owner 双轨模式，风险更低也更好读。<code>fx-compare-preference/route.ts</code> 的 GET/PUT 结构（owner filter + <code>onConflictDoUpdate</code> + userId/participantId 双轨判断）可以直接照抄。
+        </div>
+
+        <h4>零写测试要求（这条是这次设计的硬指标）</h4>
+        <p>只有用户真的手动改了排序或筛选，才允许发 PUT；页面加载、从本机缓存恢复显示，绝对不能触发任何写请求。</p>
+        <div class="fact-box">
+          <b>更正一个跟派工描述不一致的地方（如实核对代码后发现）：</b>派工描述里说 fx-compare-card"打开页面就把 updated_at 原样 PUT 一次，从来没修过"——查了 <code>fx-compare-card.tsx</code> 源码和 <code>fx-compare-card.test.tsx</code>，这个坑实际上<b>已经在 round66 修过</b>，专门有一份测试锁死（<code>describe('FxCompareCard — round66 零交互不写 D1')</code>）。round66 的修法是维护一个"是否真的用户交互过"的 ref，只有用户触发 onChange 才把它置 true；发 PUT 前还要拿即将写的值跟"当前已知的真相"做一次内容比对，双保险防止"内容没变但 updated_at 变了"这种伪写。<b>⑥项落地时应该直接复用这一套机制</b>，不是从零设计防线，并且照抄它的测试模式再补一份"零交互不写"的单测锁住 <code>activity_list_preference</code>。这条更正是为了不让下一轮又把这个坑当成"悬而未决"重新提一遍。
+        </div>
+
+        <h4>加载策略</h4>
+        <ol>
+          <li>组件挂载：先读 localStorage 缓存，有就立刻渲染（避免云端请求还没回来时界面空等）</li>
+          <li>并行发一次 GET 到云端偏好接口</li>
+          <li>云端值回来后跟本机缓存比对 <code>updatedAt</code>，谁的时间戳新就用谁校正界面（不是无脑覆盖成云端值）</li>
+          <li>校正后的值同时写回 localStorage，保持下次秒显示还是最新的</li>
+        </ol>
+
+        <h4>记住的筛选值失效了怎么办</h4>
+        <p>比如之前筛的支付方式后来被删掉了——渲染时直接过滤掉这个失效值，自动退回「全部」，<b>不弹出提示解释、也不会筛出一个空列表卡住用户</b>，静默处理。</p>
+
+        <h4>网络请求失败</h4>
+        <p>GET 偏好接口失败（离线/超时）不能卡住或阻塞列表显示，静默退回本机缓存值，列表照常渲染。</p>
+
+        <div class="open-q">
+          <b>需要 Remy 确认（跟⑤项手动拖拽排序有交互冲突，这条要跟左边「⑤ 手动排序可拖拽」那屏一起看）：</b>手动排序模式下，如果同时开着筛选（比如只看"现金"这个支付方式），拖拽调整顺序该怎么处理？<br>
+          <b>方案 A</b>：允许拖拽，但只在筛选后的可见子集内重新排列——子集内部顺序变了，被筛掉的那些记录顺序原地不动，清除筛选后子集的新顺序"嵌回"原本的位置。灵活，但用户看不到全貌，容易搞混"这几笔的相对顺序"和"全部记录的相对顺序"到底改了什么。<br>
+          <b>方案 B</b>：筛选生效时直接禁用拖拽手柄（手柄置灰/隐藏），配一句提示"筛选中无法调整顺序，先清除筛选"。逻辑最干净，不会有"看不全还在挪"的困惑，但要求用户多一步操作。<br>
+          这版稿子两个都没画成图，先摆出来给 Remy 定，定了之后下一轮再补对应那版的视觉。
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 8 ============ -->
+    <section class="screen" id="s8">
+      <div class="screen-head">
+        <h2>⑦ 记账表单 — 支付方式改成必填</h2>
+        <span class="tag">功能改动</span>
+        <span class="tag" style="background:var(--cream);color:#7a5f13;">前端+后端都要拦</span>
+      </div>
+
+      <div class="quote">
+        <b>范围：</b>expense-form.tsx（新建+编辑）+ quick-add-expense.tsx，<b>后端 POST/PATCH 也要加同一条校验</b>，不能只做前端拦截——两处表单共用同一份 <code>lib/validation/schemas.ts</code> 定义，改一处两个表单都受益，但后端路由的校验是分开的，不会因为前端改了就自动跟着变严。
+      </div>
+
+      <div class="fact-box">
+        <b>真实数据核对：</b>查了 D1，现有 <b>40</b> 笔消费（比派工当时统计的 38 笔多了 2 笔，是这两天「🇸🇬 2026新加坡柔佛」新记的，两笔都填了支付方式）——<code>payment_method_id</code> 为空的记录 <b>0</b> 笔。这次改动不会让任何一笔旧账"回头编辑就报错"，可以放心推进。
+      </div>
+
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改前 · 可以不选</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="form-block">
+                <div class="grid2">
+                  <div><label class="field-label">金额</label><input class="field-input serif" value="42.53" readonly></div>
+                  <div><label class="field-label">币种</label><input class="field-input" value="MYR ▾" readonly></div>
+                </div>
+                <div>
+                  <label class="field-label">支付方式</label>
+                  <input class="field-input" value="不指定 ▾" readonly>
+                  <p class="helper">下拉第一项就是"不指定"，很多时候用户直接跳过没选</p>
+                </div>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后 · 必须选一个</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="form-block">
+                <div class="grid2">
+                  <div><label class="field-label">金额</label><input class="field-input serif" value="42.53" readonly></div>
+                  <div><label class="field-label">币种</label><input class="field-input" value="MYR ▾" readonly></div>
+                </div>
+                <div>
+                  <label class="field-label">支付方式</label>
+                  <input class="field-input err" placeholder="请选择 ▾" readonly>
+                  <p class="helper err-note">必填 · 空着提交直接被挡："请选择支付方式"</p>
+                </div>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后 · 行程还没启用任何支付方式时（示例，见下方说明）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="form-block">
+                <div class="grid2">
+                  <div><label class="field-label">金额</label><input class="field-input serif" value="42.53" readonly></div>
+                  <div><label class="field-label">币种</label><input class="field-input" value="MYR ▾" readonly></div>
+                </div>
+                <div class="card-box" style="text-align:center;">
+                  <p style="font-size:10.5px; margin:0 0 6px;">这趟行程还没启用任何支付方式</p>
+                  <a class="big-cta" style="background:var(--accent-700);">去支付方式页启用一张 →</a>
+                </div>
+                <button class="big-cta" style="opacity:.4; pointer-events:none;" disabled>记一笔消费</button>
+              </div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note-card" style="max-width:900px; margin-top:18px;">
+        <h3>改了什么</h3>
+        <div class="diff">
+          <del>现状：<code>payment_method_id</code> 字段允许 null（schema.ts 第 222 行 <code>onDelete: 'set null'</code>），前端下拉可以选"不指定"或干脆不选，后端也没有必填校验</del><br>
+          <b>前端 <code>lib/validation/schemas.ts</code> 里加必填校验（新建+编辑两个表单共用），后端 <code>POST /api/trips/{'{'}tripId{'}'}/expenses</code> 和对应 <code>PATCH</code> 路由加同一条校验，缺了直接 400，不只是前端拦</b>
+        </div>
+
+        <h4>需要 Remy 拍板的四个边界（每条给了建议，没替她定）</h4>
+
+        <div class="open-q">
+          <b>1. 下拉要不要拿掉「不指定」这一项？</b><br>
+          我的建议：拿掉，默认空白占位「请选择」，不主动列"不指定"这个选项，提交时若为空显示红字校验错误——保留"不指定"等于留了一个"看起来选了其实没选"的出口，跟"必选"这个目标自相矛盾。
+        </div>
+        <div class="open-q">
+          <b>2. 行程一张支付方式都没启用时，表单怎么引导？</b><br>
+          我的建议：提交按钮禁用 + 一个明显的「去支付方式页启用一张 →」链接/按钮（如上图第三个手机）。<br>
+          <b>如实说明一个跟派工描述对不上的地方：</b>派工描述说"Remy 真实的新加坡行程现在就是这个状态"，但查了 D1，「🇸🇬 2026新加坡柔佛」（trip id <code>e7b781a5-41cd-4b2a-927c-3250cda2c540</code>）目前实际上<b>已经启用了 3 个支付方式</b>（现金 ×2、HSBC 大马 Visa Signature），不是"还没启用任何"的状态——这个边界这次没办法拿她这趟真实行程直接示范，上图第三个手机画的是给"未来某趟新建的、还没配置过支付方式的行程"这个通用场景准备的示例，不是她当前这趟行程的真实截图。
+        </div>
+        <div class="open-q">
+          <b>3. 代垫人（垫付人）选的是别人时，支付方式该不该强制？</b><br>
+          我的建议：不强制——这笔钱花的是对方的卡，Remy 大概率不知道对方刷的是哪张卡，此时这个字段改成隐藏或可选，不拦提交。
+        </div>
+        <div class="open-q">
+          <b>4. 支付方式被删除后，旧记录的 <code>payment_method_id</code> 被 <code>onDelete: 'set null'</code> 置空，编辑这条记录时会被要求重新选一个支付方式——这个行为可以接受吗？</b><br>
+          纯粹请她表态是否接受，这版没有替她定。
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="pagefoot">
+  trip-expense-ledger 第69轮设计稿 · 本地文件 <code>DESIGN-BRIEF-round69-mockup.html</code> · 示例数据来自 Remy 真实「🇭🇰2026香港」行程（只读查询，未修改/未打开真实行程页面）· 生成于 2026-09-25
+</footer>
+
+<script>
+  document.querySelectorAll('.nav-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+      window.scrollTo({top:0, behavior:'instant'});
+    });
+  });
+</script>
+
+</body>
+</html>
