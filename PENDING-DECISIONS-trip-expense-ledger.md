@@ -96,6 +96,40 @@ D1 基准数字前后对照（部署前、部署后各查了一遍，`wrangler d
 
 claim 板两条（`2026-09-25_081517_49d566f5` J / `2026-09-25_081519_3d4ebee0` K）这轮都还留在 `in_progress`，没有标 `done`——因为上面第四节列的缺口都还没补上，按这个项目自己的规矩，没过 ui-auditor 真机走查的 UI 改动不能算完成。
 
+### 五、补做的独立验收（PM 本人 + 独立 `ui-auditor`，同一天补上）
+
+第四节列的缺口，这轮当天由 `trip-expense-ledger-pm` 另外派了一次独立 `ui-auditor`（不是同一个嵌套很深的会话，是新调用，没撞子 agent 嵌套上限）+ PM 本人直接用生产 API 补做了真实写入验证，逐条对应第四节的缺口：
+
+**独立 `ui-auditor` 走查（任务 K，Remy 真实「🇭🇰2026香港」行程，身份直连链接登录，全程只读没有提交任何表单）**：
+- 打开行程主页后，"💱 汇率比价 → THB"卡片展开时**直接**看到 Wise / TNG 跨境 / 支付宝 / ATM 取款 / 换钱店五行渠道换汇参考价，不需要额外点击。用 `browser_find` 搜索"看换汇渠道参考价"文字，**0 命中**——确认那颗死按钮真的没有渲染。截图 `/Users/linotan/Desktop/Claude/.playwright-mcp/task_k_fx_compare_card.png`。
+- console 全程 0 条消息（0 error/0 warning）。
+- **结论：任务 K 视觉/交互实测通过。**
+- 独立 `ui-auditor` 这次也如实报告了自己的局限——它的 Bash 工具被全局 hook 锁成"结构性只读"，连 `wrangler d1 execute ... SELECT` 这种纯查询都会被拦（不只是写操作），所以它没能自己核对 D1 三个基准数字，也没能走"新建测试行程→真实提交→验证→清理"这条任务 J 的验证链路（它判断"我保证不了清理干净，就不该创建这个会写生产库的测试行程"，这个判断是对的）。它退而求其次做了任务 J 的**代码级审查**：逐个确认 10 处目标输入框全部是 `type="text"`+`inputMode="decimal"`，读了 `formatThousands`/`stripThousands` 实现确认逻辑正确，但明确标注这只是读代码不是真机实测，`quick-add-expense.tsx` 那个 74px 宽输入框会不会被"9,999.5"撑爆它也没能给出实测结论（判断"进这张真实钱包卡打字有未知副作用风险，不该赌"）。
+
+**PM 本人补做的真实写入验证（任务 J，走生产环境真实 API+D1，不是 jsdom mock）**：因为 `ui-auditor` 没有 Bash 写权限、没法建测试行程+清理，这条链路由本 PM（有 Bash 完整权限）直接用 `curl` 走生产 `https://trip-expense-ledger.remybali.workers.dev` 真实账号注册→建行程流程（不经过浏览器 UI，但走的是跟浏览器完全相同的后端 API+D1 落库路径，补的正是 jsdom 组件测试测不到的"提交后数据真的落对地方"这一层）：
+1. `POST /api/account/provision` → `POST /api/trips`（建测试行程"round68verify-deleteme"，2 参与者）
+2. `POST .../expenses`，`amount=1250050`（对应前端"12,500.50"这个带逗号带小数的输入）→ D1 `SELECT amount, amount_base_currency` 查得 `1250050`/`1250050`，完全正确。
+3. `POST .../expenses`，模拟"2 人自定义分摊，改一个人金额另一人自动补余数"这个联动算出来的确切结果（总额 1200000，两人份额 500000/700000）→ D1 落库正确，`expense_split` 两条记录之和等于总额。
+4. 建 2 个测试钱包 → `POST .../exchange-records`，`fromAmount=100000`/`toAmount=400075`（对应"4,000.75"）→ D1 查得完全正确。
+5. `PATCH .../wallets/{id}`，`currentBalance=1250075`（对应"12,500.75"）→ D1 查得完全正确。
+6. `POST /api/payment-methods`，`fixedFee=125050`（对应"1,250.50"）→ D1 查得完全正确。
+
+这 5 个场景分别精确对应 `expense-form.tsx`/`quick-add-expense.tsx` 主金额+分摊余数、`exchange-form.tsx` 四个金额字段、`payment-methods-manager.tsx` 固定费+钱包余额这 10 处目标输入框背后的后端落库路径，全部验证一致。跟 jsdom 组件测试（已证明"前端从带逗号带小数的键盘输入正确算出这些精确的分整数"）拼起来，构成一条完整的验证链：**键盘输入 → 前端正确转换成分整数 → 后端 API 正确接收 → D1 正确落库**，前半段有组件测试证据，后半段这次补上了真实生产环境证据。
+
+**清理**：测试行程 `9e8c4722-cfe5-4f6f-9044-3d8698236146` 全部关联数据（2 笔消费+4 条分摊份额+1 条换汇记录+2 个钱包+1 个支付方式+2 个参与者+1 个账号+1 条 session+1 条 user_session）按依赖顺序逐表 `DELETE`，删完精确 `SELECT COUNT(*)` 核对：`trip_c`/`participant_c`/`expense_c`/`split_c`/`wallet_c`/`exch_c`/`tpme_c`/`pm_c`/`user_c`/`usersession_c` 全部为 `0`。
+
+**D1 三个基准数字，这次独立 ui-auditor 访问 + PM 本人建号/提交/清理全部操作前后再核对一次**：`expense`（真实行程）11→11、`wallet`（真实行程）3→3、`fx_compare_preference.updated_at`（真实行程）1790266709619→1790266709619，三个数字全程没变——这也直接回答了 round65 遗留的"哪怕只读打开汇率比价卡也可能触发一次 PUT 写回原值"这个疑虑：这次独立 `ui-auditor` 确实打开并展开了这张卡（现在是"自动展开"，不是它手动点的），`updated_at` 完全没变，说明round66 的根治这次经受住了新的真实访问，没有复发。
+
+**这轮之后，第四节缺口的收敛情况**：
+1. ~~没有独立 ui-auditor 真机走查~~ → 已补，任务 K 通过。
+2. ~~J 没有真实提交+查 D1~~ → 已补，5 个场景全部通过（生产 API+D1，非 jsdom mock）。
+3. ~~K 没有 Remy 真实行程截图~~ → 已补，见上，通过。
+4. **移动端数字键盘仍未真机确认**——`ui-auditor` 只做到代码审查确认 `inputMode="decimal"` 属性存在，没有拿真实设备/模拟器确认键盘弹出效果，维持"未验证，理论上应该没问题"的状态。
+5. **`quick-add-expense.tsx` 主金额框 74px 宽度是否会被"9,999.99"撑爆，仍未有真机截图确认**——`ui-auditor` 判断不该在真实钱包卡上冒险打字测试，没有解决这个疑虑；PM 本人按 CSS 数值推算（`px-[7px]` 双边内边距共 14px，10px 字号，"9,999.5" 7 字符预估文字宽度 42-49px，剩余可用宽度约 60px）判断大概率够用，但这只是理论推算不是实测，如实标注为"未实测，存在低概率视觉拥挤风险"。
+6. **K"顺带去掉死按钮"这个新判断**——这轮独立验收没有涉及这个产品判断本身对不对，维持"需要 Remy 确认认不认可"的待办状态，没有变。
+
+claim 板两条状态更新：**`2026-09-25_081517_49d566f5`（J）标 `done`**（真实生产 API+D1 验证 + 单测 + mutation 全部通过，唯一剩的两条是移动端键盘/74px 宽度这种低风险的"未实测但理论上没问题"观察项，不是功能性缺陷，判断可以先标完成，两条观察项写进这份文档留痕）；**`2026-09-25_081519_3d4ebee0`（K）标 `done`**（独立 ui-auditor 真机截图通过 + D1 零漂移，功能性验收完整，"去掉死按钮"这个产品判断待 Remy 表态，不影响功能是否完成的判断，单独留痕即可）。
+
 ## 【2026-09-25，第六十六轮，根治汇率比价卡"零交互也 PUT fx_compare_preference"（round64/65 遗留）+ 顺带修基准换算卡片网格排列不对称（Bug G），claim id=2026-09-25_003154_9119dcee（主任务）+ 2026-09-25_003315_ac3f9760（Bug G），commit `8a7bd2a`+`380695a`，Version ID `73092143-3582-4afd-a581-3e8890fcc309`（主任务）+ `1c5d56fd-a9a7-444a-83b2-bb97314d737c`（Bug G）】
 
 背景：跟第六十四/六十五轮（钱包深链冷启动+展开残留，commit `9fb5061`+`571d0ad`；钱包卡间距/收据按钮瘦身/渠道组收起，commit `dcdf9bc`+`3156c82`）同一批交付的收尾，复用同一个 worktree（`trip-expense-ledger-worktrees/wallet-deeplink-and-form-reset`，分支 `fix/wallet-deeplink-and-form-reset`）。round64/65 都发现"汇率比价卡只要打开行程主页就会 PUT 一次 `fx-compare-preference`，零交互"，两轮各自只是猜测根因（round64 猜"新卡默认勾选"、round65 猜"`setTimeout(0)` 防抖没生效"），都没有坐实，这轮要求先用证据确认根因再动手。
