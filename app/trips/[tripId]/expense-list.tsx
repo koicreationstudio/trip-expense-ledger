@@ -1,12 +1,17 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, GripVertical } from 'lucide-react';
 import { formatMoney } from '@/lib/money';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { SelectDropdown } from '@/components/select-dropdown';
+import { moveItem, isSameOrder } from '@/lib/domain/reorder';
+import {
+  isSameExpenseListPreference,
+  type ExpenseListPreferenceSnapshot,
+} from '@/lib/domain/expense-list-preference-diff';
 
 export interface ExpenseListItem {
   id: string;
@@ -33,6 +38,10 @@ export interface ExpenseListItem {
   // 2026-09-16 新增：这笔是不是被标了"不计入 Hero 卡我承担合计"（机票/宝石这类
   // 默认如此），纯展示小标记，不影响这里任何排序/筛选/金额计算。
   excludeFromSplit: boolean;
+  // 2026-09-26 第七十一轮任务⑤新增："手动排序"模式下的顺序，服务端已经按这个
+  // 字段排过一次（page.tsx 现在改成按 sortOrder 传下来，见下面组件里的用法），
+  // 这里只是同一份数据在前端拖拽时的排序基准。
+  sortOrder: number;
 }
 
 type SortMode = 'manual' | 'date' | 'amount';
@@ -106,6 +115,218 @@ export function ExpenseList({
   // 没有浮层遮挡问题）。
   const [revealedId, setRevealedId] = useState<string | null>(null);
 
+  // fix(2026-09-26 第七十一轮，任务⑥)：排序模式 + 4 个筛选条件云端同步，跟
+  // fx-compare-card.tsx 完全同一套"零交互不 PUT"双保险——`hasUserInteractedRef`
+  // 只在下面四个筛选下拉/排序下拉的 onChange 真实入口置 true，组件挂载、从 D1
+  // 恢复存档这类派生 setState 一律不会碰它；`lastSavedSnapshotRef` 是发 PUT 前
+  // 再跟"已知最新存档内容"比一遍的第二层双保险。两层写法完全照抄
+  // fx-compare-card.tsx，不重新发明。
+  const hasUserInteractedRef = useRef(false);
+  function markUserInteracted() {
+    hasUserInteractedRef.current = true;
+  }
+  const lastSavedSnapshotRef = useRef<ExpenseListPreferenceSnapshot | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPreference() {
+      try {
+        const res = await fetch(`/api/trips/${tripId}/expense-list-preference`);
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          preference: {
+            sortMode: string;
+            categoryFilter: string;
+            payerFilter: string;
+            dateFilter: string;
+            paymentMethodFilter: string;
+          } | null;
+        };
+        const saved = data.preference;
+        if (cancelled) return;
+        lastSavedSnapshotRef.current = saved
+          ? {
+              sortMode: saved.sortMode,
+              categoryFilter: saved.categoryFilter,
+              payerFilter: saved.payerFilter,
+              dateFilter: saved.dateFilter,
+              paymentMethodFilter: saved.paymentMethodFilter,
+            }
+          : null;
+        if (!saved) return;
+        // 优雅降级：存的筛选值如果这趟行程现在已经没有对应的候选项了（比如那个
+        // 分类/那个人已经不在筛选候选池里），悄悄忽略，继续用 ALL，不阻塞渲染。
+        // 这些 setState 都是"恢复存档"，不是用户操作，不能碰 hasUserInteractedRef。
+        if (saved.sortMode === 'manual' || saved.sortMode === 'date' || saved.sortMode === 'amount') {
+          setSortMode(saved.sortMode);
+        }
+        if (saved.categoryFilter) setCategoryFilter(saved.categoryFilter);
+        if (saved.payerFilter) setPayerFilter(saved.payerFilter);
+        if (saved.dateFilter) setDateFilter(saved.dateFilter);
+        if (saved.paymentMethodFilter) setPaymentMethodFilter(saved.paymentMethodFilter);
+      } catch {
+        // 拉取失败静默走默认值，不阻塞列表渲染。
+      }
+    }
+    void loadPreference();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId]);
+
+  useEffect(() => {
+    if (!hasUserInteractedRef.current) return;
+    const timer = setTimeout(() => {
+      const nextSnapshot: ExpenseListPreferenceSnapshot = {
+        sortMode,
+        categoryFilter,
+        payerFilter,
+        dateFilter,
+        paymentMethodFilter,
+      };
+      if (isSameExpenseListPreference(lastSavedSnapshotRef.current, nextSnapshot)) return;
+      lastSavedSnapshotRef.current = nextSnapshot;
+      void fetch(`/api/trips/${tripId}/expense-list-preference`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(nextSnapshot),
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [tripId, sortMode, categoryFilter, payerFilter, dateFilter, paymentMethodFilter]);
+
+  // fix(2026-09-26 第七十一轮，任务⑤)：手动排序拖拽。`serverManualOrder` 是服务端
+  // 按 sortOrder 排好的基准顺序（页面刷新/新增删除消费后 `expenses` prop 变化时
+  // 自动跟着变）；`dragOrderOverride` 是这次拖拽会话里的乐观顺序，落位后 PATCH
+  // 成功、`router.refresh()` 带回新的 `expenses` prop 时靠下面这个 effect 清空，
+  // 重新信任服务端顺序（不会一直用本地覆盖值，避免跟服务端真相脱节）。
+  const serverManualOrder = useMemo(
+    () => [...expenses].sort((a, b) => a.sortOrder - b.sortOrder).map((e) => e.id),
+    [expenses]
+  );
+  const [dragOrderOverride, setDragOrderOverride] = useState<string[] | null>(null);
+  useEffect(() => {
+    setDragOrderOverride(null);
+  }, [expenses]);
+  const manualOrder = dragOrderOverride ?? serverManualOrder;
+
+  const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
+  const dragStateRef = useRef<{
+    pointerId: number;
+    orderAtStart: string[];
+    longPressTimer: ReturnType<typeof setTimeout> | null;
+    armed: boolean;
+    startClientY: number;
+  } | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  async function commitReorder(nextOrder: string[]) {
+    setDragOrderOverride(nextOrder);
+    if (isSameOrder(nextOrder, serverManualOrder)) return;
+    try {
+      const res = await fetch(`/api/trips/${tripId}/expenses/reorder`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ orderedExpenseIds: nextOrder }),
+      });
+      if (!res.ok) {
+        setError('调整顺序失败，刷新页面再试一次');
+        setDragOrderOverride(null);
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError('调整顺序失败，刷新页面再试一次');
+      setDragOrderOverride(null);
+    }
+  }
+
+  function handleDragMove(clientY: number) {
+    const state = dragStateRef.current;
+    if (!state || !state.armed || draggingId === null) return;
+    const currentOrder = dragOrderOverride ?? state.orderAtStart;
+    const fromIndex = currentOrder.indexOf(draggingId);
+    if (fromIndex === -1) return;
+    // 拿指针当前 Y 坐标去跟每一行的中点比，落在哪一行的中点上方/下方决定目标下标——
+    // 不用命中判定整行范围，逐行中点比较对短行/长行都稳定，也不需要考虑指针
+    // 有没有精确停在某个元素的可点击区域内。
+    let targetIndex = fromIndex;
+    for (let i = 0; i < currentOrder.length; i++) {
+      const el = itemRefs.current[currentOrder[i]!];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (clientY < mid) {
+        targetIndex = i;
+        break;
+      }
+      targetIndex = i;
+    }
+    if (targetIndex === fromIndex) return;
+    setDragOrderOverride(moveItem(currentOrder, fromIndex, targetIndex));
+  }
+
+  function endDrag() {
+    const state = dragStateRef.current;
+    if (state?.longPressTimer) clearTimeout(state.longPressTimer);
+    dragStateRef.current = null;
+    if (draggingId !== null && dragOrderOverride) {
+      void commitReorder(dragOrderOverride);
+    }
+    setDraggingId(null);
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLButtonElement>, expenseId: string) {
+    if (dragDisabled) return;
+    const orderAtStart = manualOrder;
+    const startClientY = e.clientY;
+    const isTouch = e.pointerType === 'touch';
+
+    function arm() {
+      dragStateRef.current = {
+        pointerId: e.pointerId,
+        orderAtStart,
+        longPressTimer: null,
+        armed: true,
+        startClientY,
+      };
+      setDraggingId(expenseId);
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    }
+
+    if (isTouch) {
+      // 手机长按拖拽：先记一个"待激活"状态，等 350ms 计时器真的触发才算拖拽开始
+      // （给普通点击/滑动列表留出识别窗口，不是一碰手柄就误触发拖拽）。
+      const timer = setTimeout(() => {
+        arm();
+      }, 350);
+      dragStateRef.current = { pointerId: e.pointerId, orderAtStart, longPressTimer: timer, armed: false, startClientY };
+    } else {
+      // 电脑按住拖：鼠标/触控笔按下即可开始，不需要长按等待。
+      arm();
+    }
+  }
+
+  function handlePointerMoveOnHandle(e: React.PointerEvent<HTMLButtonElement>) {
+    const state = dragStateRef.current;
+    if (!state) return;
+    if (!state.armed) {
+      // 长按计时器还没触发时指针已经明显移动（判定为滚动/误触），取消这次待激活。
+      if (Math.abs(e.clientY - state.startClientY) > 10) {
+        if (state.longPressTimer) clearTimeout(state.longPressTimer);
+        dragStateRef.current = null;
+      }
+      return;
+    }
+    handleDragMove(e.clientY);
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLButtonElement>) {
+    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+    endDrag();
+  }
+
   // 筛选候选清单：从当前这份列表的真实数据里取 distinct 值，不是写死的枚举——
   // 这趟行程记过什么分类/谁垫过钱/哪几天记过账，候选就是什么，行程之间不会串。
   const categoryOptions = useMemo(() => Array.from(new Set(expenses.map((e) => e.category))), [expenses]);
@@ -133,14 +354,27 @@ export function ExpenseList({
     if (sortMode === 'amount') {
       return [...filtered].sort((a, b) => b.amountBaseCurrency - a.amountBaseCurrency);
     }
-    // 'manual'：维持 props 传进来的原始顺序（服务端已经按日期新→旧排过一次）。
-    return filtered;
-  }, [expenses, sortMode, categoryFilter, payerFilter, dateFilter, paymentMethodFilter]);
+    // 'manual'：按 sortOrder（或这次拖拽会话里的乐观顺序）排，不再是"props 传进来
+    // 的原始顺序"——2026-09-26 第七十一轮任务⑤之前，manual 模式其实等价于服务端
+    // 默认的按日期排序，现在真的可以拖拽调整了，要按 `manualOrder` 这份显式顺序
+    // 来，不能继续假设 props 顺序天然正确。
+    const orderIndex = new Map(manualOrder.map((id, i) => [id, i]));
+    return [...filtered].sort(
+      (a, b) => (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+    );
+  }, [expenses, sortMode, categoryFilter, payerFilter, dateFilter, paymentMethodFilter, manualOrder]);
 
   const hasActiveFilter =
     categoryFilter !== ALL || payerFilter !== ALL || dateFilter !== ALL || paymentMethodFilter !== ALL;
 
+  // fix(2026-09-26 第七十一轮，任务⑤)：开着筛选时列表只显示部分消费，此时拖拽
+  // 调整的"相对顺序"跟实际存的全量顺序会脱节（用户看到的是收窄过的子集，以为
+  // 拖到最上面，实际在全量顺序里未必真的排最前）——禁止拖拽 + 引导"清空筛选才能
+  // 调整顺序"比允许一个会让人困惑的局部拖拽更安全，这是任务书原文明确要求的边界。
+  const dragDisabled = sortMode !== 'manual' || hasActiveFilter;
+
   function resetFilters() {
+    markUserInteracted();
     setCategoryFilter(ALL);
     setPayerFilter(ALL);
     setDateFilter(ALL);
@@ -179,9 +413,12 @@ export function ExpenseList({
           静态展示，日期/金额排序才是真的——这句话是照方案 demo 自身情况写的，不能照抄
           到这个真实 app 里（这里没有一项是假的，连"手动"都是真实服务器顺序，不是摆设，
           只是不支持长按拖拽调整），所以文案改成如实描述这个真实 app 自己的情况，不是
-          抄方案的字面句子。 */}
+          抄方案的字面句子。
+          fix(2026-09-26 第七十一轮，任务⑤，Remy 明确要求"拖拽支持")：手动排序现在
+          真的可以拖拽调整了（电脑按住拖/手机长按拖），文案改回如实描述这个新状态；
+          开着筛选时拖拽会被禁用（见下面 dragDisabled），这句也提一句。 */}
       <p className="text-[9.5px] leading-[1.5] text-muted">
-        💡 排序里「手动」是维持记账时的原始顺序（不能长按拖拽调整），「日期」/「金额」重排是真的会动；下面的分类/垫付人/日期/支付方式筛选也是真的会按条件隐藏不符合的记录，不是摆设。
+        💡 排序「手动」时可以拖拽调整顺序（电脑按住拖，手机长按拖，开着筛选时暂不能拖）；「日期」/「金额」重排是真的会动；下面的分类/垫付人/日期/支付方式筛选也是真的会按条件隐藏不符合的记录，不是摆设。
       </p>
 
       {/* 排序下拉 + 4 个筛选 chip：chip 用跟 fx-channel-compare-card.tsx 目标币种
@@ -193,7 +430,10 @@ export function ExpenseList({
         <SelectDropdown
           ariaLabel="排序方式"
           value={sortMode}
-          onChange={(next) => setSortMode(next as SortMode)}
+          onChange={(next) => {
+            markUserInteracted();
+            setSortMode(next as SortMode);
+          }}
           triggerClassName="min-h-[26px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
           options={[
             { value: 'manual', label: '排序：手动' },
@@ -204,7 +444,10 @@ export function ExpenseList({
         <SelectDropdown
           ariaLabel="按分类筛选"
           value={categoryFilter}
-          onChange={setCategoryFilter}
+          onChange={(next) => {
+            markUserInteracted();
+            setCategoryFilter(next);
+          }}
           triggerClassName="min-h-[26px] max-w-[104px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
           options={[
             { value: ALL, label: '分类：全部' },
@@ -214,7 +457,10 @@ export function ExpenseList({
         <SelectDropdown
           ariaLabel="按垫付人筛选"
           value={payerFilter}
-          onChange={setPayerFilter}
+          onChange={(next) => {
+            markUserInteracted();
+            setPayerFilter(next);
+          }}
           triggerClassName="min-h-[26px] max-w-[96px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
           options={[
             { value: ALL, label: '垫付人：全部' },
@@ -224,7 +470,10 @@ export function ExpenseList({
         <SelectDropdown
           ariaLabel="按日期筛选"
           value={dateFilter}
-          onChange={setDateFilter}
+          onChange={(next) => {
+            markUserInteracted();
+            setDateFilter(next);
+          }}
           triggerClassName="min-h-[26px] max-w-[100px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
           options={[
             { value: ALL, label: '日期：全部' },
@@ -234,7 +483,10 @@ export function ExpenseList({
         <SelectDropdown
           ariaLabel="按支付方式筛选"
           value={paymentMethodFilter}
-          onChange={setPaymentMethodFilter}
+          onChange={(next) => {
+            markUserInteracted();
+            setPaymentMethodFilter(next);
+          }}
           triggerClassName="min-h-[26px] max-w-[112px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
           options={[
             { value: ALL, label: '支付方式：全部' },
@@ -247,6 +499,13 @@ export function ExpenseList({
           </button>
         )}
       </div>
+
+      {/* fix(2026-09-26 第七十一轮，任务⑤)：开着筛选时拖拽手柄整组隐藏（不是显示
+          但点了没反应那种半失效状态），这里提示一句为什么拖不动，别让用户以为
+          拖拽功能坏了。 */}
+      {sortMode === 'manual' && hasActiveFilter && (
+        <p className="text-[9.5px] text-muted">清除筛选之后才能拖拽调整顺序。</p>
+      )}
 
       {visibleExpenses.length === 0 ? (
         <p className="text-xs text-muted">没有符合筛选条件的消费。</p>
@@ -270,8 +529,32 @@ export function ExpenseList({
             return (
               <li
                 key={e.id}
-                className="relative overflow-hidden border-t border-sand first:border-t-0"
+                ref={(el) => {
+                  itemRefs.current[e.id] = el;
+                }}
+                className={`relative flex items-stretch overflow-hidden border-t border-sand first:border-t-0 ${
+                  draggingId === e.id ? 'bg-[rgba(164,163,160,.14)]' : ''
+                }`}
               >
+                {/* fix(2026-09-26 第七十一轮，任务⑤，Remy 明确要求"拖拽支持")：
+                    手动排序模式 + 没有筛选时才显示拖拽手柄。电脑按住手柄拖（鼠标/
+                    触控笔按下即开始），手机长按手柄 350ms 拖（给普通滚动手势留出
+                    识别窗口，不是一碰就误触发）。手柄本身是一颗独立的小按钮，不是
+                    整行都能拖——整行已经被"点击展开编辑/删除"占用，两个手势混在
+                    同一块区域会互相打架，分开一颗专属手柄更清楚。 */}
+                {!dragDisabled && (
+                  <button
+                    type="button"
+                    aria-label="拖拽调整顺序"
+                    className="flex shrink-0 cursor-grab touch-none items-center justify-center px-[2px] text-muted active:cursor-grabbing"
+                    onPointerDown={(evt) => handlePointerDown(evt, e.id)}
+                    onPointerMove={handlePointerMoveOnHandle}
+                    onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerUp}
+                  >
+                    <GripVertical className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                )}
                 {/* fix(2026-09-17 第二十轮)：整行可点（仅自己录入的行）切换编辑/删除
                     展开态，对齐方案"操作按钮是点击/滑动后才出现的隐藏态，不是常驻
                     显示"——上一轮评估过真滑动手势（跨设备行为不一致、跟 Link/按钮
@@ -283,7 +566,7 @@ export function ExpenseList({
                   type="button"
                   disabled={!mine}
                   onClick={() => setRevealedId((prev) => (prev === e.id ? null : mine ? e.id : prev))}
-                  className="flex w-full items-center gap-[7px] py-[7px] pl-[2px] pr-[4px] text-left disabled:cursor-default"
+                  className="flex min-w-0 flex-1 items-center gap-[7px] py-[7px] pl-[2px] pr-[4px] text-left disabled:cursor-default"
                   aria-expanded={mine ? revealed : undefined}
                   aria-label={mine ? '展开这笔消费的编辑/删除操作' : undefined}
                 >
