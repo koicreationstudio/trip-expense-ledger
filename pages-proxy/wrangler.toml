@@ -1,0 +1,16 @@
+# kongsi-trip 转发站 —— Cloudflare Pages 项目，唯一职责是用 service binding
+# 把请求原封不动转给现有 Worker `trip-expense-ledger`（同一份 D1
+# trip-expense-ledger-db，不新建数据库、不复制数据）。
+#
+# 起这个项目的原因：马来西亚网络挡 *.workers.dev 域名，Remy 手机不开 VPN 打开
+# trip-expense-ledger.remybali.workers.dev 会白屏；pages.dev 域名不受影响。
+# 旧网址保留不动当备用入口，这里只是加一层新的转发入口，绝对不能碰账号的
+# workers.dev 子域名 remybali 本身（remy-api.remybali.workers.dev 等好几个
+# 系统挂在它下面）。
+name = "kongsi-trip"
+pages_build_output_dir = "public"
+compatibility_date = "2026-09-25"
+
+[[services]]
+binding = "ORIGIN"
+service = "trip-expense-ledger"

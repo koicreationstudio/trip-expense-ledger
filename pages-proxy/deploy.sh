@@ -1,0 +1,104 @@
+#!/bin/bash
+# kongsi-trip.pages.dev 转发层部署关卡 —— 不准直接 `wrangler pages deploy`。
+# 这个项目本身只有一个文件在做真事（functions/[[path]].js，把请求原样转给
+# trip-expense-ledger Worker），但照全机规矩，凡是会推东西上线的部署都要走
+# 自己的 deploy.sh，不准裸推。
+#
+# 关卡（任一不过 abort 不部署）：
+#   ① git 工作树干净（scoped 到 pages-proxy/ 这个子目录）+ HEAD 已推 origin/main
+#   ② 语法检查（node --check functions/[[path]].js）
+#   ③ 转发冒烟测试守护（node --test，测的是"转发函数逻辑有没有被改坏"——假
+#      env.ORIGIN.fetch 探针断言：只调用一次 / 传进去的是原始 request 对象本身
+#      不是重新拼的 / 返回值就是 fetch 的返回值本身不被改写。mutation 验证记录：
+#      手动跑过三种坏版本[不调用fetch / 重新new Request而非透传 / 吞掉返回值自造
+#      Response]，三次都真的让测试变红，改回原版全绿，证明不是空壳，过程见
+#      pages-proxy/tests/forward.test.mjs 顶部注释）
+#      这一步测的是"转发函数本身的代码逻辑"，不是"线上真的转发成功"——线上是
+#      否真通全靠下面④打真实网络验证，两层职责不重叠：③挡的是代码回归（比如
+#      以后有人手滑把这个文件改坏），④挡的是环境/配置层面的问题（比如
+#      service binding 配错名字、origin worker 挂了）。
+#   ④ npx wrangler pages deploy public --project-name kongsi-trip
+#   ⑤ 回读本次部署输出的直连 URL（不是 apex kongsi-trip.pages.dev —— apex 走
+#      的是生产分支别名，边缘缓存传播有延迟，直连 URL 才能立刻验证这次部署
+#      有没有真的生效，不会被"其实还没生效但恰好读到旧缓存"骗过）打
+#      /api/health，这个请求会一路转发到 trip-expense-ledger Worker 自己的
+#      /api/health（真的查一次 D1 `SELECT 1`），200 + {"ok":true} 才算过关。
+#
+# 退出码：0 成功 / 1 前置检查（①干净树+已推 / ②语法 / ③冒烟测试）没过，未部署
+#         / 2 已部署但回读没验证到（可能配置有问题，也可能只是边缘传播慢，
+#         过几秒手动 curl 直连 URL 再确认一次）
+set -uo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT" || { echo "✘ 进不去 pages-proxy 目录"; exit 1; }
+REPO_ROOT="$(cd "$ROOT/.." && pwd)"
+
+echo "▶ [kongsi-trip deploy] ① 工作树干净（scoped pages-proxy/）+ HEAD 已推 origin/main"
+cd "$REPO_ROOT" || { echo "✘ 进不去仓库根目录"; exit 1; }
+DIRTY="$(git status --porcelain -- pages-proxy)"
+if [ -n "$DIRTY" ]; then
+  echo "✘ pages-proxy/ 有未提交改动，不部署（要上生产的代码必须先进 git）："
+  echo "$DIRTY"
+  exit 1
+fi
+git fetch origin main --quiet 2>/dev/null
+LOCAL_HEAD="$(git rev-parse HEAD)"
+REMOTE_MAIN="$(git rev-parse origin/main 2>/dev/null)"
+if [ -z "$REMOTE_MAIN" ]; then
+  echo "✘ 拿不到 origin/main（fetch 失败或没网），不部署"; exit 1
+fi
+if [ "$LOCAL_HEAD" != "$REMOTE_MAIN" ]; then
+  if git merge-base --is-ancestor "$LOCAL_HEAD" "$REMOTE_MAIN" 2>/dev/null; then
+    echo "✘ 本地 HEAD 落后 origin/main — 先 git pull origin main 同步再部署，不部署"
+  else
+    echo "✘ 本地 HEAD ($LOCAL_HEAD) 还没推到 origin/main ($REMOTE_MAIN) — 先 git push origin main 再部署，不部署"
+  fi
+  exit 1
+fi
+echo "✓ 关① 工作树干净，HEAD 已推 origin/main ($LOCAL_HEAD)"
+cd "$ROOT" || exit 1
+
+echo "▶ [kongsi-trip deploy] ② 语法检查"
+if ! node --check "functions/[[path]].js"; then
+  echo "✘ 语法检查不过，不部署"; exit 1
+fi
+echo "✓ 关② 语法检查通过"
+
+echo "▶ [kongsi-trip deploy] ③ 转发冒烟测试守护"
+if ! npm test; then
+  echo "✘ 转发冒烟测试不过，不部署"; exit 1
+fi
+echo "✓ 关③ 转发冒烟测试通过"
+
+echo "▶ [kongsi-trip deploy] ④ npx wrangler pages deploy public --project-name kongsi-trip"
+DEPLOY_OUTPUT="$(npx wrangler pages deploy public --project-name kongsi-trip 2>&1)"
+WRANGLER_RC=$?
+echo "$DEPLOY_OUTPUT"
+if [ "$WRANGLER_RC" -ne 0 ]; then
+  echo "✘ wrangler pages deploy 失败（前面守卫已过，是部署本身的问题）"; exit 2
+fi
+
+DEPLOY_URL="$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[a-zA-Z0-9.-]+\.kongsi-trip\.pages\.dev' | head -1)"
+if [ -z "$DEPLOY_URL" ]; then
+  # 兜底：有些 wrangler 版本输出格式不同，退而求其次抓任意 *.pages.dev 直连 URL
+  DEPLOY_URL="$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev' | grep -v '^https://kongsi-trip\.pages\.dev$' | head -1)"
+fi
+if [ -z "$DEPLOY_URL" ]; then
+  echo "⚠️ 部署输出里没解析到直连 URL，回读改用 apex https://kongsi-trip.pages.dev（可能受边缘传播延迟影响）"
+  DEPLOY_URL="https://kongsi-trip.pages.dev"
+fi
+
+echo "▶ [kongsi-trip deploy] ⑤ 回读 $DEPLOY_URL/api/health（经转发层打到 trip-expense-ledger 的真实健康检查）"
+HEALTH_BODY="$(curl -s "$DEPLOY_URL/api/health" --max-time 15)"
+HEALTH_STATUS="$(curl -s -o /dev/null -w '%{http_code}' "$DEPLOY_URL/api/health" --max-time 15 || echo 'curl_failed')"
+if [ "${HEALTH_STATUS:-}" != "200" ]; then
+  echo "✘ 部署成功但 /api/health 回读拿到 [$HEALTH_STATUS]（不是 200），可能是刚部署边缘还没传播完，稍等几秒手动再 curl 一次确认，也可能是 service binding 配置有问题"
+  exit 2
+fi
+echo "回读响应体：$HEALTH_BODY"
+if [[ "$HEALTH_BODY" != *'"ok":true'* ]]; then
+  echo "✘ /api/health 回读到 200 但响应体不是预期的 {\"ok\":true}（$HEALTH_BODY）—— 转发本身可能没问题，但打到的不是真的 trip-expense-ledger health handler，需要人工核实"
+  exit 2
+fi
+
+echo "✓ [kongsi-trip deploy] 部署完成，$DEPLOY_URL 回读 /api/health 200 {\"ok\":true}（转发链路 Pages→service binding→trip-expense-ledger Worker→D1 全通）"
+exit 0

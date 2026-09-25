@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "description": "强制所有路径都走 functions/[[path]].js 转发，不让 public/ 目录下任何静态文件（哪怕以后不小心加了同名文件）抢先命中、绕过转发逻辑。",
+  "include": ["/*"],
+  "exclude": []
+}

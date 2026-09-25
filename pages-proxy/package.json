@@ -1,0 +1,9 @@
+{
+  "name": "kongsi-trip-pages-proxy",
+  "private": true,
+  "type": "module",
+  "description": "kongsi-trip.pages.dev 转发层，把请求原样转给 trip-expense-ledger Worker，本身不含业务逻辑。",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

@@ -1,0 +1,12 @@
+<!doctype html>
+<!--
+  这个文件几乎不会被真正用到 —— public/_routes.json 把所有路径都强制路由给
+  functions/[[path]].js 转发处理，就算路径是 "/" 也一样先经过转发函数，不会
+  命中这份静态文件。留着它只是因为 Cloudflare Pages 部署要求构建输出目录里
+  至少有点东西，不是给用户看的页面。真正的首页内容来自被转发的
+  trip-expense-ledger Worker。
+-->
+<html lang="zh">
+  <head><meta charset="utf-8" /><title>kongsi-trip</title></head>
+  <body>转发层占位文件，不应该被访问到。</body>
+</html>
