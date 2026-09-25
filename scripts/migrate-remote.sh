@@ -29,9 +29,15 @@ cd "$ROOT" || { echo "✘ 进不去 trip-expense-ledger 目录"; exit 1; }
 echo "▶ [trip-expense-ledger migrate-remote] ① 工作树干净 + HEAD 已推 origin/main"
 # 噪音排除跟 deploy.sh 关① 用同一套约定，保持一致（不是遗漏）：
 #   - audit-diffs/  走查截图，长期不进 git
+#   - design-references/  设计方案参照截图，跟 audit-diffs 同类，不进 git
 #   - *.md          PENDING-DECISIONS 等本地记事本，跟要迁移的 SQL 无关
 #   - lib/build-info.ts  prebuild 钩子每次构建自动重写，不代表真实代码改动
-DIRTY="$(git status --porcelain -- . ':!audit-diffs' ':!*.md' ':!lib/build-info.ts')"
+#   - trip-expense-ledger-worktrees/  嵌在主 checkout 内部的历史遗留 worktree
+#     目录（`git worktree add` 建的隔离环境），本身不是这个仓库要追踪的内容，
+#     一直存在，不代表这次要迁移的改动有问题（2026-09-26 第七十一轮补：之前
+#     这条只在 deploy.sh 漏了，migrate-remote.sh 从来没排除过，两边本该"同一套
+#     约定"却实际不同步，这次一并对齐，见同一轮 deploy.sh 的对应改动）。
+DIRTY="$(git status --porcelain -- . ':!audit-diffs' ':!design-references' ':!*.md' ':!lib/build-info.ts' ':!trip-expense-ledger-worktrees')"
 if [ -n "$DIRTY" ]; then
   echo "✘ 工作树有未提交改动，不迁移生产 D1（要跑的迁移文件必须先进 git，不能凭工作树现状迁移）："
   echo "$DIRTY"

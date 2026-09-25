@@ -44,7 +44,10 @@ echo "▶ [trip-expense-ledger deploy] ① 工作树干净 + HEAD 已推 origin/
 #   - *.md          PENDING-DECISIONS-trip-expense-ledger.md 等本地记事本，设计
 #                    上就是「写完不进 git」，跟部署的代码是否等于 HEAD 无关
 #   - lib/build-info.ts  prebuild 钩子每次构建自动重写，不代表真实代码改动
-DIRTY="$(git status --porcelain -- . ':!audit-diffs' ':!design-references' ':!*.md' ':!lib/build-info.ts')"
+#   - trip-expense-ledger-worktrees/  嵌在主 checkout 内部的历史遗留 worktree
+#     目录，本身不是这个仓库要追踪的内容（2026-09-26 第七十一轮：跟
+#     scripts/migrate-remote.sh 的同款闸门对齐排除，两边本该一致却一直漂移）。
+DIRTY="$(git status --porcelain -- . ':!audit-diffs' ':!design-references' ':!*.md' ':!lib/build-info.ts' ':!trip-expense-ledger-worktrees')"
 if [ -n "$DIRTY" ]; then
   echo "✘ 工作树有未提交改动，不部署（要上生产的代码必须先进 git，不能凭工作树现状部署）："
   echo "$DIRTY"
