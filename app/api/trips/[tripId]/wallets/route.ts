@@ -55,11 +55,14 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
   const now = new Date();
 
   // fix(2026-09-24 第三十九轮，团队看板"历史现金消费回溯补算进钱包余额")：创建时如果
-  // 直接绑了支付方式，这趟行程里「币种一致 + 这个支付方式 + 这个参与者自己记的」那些
+  // 直接绑了支付方式，这趟行程里「币种一致 + 这个支付方式 + 这个参与者自己付的」那些
   // 比这个钱包更早存在的消费，这次也一并补扣进起始余额——不再是只对绑定之后新记的
-  // 消费生效。匹配条件完全照抄 `app/api/trips/[tripId]/expenses/route.ts` 第 95-118
-  // 行「记账自动扣钱包余额」那段的口径（`paymentMethodId` 匹配 + `currency` 精确一致 +
-  // `enteredByParticipantId` 是这个钱包的主人），唯一新增的判断只是时间方向倒过来：
+  // 消费生效。匹配条件照抄 `app/api/trips/[tripId]/expenses/route.ts`「记账自动扣
+  // 钱包余额」那段的口径（`paymentMethodId` 匹配 + `currency` 精确一致 + 付款人是
+  // 这个钱包的主人），唯一新增的判断只是时间方向倒过来：
+  // fix(第七十轮)：这里原本用 `enteredByParticipantId` 判断"这个参与者自己记的"，
+  // 应该用 `payerParticipantId` 判断"这个参与者自己付的"——道理跟 expenses/route.ts
+  // POST 那边同一个 bug、同一次一起修，见 `lib/domain/wallet-balance.ts` 顶部注释。
   // 那边扫「这笔消费发生时，钱包在不在」，这里扫「钱包诞生前，已经有哪些这样的消费」。
   // 用 `expenses.createdAt < now`（这次 INSERT 的时间点）做唯一的分界线：这条线一过，
   // 这个钱包就已经在数据库里存在了，从这一刻起新记的任何消费都归下面那条「记账自动扣」
@@ -86,7 +89,7 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
           eq(expenses.tripId, params.tripId),
           eq(expenses.paymentMethodId, body.paymentMethodId),
           eq(expenses.currency, body.currency),
-          eq(expenses.enteredByParticipantId, identity.participantId),
+          eq(expenses.payerParticipantId, identity.participantId),
           lt(expenses.createdAt, now)
         )
       );

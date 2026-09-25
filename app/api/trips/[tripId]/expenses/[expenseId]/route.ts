@@ -1,13 +1,14 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { getDb, type Db } from '@/lib/db/client';
-import { expenses, expenseSplits, participants, trips } from '@/lib/db/schema';
+import { expenses, expenseSplits, participants, trips, wallets } from '@/lib/db/schema';
 import { assertSameTrip, withSession } from '@/lib/auth/require-session';
 import { toExpenseDto } from '@/lib/http/dto';
 import { parseJsonBody } from '@/lib/http/validate';
 import { updateExpenseSchema } from '@/lib/validation/schemas';
 import { validateSplits } from '@/lib/http/expense-validation';
 import { deleteReceipt } from '@/lib/storage/receipts';
+import { findDirectDebitWallet } from '@/lib/domain/wallet-balance';
 
 interface Context {
   params: { tripId: string; expenseId: string };
@@ -105,22 +106,79 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
     if (splitError) return splitError;
   }
 
+  const nextPayerParticipantId = body.payerParticipantId ?? existing.payerParticipantId;
+  const nextPaymentMethodId =
+    body.paymentMethodId !== undefined ? body.paymentMethodId : existing.paymentMethodId;
+
+  // fix(第七十轮，"编辑改支付方式旧钱包不退回"bug 根治)：老注释在这里写的是
+  // "编辑时改支付方式只更新标记字段，不回溯调整钱包余额"——这是真实事故的根因：
+  // 一笔消费最初记在「现金 USD」钱包，后来编辑改成「USDT」，旧钱包的扣款从来没
+  // 退回去过，导致「现金 USD」钱包一直多扣了这笔钱（详见 PENDING-DECISIONS 第
+  // 七十轮）。这次补上：编辑前后分别算一次"这笔消费该扣哪个旧模式钱包"
+  // （`findDirectDebitWallet`，已设置过"当前余额"的锚点模式钱包不受影响，会在
+  // 下次读取时用 wallet-balance.ts 的推导公式自动算对，不需要这里处理），
+  // 新旧钱包不是同一个就分别退回旧钱包、扣进新钱包；是同一个钱包就只按金额
+  // 差额调整一次，不做"先退回全额再扣全额"这种会产生中间态的写法。
+  const oldWallet = await findDirectDebitWallet(db, {
+    tripId: params.tripId,
+    ownerParticipantId: identity.participantId,
+    payerParticipantId: existing.payerParticipantId,
+    paymentMethodId: existing.paymentMethodId,
+    currency: existing.currency,
+  });
+  const newWallet = await findDirectDebitWallet(db, {
+    tripId: params.tripId,
+    ownerParticipantId: identity.participantId,
+    payerParticipantId: nextPayerParticipantId,
+    paymentMethodId: nextPaymentMethodId,
+    currency: nextCurrency,
+  });
+
+  const walletStatements: unknown[] = [];
+  if (oldWallet && newWallet && oldWallet.id === newWallet.id) {
+    // 同一个钱包：只调整金额差额，不产生"先退回全额、再扣全额"的两条语句。
+    const delta = nextAmount - existing.amount;
+    if (delta !== 0) {
+      walletStatements.push(
+        db
+          .update(wallets)
+          .set({ currentBalance: oldWallet.currentBalance - delta })
+          .where(eq(wallets.id, oldWallet.id))
+      );
+    }
+  } else {
+    if (oldWallet) {
+      walletStatements.push(
+        db
+          .update(wallets)
+          .set({ currentBalance: oldWallet.currentBalance + existing.amount })
+          .where(eq(wallets.id, oldWallet.id))
+      );
+    }
+    if (newWallet) {
+      walletStatements.push(
+        db
+          .update(wallets)
+          .set({ currentBalance: newWallet.currentBalance - nextAmount })
+          .where(eq(wallets.id, newWallet.id))
+      );
+    }
+  }
+
   // D1 的 remote binding 不支持交互式多语句事务，官方推荐用 batch() 做原子
-  // 多语句写入。splits 是否重传是运行时才知道的，batch() 的 TS 签名要求一个
-  // 至少 1 项的元组类型来做逐项类型推断，这里数组长度可变，结构上退化成普通
-  // 数组，做一次断言（运行时永远至少有 1 项：更新 expense 本体）。
+  // 多语句写入。splits/钱包调整是否需要都是运行时才知道的，batch() 的 TS 签名
+  // 要求一个至少 1 项的元组类型来做逐项类型推断，这里数组长度可变，结构上退化成
+  // 普通数组，做一次断言（运行时永远至少有 1 项：更新 expense 本体）。
   const statements = [
     db
       .update(expenses)
       .set({
-        payerParticipantId: body.payerParticipantId ?? existing.payerParticipantId,
+        payerParticipantId: nextPayerParticipantId,
         amount: nextAmount,
         currency: nextCurrency,
         amountBaseCurrency,
         fxRateUsed,
-        // 编辑时改支付方式只更新这个标记字段本身，不会回溯调整钱包余额——
-        // 钱包扣减只在创建那一刻发生一次，这是 v1 明确的简化边界（见 POST handler 注释）。
-        paymentMethodId: body.paymentMethodId !== undefined ? body.paymentMethodId : existing.paymentMethodId,
+        paymentMethodId: nextPaymentMethodId,
         category: body.category ?? existing.category,
         // body.merchant === '' 是显式清空（表单把商家名称删空后提交），跟 undefined
         // 的"没传这个字段，保持原值"分开处理，用 || null 把空字符串归一化成 null。
@@ -143,6 +201,7 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
           ),
         ]
       : []),
+    ...walletStatements,
   ];
   await db.batch(statements as unknown as Parameters<typeof db.batch>[0]);
 
@@ -162,7 +221,28 @@ export const DELETE = withSession<Context>(async (_request, { params }, identity
     await deleteReceipt(existing.receiptPath);
   }
 
-  await db.delete(expenses).where(eq(expenses.id, params.expenseId));
+  // fix(第七十轮，同一个根因)：删除这笔消费如果它曾经直接扣过某个旧模式钱包，
+  // 要把这次扣款退回去——之前这里完全没有这段逻辑，是"编辑/删除消费不会回滚
+  // 钱包余额"这个既有缺口的另一半（已设置过"当前余额"的锚点模式钱包不受影响，
+  // 行删掉之后下次读取会自动算对，见 wallet-balance.ts）。
+  const linkedWallet = await findDirectDebitWallet(db, {
+    tripId: params.tripId,
+    ownerParticipantId: identity.participantId,
+    payerParticipantId: existing.payerParticipantId,
+    paymentMethodId: existing.paymentMethodId,
+    currency: existing.currency,
+  });
+
+  const statements: unknown[] = [db.delete(expenses).where(eq(expenses.id, params.expenseId))];
+  if (linkedWallet) {
+    statements.push(
+      db
+        .update(wallets)
+        .set({ currentBalance: linkedWallet.currentBalance + existing.amount })
+        .where(eq(wallets.id, linkedWallet.id))
+    );
+  }
+  await db.batch(statements as unknown as Parameters<typeof db.batch>[0]);
 
   return new NextResponse(null, { status: 204 });
 });
