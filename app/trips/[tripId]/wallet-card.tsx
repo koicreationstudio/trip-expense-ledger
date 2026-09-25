@@ -126,6 +126,7 @@ export function WalletCard({
           baseCurrency={baseCurrency}
           myParticipantId={myParticipantId}
           participants={participants}
+          paymentMethods={paymentMethods}
         />
       </section>
     </>

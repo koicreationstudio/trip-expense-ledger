@@ -9,6 +9,7 @@ import { createExpenseSchema } from '@/lib/validation/schemas';
 import { equalSplit } from '@/lib/domain/split';
 import { validateSplits } from '@/lib/http/expense-validation';
 import { findDirectDebitWallet } from '@/lib/domain/wallet-balance';
+import { loadEnabledPaymentMethodIds } from '@/lib/domain/payment-method-scope';
 
 interface Context {
   params: { tripId: string };
@@ -49,6 +50,22 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
 
   if (!participantIds.has(body.payerParticipantId)) {
     return NextResponse.json({ error: 'invalid_payer' }, { status: 400 });
+  }
+
+  // fix(2026-09-25 第七十轮，追加2 那条"记账不选支付方式显示成现金HKD"bug 的根治
+  // 防线)：代垫人是记录人自己时，必须选支付方式——不知道自己用哪张卡/钱包付的钱
+  // 这件事本身就不合理，不能让它静默落成任何默认值。代垫人不是自己（别人代垫）时
+  // 不强制，因为记录人本来就不一定知道对方用什么支付方式付的钱。前端已经用禁用
+  // 提交按钮拦过一层，这里是后端最后一道关卡，不能只信前端。
+  // fix(2026-09-26 第七十一轮)：这趟行程压根没启用任何支付方式时不能死堵——用户
+  // 没有任何东西可选，硬性要求「必须选一个」等于永远记不了账。只在真的有支付方式
+  // 可选（`loadEnabledPaymentMethodIds` 非空）时才要求必选，前端同一份判断逻辑
+  // 见 expense-form.tsx / quick-add-expense.tsx 的 `paymentMethodRequired`。
+  if (body.payerParticipantId === identity.participantId && !body.paymentMethodId) {
+    const enabledIds = await loadEnabledPaymentMethodIds(db, params.tripId, identity);
+    if (enabledIds.size > 0) {
+      return NextResponse.json({ error: 'payment_method_required' }, { status: 400 });
+    }
   }
 
   let fxRateUsed = 1;

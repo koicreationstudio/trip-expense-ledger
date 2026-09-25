@@ -1,10 +1,11 @@
 'use client';
 
-import { useRef, useState, useLayoutEffect } from 'react';
+import { useRef, useState, useLayoutEffect, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
+import { deriveMidRate } from '@/lib/fx/derive-mid-rate';
 import { equalSplit, rescaleSplitToBaseCurrency } from '@/lib/domain/split';
 import type { SplitShare } from '@/lib/domain/split';
 import { COMMON_CATEGORIES } from '@/lib/domain/categories';
@@ -171,19 +172,24 @@ export function ExpenseForm({
     initialExpense ? initialExpense.expenseDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
   );
   const [note, setNote] = useState(initialExpense?.note ?? '');
-  // fix(2026-09-16)："这笔不计入分摊"开关。新建时按初始分类自动给个默认值
-  // （机票/宝石预设 true），一旦用户自己手动点过这个勾选框（excludeFromSplitTouched），
-  // 之后再切换分类就不再覆盖用户的选择——只是"帮用户省一次手动勾选"，不是写死的强规则。
-  const [excludeFromSplit, setExcludeFromSplit] = useState(
-    initialExpense?.excludeFromSplit ?? AUTO_EXCLUDE_CATEGORIES.has(initialExpense?.category ?? '')
-  );
-  const [excludeFromSplitTouched, setExcludeFromSplitTouched] = useState(false);
+  // fix(2026-09-25 第七十轮，Remy 明确要求"去掉手动控制")：「这笔不计入分摊」不再是
+  // 用户可以手动勾/取消的开关，纯粹由分类派生——选了「✈️ 机票」或「💎 宝石」就自动
+  // 排除，选别的分类就不排除，没有任何手动覆盖的余地。之前的 excludeFromSplitTouched
+  // "手动点过就不再跟着分类联动"这层折中逻辑整段删掉。
+  //
+  // 边界情况（已用真实数据查证，写清楚留给 Remy 确认）：生产库里有 46 条
+  // exclude_from_split=1 的记录，其中 33 条 category 不是机票/宝石（比如"交通"
+  // "住宿""餐饮"这些），是这次改动之前 Remy 手动勾过的。这些历史记录本身不受影响——
+  // 行程主页 Hero 卡"我承担"合计读的是数据库里存的 excludeFromSplit 字段本身
+  // （page.tsx `loadMyShareBreakdown`），不是这里重新按分类现算，所以这次改动上线
+  // 后这 33 条记录显示不会变。但如果 Remy 之后编辑（哪怕只是改个商家名字这种不相关
+  // 的小修改）这 33 条里的某一条，保存时这里会按新逻辑把 excludeFromSplit 静默改回
+  // false（因为它的分类不是机票/宝石）——那笔历史记录会从"不计入分摊"变回"计入分摊"，
+  // 这是一次真实的行为改变，不是假设，需要 Remy 知道。
+  const excludeFromSplit = AUTO_EXCLUDE_CATEGORIES.has(category);
 
   function handleCategoryChange(value: string) {
     setCategory(value);
-    if (!excludeFromSplitTouched) {
-      setExcludeFromSplit(AUTO_EXCLUDE_CATEGORIES.has(value));
-    }
   }
   const [fxRateUsed, setFxRateUsed] = useState(
     initialExpense && initialExpense.fxRateUsed !== 1 ? String(initialExpense.fxRateUsed) : ''
@@ -192,8 +198,16 @@ export function ExpenseForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // fix(2026-09-25 第七十轮，任务⑦-④)：编辑一笔旧账时，如果它原来选的支付方式已经
+  // 不在当前"本行程启用的支付方式"列表里（被删除/停用了），初始值就不能照抄
+  // initialExpense.paymentMethodId——那是个表单里选不出来、也不该静默带着提交的
+  // 幽灵值，落回 null 强制用户重新选一个（配合下面"payer=自己时必须选"这条硬性
+  // 校验，选不出旧值 + 必须选 = 用户没法绕过，只能重新选一个真实存在的）。
+  const initialPaymentMethodId = initialExpense?.paymentMethodId ?? null;
+  const initialPaymentMethodStillEnabled =
+    initialPaymentMethodId !== null && paymentMethods.some((m) => m.id === initialPaymentMethodId);
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(
-    initialExpense?.paymentMethodId ?? null
+    initialPaymentMethodStillEnabled ? initialPaymentMethodId : null
   );
 
   // fix(2026-09-14 ui-auditor 第二轮复验抓到的真 bug)：新建消费时默认值原本是 'equal'，
@@ -225,6 +239,59 @@ export function ExpenseForm({
 
   const needsManualFxRate = currency !== baseCurrency;
 
+  // fix(2026-09-26 第七十一轮，任务①)：汇率自动带入——非本位币消费之前完全靠用户
+  // 手打汇率，这次改成先用行程已有的 `GET /api/trips/{tripId}/fx-mid-rates`（跟
+  // fx-compare-card.tsx 同一份实时汇率数据源）自动算出建议值填进去，但保留可编辑。
+  // `fxRateTouchedRef`：只要用户自己手改过这个字段就不再用自动值覆盖（尊重用户的
+  // 判断，比如她知道实际换汇点比市场中间价差一点）；编辑一笔旧账且原始 fxRateUsed
+  // 不是默认值 1 时，视为"已经有一个用户认可过的手动值"，同样不覆盖。币种一旦切换
+  // （`previousCurrencyRef` 检测到变化），旧币种下手动改过的汇率对新币种没有意义，
+  // 重新允许自动带入。
+  const initialFxRateTouched = Boolean(isEdit && initialExpense && initialExpense.fxRateUsed !== 1);
+  const fxRateTouchedRef = useRef(initialFxRateTouched);
+  const previousCurrencyRef = useRef(currency);
+  const [liveMidRates, setLiveMidRates] = useState<Record<string, number> | null>(null);
+
+  useEffect(() => {
+    if (previousCurrencyRef.current !== currency) {
+      previousCurrencyRef.current = currency;
+      fxRateTouchedRef.current = false;
+    }
+  }, [currency]);
+
+  useEffect(() => {
+    if (!needsManualFxRate) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/trips/${tripId}/fx-mid-rates`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { rates: Record<string, number> };
+        if (!cancelled) setLiveMidRates(data.rates);
+      } catch {
+        // 拉取失败维持手动输入这条老路径，不卡住表单——见下面 placeholder 文案。
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [needsManualFxRate, tripId]);
+
+  useEffect(() => {
+    if (!needsManualFxRate || fxRateTouchedRef.current || !liveMidRates) return;
+    const rate = deriveMidRate(liveMidRates, currency, baseCurrency);
+    if (rate !== undefined) {
+      setFxRateUsed(String(rate));
+    }
+  }, [needsManualFxRate, liveMidRates, currency, baseCurrency]);
+
+  // 当地金额（约）：amount（原始币种）× fxRateUsed 约算成 baseCurrency，纯只读展示，
+  // 不反向驱动 amount/fxRateUsed（避免来回换算的浮点误差累积）。
+  const localAmountCents =
+    needsManualFxRate && fxRateUsed && !Number.isNaN(Number(fxRateUsed))
+      ? Math.round(yuanToCents(Number(amountYuan) || 0) * Number(fxRateUsed))
+      : null;
+
   const amountCentsTotal = yuanToCents(Number(amountYuan) || 0);
   const includedParticipants = participants.filter((p) => splitIncluded[p.id]);
   const splitCentsTotal = includedParticipants.reduce(
@@ -232,6 +299,23 @@ export function ExpenseForm({
     0
   );
   const splitMismatch = splitMode === 'custom' && splitCentsTotal !== amountCentsTotal;
+
+  // fix(2026-09-25 第七十轮，任务⑦)：代垫人是记录人自己时必须选支付方式（不知道
+  // 自己用哪张卡/钱包付的钱不合理），代垫人是别人时不强制（记录人不一定知道对方
+  // 用什么付的）。
+  // fix(2026-09-26 第七十一轮，PM 复核时抓到的真 bug)：上一版这里的注释写着"零
+  // 支付方式可选时下面按钮天然保持禁用"——这句话本身就是问题：这趟行程压根没
+  // 配置任何支付方式时，`selectedPaymentMethodId` 永远选不出来，会导致提交按钮
+  // **永久禁用**，用户完全没有办法记账（连"先记下来，以后再补支付方式"这个退路
+  // 都没有）。跟后端 `app/api/trips/[tripId]/expenses/route.ts` POST 的校验逻辑
+  // 对比：后端已经正确地"只在 `loadEnabledPaymentMethodIds` 非空时才要求必选"，
+  // 前端这里没有跟上同一条豁免规则，导致前端比后端更严格——后端愿意接受的请求，
+  // 前端却先一步把提交按钮锁死，用户永远发不出这个请求。这里补上跟后端一致的
+  // `paymentMethods.length > 0` 门槛：没有任何支付方式可选时不强制，跟上面
+  // "还没有启用的支付方式，先去支付方式设置"那条引导配合，用户这种情况下可以先
+  // 不选、正常记账，以后再回来把这笔账编辑加上支付方式。
+  const paymentMethodRequired = payerParticipantId === myParticipantId && paymentMethods.length > 0;
+  const paymentMethodMissing = paymentMethodRequired && !selectedPaymentMethodId;
 
   function handleSelectSplitMode(mode: SplitMode) {
     setSplitMode(mode);
@@ -276,6 +360,13 @@ export function ExpenseForm({
     }
     if (!category.trim()) {
       setError('分类不能空着');
+      return;
+    }
+    // fix(2026-09-25 第七十轮)：提交按钮虽然已经在 paymentMethodMissing 时禁用，
+    // 这里再拦一层是防御性的——万一按钮的 disabled 判断哪天被改漏、或者表单被
+    // 编程方式提交绕过按钮本身，这道关卡还在，不会让请求打到后端才被拒。
+    if (paymentMethodMissing) {
+      setError('这笔是自己代垫的，要选一个支付方式才能保存');
       return;
     }
 
@@ -416,21 +507,43 @@ export function ExpenseForm({
         </div>
       </div>
 
+      {/* fix(2026-09-26 第七十一轮，任务①)：汇率框 + 当地金额框左右并排——汇率现在会
+          自动带入（见上面 useEffect，拉 /api/trips/{tripId}/fx-mid-rates 现算），
+          用户还是可以直接改这个输入框覆盖自动值；旁边"当地金额（约）"是 amount×fxRateUsed
+          换算成本位币的只读展示，方便一眼确认"这笔换算成本位币大概多少钱"对不对，不是
+          独立可编辑字段（不反向改 amount/fxRateUsed，避免来回换算的舍入误差累积）。 */}
       {needsManualFxRate && (
-        <div className="flex flex-col gap-[2px]">
-          <label className="field-label" htmlFor="fx-rate">
-            汇率（1 {currency} = 多少 {baseCurrency}）
-          </label>
-          <input
-            id="fx-rate"
-            type="number"
-            min="0"
-            step="0.0001"
-            value={fxRateUsed}
-            onChange={(e) => setFxRateUsed(e.target.value)}
-            placeholder="手动输入，比价拉不到当日汇率也不影响记账"
-            className="field-input"
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-[2px]">
+            <label className="field-label" htmlFor="fx-rate">
+              汇率（1 {currency} = 多少 {baseCurrency}）
+            </label>
+            <input
+              id="fx-rate"
+              type="number"
+              min="0"
+              step="0.0001"
+              value={fxRateUsed}
+              onChange={(e) => {
+                fxRateTouchedRef.current = true;
+                setFxRateUsed(e.target.value);
+              }}
+              placeholder={liveMidRates ? '已自动带入，可以手动改' : '手动输入，比价拉不到当日汇率也不影响记账'}
+              className="field-input"
+            />
+          </div>
+          <div className="flex flex-col gap-[2px]">
+            <label className="field-label" htmlFor="local-amount">
+              当地金额（约，{baseCurrency}）
+            </label>
+            <div
+              id="local-amount"
+              className="field-input flex items-center font-serif tabular-nums text-muted"
+              aria-live="polite"
+            >
+              {localAmountCents !== null ? formatMoney(localAmountCents, baseCurrency) : '—'}
+            </div>
+          </div>
         </div>
       )}
 
@@ -481,29 +594,9 @@ export function ExpenseForm({
         />
       </div>
 
-      {/* fix(2026-09-16)："不计入分摊"开关——机票/宝石这类差旅业务成本默认勾选，
-          不该分给同行人；其它分类默认不勾。跟"跟其他人 split 这笔"是两回事：那个
-          开关决定"这笔实际怎么分给谁"，这个开关只决定"这笔算不算进行程主页 Hero
-          卡'我承担'那个主数字"，两者互不影响，这笔即使勾了这里，下面照样可以正常
-          设置 splits（真实语义详见 PENDING-DECISIONS，这是待 Remy 确认的理解）。 */}
-      <div className="flex items-start gap-2 rounded-xl border border-sand bg-paper p-3">
-        <input
-          id="exclude-from-split"
-          type="checkbox"
-          checked={excludeFromSplit}
-          onChange={(e) => {
-            setExcludeFromSplit(e.target.checked);
-            setExcludeFromSplitTouched(true);
-          }}
-          className="mt-[3px] h-4 w-4 shrink-0 accent-accent-700"
-        />
-        <label htmlFor="exclude-from-split" className="flex flex-col gap-0.5">
-          <span className="field-label">这笔不计入跟同行人的分摊总额</span>
-          <span className="text-[10px] text-muted">
-            业务/个人成本（比如机票、宝石采购），照常记账，只是不算进行程主页「我承担」的合计数字里，下面分摊设置不受影响。选了「✈️ 机票」或「💎 宝石」分类会自动帮你勾上，你也可以手动改。
-          </span>
-        </label>
-      </div>
+      {/* fix(2026-09-25 第七十轮)：手动"不计入分摊"勾选框整段删掉——excludeFromSplit
+          现在纯粹由分类派生（见上面 state 定义），选了机票/宝石这两个分类会自动不计入
+          「我承担」合计，用户没有单独的开关可以改。 */}
 
       {/* fix(2026-09-14 第四轮走查，Remy 本人明确要求"都要做")：这里原本是一张带"比价"
           按钮的卡片（点了拉 /api/trips/{tripId}/fx-recommendation 算哪张卡最划算），
@@ -581,19 +674,24 @@ export function ExpenseForm({
           随方角变细。**触控高度 `min-h-[32px]` 刻意没有再往下降**——这已经是这个 app
           "次级操作"类按钮（`.tap-link`/`.btn-secondary`）用了很多轮、写进 globals.css
           注释的既定地板值，砍到 32px 以下会破坏跟全站其它次级按钮的触控一致性，也可能
-          点不中，两害相权，选择用形状/字重而不是高度来做"细"这件事。 */}
+          点不中，两害相权，选择用形状/字重而不是高度来做"细"这件事。
+          fix(2026-09-26 第七十一轮，Remy 反馈"再收细一点")：round65 已经把
+          `min-h-[32px]` 这条触控地板值定死不再往下砍，这次收紧的是水平方向——
+          横向内边距 `px-[8px]`→`px-[6px]`，按钮跟旁边文件名文字的间距 `gap-2`(8px)
+          →`gap-1.5`(6px)，字号从 10.5px 统一收到 10px（按钮和旁边"未选择文件"
+          文字一起收，两者继续保持同档不产生新的反差）。 */}
       <div className="flex flex-col gap-[4px]">
         <label className="field-label" htmlFor="receipt">
           收据（可选{isEdit && initialExpense.hasReceipt ? '，已有收据，上传新文件会替换' : ''}）
         </label>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <label
             htmlFor="receipt"
-            className="inline-flex min-h-[32px] shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-lg border border-sand bg-white px-[8px] text-[10.5px] font-normal text-ink transition-colors hover:bg-slate-50"
+            className="inline-flex min-h-[32px] shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-lg border border-sand bg-white px-[6px] text-[10px] font-normal text-ink transition-colors hover:bg-slate-50"
           >
             📎 选择文件
           </label>
-          <span className="min-w-0 flex-1 truncate text-[10.5px] text-muted">
+          <span className="min-w-0 flex-1 truncate text-[10px] text-muted">
             {receiptFile?.name ?? (isEdit && initialExpense.hasReceipt ? '已有收据（未更换）' : '未选择文件')}
           </span>
         </div>
@@ -805,7 +903,7 @@ export function ExpenseForm({
       <div className="flex flex-col items-center gap-2">
         <button
           type="submit"
-          disabled={submitting || splitMismatch}
+          disabled={submitting || splitMismatch || paymentMethodMissing}
           className="big-cta"
         >
           {submitting ? '保存中…' : isEdit ? '保存修改' : '记这笔账'}
