@@ -1,5 +1,101 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-25，第六十八轮，J：约 14 处金额输入框统一加千分位（重新 grep 后落地 10 处） + K：汇率比价卡可比支付方式 0 行时渠道参考价自动展开，claim id=2026-09-25_081517_49d566f5（J）+ 2026-09-25_081519_3d4ebee0（K），commit `dd759b7`，Version ID `d00007cd-f671-4a1b-8c56-aeed051fc352`】
+
+**先说明一个交接缺口**：这轮开工前发现第六十七轮（任务 H"兑换金额输入框加千分位"+ 任务 I"说明文字断行优化"，commit `ae15f24`+`5cb1122`）从来没有补写进这份文档——commit message 里有记录，但没有对应的 PENDING-DECISIONS 章节。这轮没有花时间补写那个历史空档（不在这次任务范围内），如实记录这个缺口，提醒下一轮如果要查 H/I 的完整验收记录，得去 git log 里翻 commit message，这份文档里目前查不到。
+
+延续同一批交付，复用同一个 worktree（`trip-expense-ledger-worktrees/wallet-deeplink-and-form-reset`，分支 `fix/wallet-deeplink-and-form-reset`）。开工前用 `git fetch` 确认没有新的并行提交（HEAD 跟 origin/main 一致，`5cb1122`）。
+
+### 一、任务 J：金额输入框千分位
+
+**重新 grep 的结果，跟上一轮"约 14 处"的口径有出入**：全项目搜 `type="number"` 命中 16 处（4 个目标文件 + `invites-manager.tsx` 1 处"邀请链接有效期天数"）。逐处判断是不是真正的"金额"（会不会出现到 4 位数、分组才有意义），排除了：
+- `invites-manager.tsx` 的"有效期天数"——不是金额，天数不需要千分位，也不在这轮任务书列的 4 个文件范围内。
+- `expense-form.tsx`/`exchange-form.tsx`/`quick-add-expense.tsx` 各自的"汇率"输入框（1 处）——这个项目 8 个支持币种（`lib/currencies.ts`：MYR/USD/HKD/THB/PHP/SGD/LKR/CNY）互相换算出的隐含汇率实测最大也就 3 位数（1 USD≈329 LKR 这种量级，参照 `fx-compare-card.tsx` 里的 `FX_RATES_FALLBACK` 兜底表），永远到不了 4 位数触发分组，格式化没有实际价值。
+- `payment-methods-manager.tsx` 的 `pm-fx-markup`/`pm-foreign-fee`/`pm-cashback` 三个百分比字段（0-100 范围）——不是金额，是百分比。
+
+最终落地 **10 处**（比"约 14"少，差额主要是上面 6 处排除项跟上一轮"约 14"的估算口径不同）：
+1. `expense-form.tsx`：主金额输入框（`id="amount"`）
+2. 同文件：自定义分摊逐人金额输入框（`includedParticipants.map` 循环内）
+3. `payment-methods-manager.tsx`：`id="pm-fixed-fee"`（固定费，结算币种/元）
+4. 同文件：每个钱包"当前余额"输入框（`id={wallet-balance-${w.id}}`）
+5. `exchange-form.tsx`：`id="from-amount"`（拿出多少）
+6. 同文件：`id="to-amount"`（换到...存多少）
+7. 同文件：`id="to-amount-2"`（拆分到第二个钱包，存多少）
+8. 同文件：`id="deposit-fee"`（存款手续费）
+9. `quick-add-expense.tsx`：主金额输入框
+10. 同文件：自定义分摊逐人金额输入框
+
+**实现**：复用现成的 `lib/format-thousands.ts`（`formatThousands`/`stripThousands`/`countMeaningfulCharsBefore`/`positionForMeaningfulCount`），一个字没改，跟 `fx-compare-card.tsx`（第六十七轮任务 H）同一套模式：`<input>` 从 `type="number"` 改 `type="text"` + `inputMode="decimal"`，展示层 `formatThousands(state)`，`onChange` 里剥逗号校验（`/^\d*\.?\d*$/`）+ 光标锚点重定位。真相源永远是不带逗号的纯数字字符串。
+
+**两处额外复杂度**（任务书点名要求专门处理，没有照抄粘贴）：
+- `expense-form.tsx`"2 人自动算分摊余数"联动（`includedParticipants.length === 2` 时改一个人的金额自动补另一人）：改用**剥完逗号之后的 `candidate`** 去算余数，不能拿带逗号的展示字符串做减法——mutation 验证过这条（见下）。
+- `quick-add-expense.tsx` `resetForm()`：提交成功后 `setAmountYuan('')`，这不是"用户打字"触发的变化，不会设置 `pendingCursorMeaningfulCountRef`，光标重定位 `useLayoutEffect` 判断 pending 为 null 直接跳过，不会对已清空的输入框做多余操作。
+
+**光标 ref 的三种形态**（因为渲染次数不同，不能一刀切用同一个模式）：
+- 整个组件只有一份实例（`expense-form.tsx`/`quick-add-expense.tsx` 的主金额输入框）：单一 `useRef<HTMLInputElement>`。
+- 同一段 JSX 因参与者人数渲染出多份（两个文件的"自定义分摊逐人金额"）：改用 `useRef<Record<string, HTMLInputElement | null>>` 按 participant id 索引的 ref 映射 + 对应的 pending 计数映射。
+- `payment-methods-manager.tsx` 的钱包余额输入框虽然也在 `.map` 循环里，但 `editingWalletId` 同时只会等于一个钱包 id，任一时刻最多一份 input 真的挂载，判断后维持单一 ref（不需要按 wallet id 建映射）。
+- `exchange-form.tsx` 四个字段各自都是"整个组件只有一份实例"，抽了一个 `useThousandsField(value, setValue)` 小 hook 复用同一套 ref/pending/onChange 逻辑，避免四份几乎一样的样板代码分别写四次。
+
+**单测清单**（4 个文件此前全部没有组件级测试，这轮各自新建）：
+- `expense-form.test.tsx`（5 条）：主金额打字格式化+提交 payload 正确、粘贴逗号不产生 NaN、编辑回填（1250050 分回填展示 `12,500.5`）、非法字符拒绝、2 人自定义分摊余数联动（`5,000`→另一人正确显示 `7,000`，提交后两人份额之和跟总额一致）。
+- `quick-add-expense.test.tsx`（4 条）：主金额打字格式化+提交正确、粘贴逗号不产生 NaN、提交成功后 `resetForm()` 清空展示为空字符串（不是 "0"/不报错）、自定义分摊逐人金额展示+提交正确。
+- `exchange-form.test.tsx`（4 条）："换到...存多少"格式化+提交正确、"拿出多少"粘贴逗号不产生 NaN、拆分到第二个钱包"存多少"+"存款手续费"两处千分位+两条记录金额都正确、非法字符拒绝。
+- `payment-methods-manager.test.tsx`（4 条）：固定费格式化+提交正确、粘贴逗号不产生 NaN、钱包余额编辑回填（500000 分展示 `5,000`）、改新余额提交后 PATCH body 正确（12500.75 元→1250075 分）。
+
+**Mutation 验证（4 处，逐个改坏确认测试真的会失败，再改回原样，改回后 4 个文件字节级 diff 确认恢复）**：
+1. `expense-form.tsx` 主金额 `onChange` 改成存 `rawInput`（带逗号）而不是剥完的 `candidate` → "粘贴逗号不产生 NaN"这条测试如期失败（`Number("12,500")` 是 `NaN`，校验挡在"金额要大于 0"，提交按钮点了也发不出 POST，等 `postSpy` 超时）。
+2. `expense-form.tsx` 2 人余数联动改用 `rawInput` 算余数 → "另一人自动补成正确的剩余金额"这条如期失败（`expected '12,000' to be '7,000'`，因为 `Number("5,000")` 也是 `NaN`，`|| 0` 兜底成 0，余数直接算成全额）。
+3. `quick-add-expense.tsx` 主金额同款 mutation → 对应测试如期超时失败。
+4. `exchange-form.tsx` 的共享 `useThousandsField` hook 里 `setValue(candidate)` 改成 `setValue(rawInput)` → "拿出多少粘贴逗号"测试如期超时失败（一次改坏影响 4 个字段共用的同一个 hook，测试也确实抓到了）。
+5. `payment-methods-manager.tsx` 固定费 `onChange` 同款 mutation → "粘贴逗号数字不产生 NaN"测试如期失败（这里意外发现 `Number("1,500")` 实际返回的是 `0` 不是 `NaN`，但断言的是精确数值 `150000`，一样被抓到，说明断言写的是"精确数值correct"不是仅仅"不是 NaN"，覆盖力度够）。
+
+全量重跑：`npx tsc --noEmit` 0 错误、`npm run lint` 0 警告 0 错误、`npx vitest run` 37 个测试文件 231 条全过（改动前 33 文件 214 条，新增 4 文件 17 条 —— 其中 K 的验证在下面单独算，这里只算 J 新增的 17 条一致）。
+
+**D1 真实写入验证——如实说明这轮做到什么程度**：这轮受限于执行环境（子 agent 嵌套深度到顶，没能再调一次独立 `ui-auditor` 走真实浏览器提交），**没有**做到"在测试行程里用真实浏览器点一遍表单、提交后查 D1"这一步。已经做到的替代验证：①jsdom 组件测试是用 `@testing-library/react` 真的挂载组件、`fireEvent.change` 触发真实 DOM change 事件（不是直接调用内部函数），走的是组件真实的 `onChange` 处理函数，断言的是真实 mock `fetch` 收到的 POST/PATCH body 里的数值——这条链路（DOM 事件→React state→提交 payload）是被真实测试覆盖的，不是纯函数单测那种间接验证；②上面 5 条 mutation 验证证明这些测试在链路真的被破坏时会真的失败，不是形同虚设。**没有验证到的**：真实浏览器里千分位展示的视觉效果好不好看（比如 `quick-add-expense.tsx` 主金额输入框固定宽度 `w-[74px]`，之前只需要装下 "999.99" 这类数字，现在装 "9,999.99" 多了一个逗号字符，有没有被截断没有实测确认，这是这轮明确留下的观察点）、iOS/Android 上 `inputMode="decimal"` 是不是真的弹出带小数点的数字键盘（MDN 文档说明 `inputMode="decimal"` 会触发带小数点符号的数字键盘，这是浏览器标准行为，跟 `fx-compare-card.tsx` 兑换金额输入框第六十七轮已经用的是同一个属性值，理论上行为一致，但没有真机实测这轮新加的 10 处）。**这些必须由下一次独立 `ui-auditor` 走查补上**，在那之前不能算"已验证生效"。
+
+### 二、任务 K：汇率比价卡可比支付方式 0 行时渠道参考价自动展开
+
+`fx-compare-card.tsx`。改动前：`channelGroupExpanded` 状态默认 `false`，"渠道换汇"这组参考价永远要点"看换汇渠道参考价 ▾"才会显示，不管"我的支付方式"那组有没有数据。改动后：`effectiveChannelExpanded = channelGroupExpanded || cardGroupRows.length === 0`——`cardGroupRows`（"我的支付方式"分组，来自 `showCards`=`hasPaymentMethods && effectiveHold === baseCurrency` 门槛）长度是 0 时（对应两种情况：①"我持有"选的币种不是行程本位币 ②这趟行程压根没配置任何支付方式），不管用户点没点过那个展开按钮，渠道参考价一律视为已展开；有可比支付方式（`cardGroupRows.length > 0`）时行为不变，维持默认收起。
+
+**纯渲染层派生值，没有新增 state、没有碰 `markUserInteracted()`**——这是这次改动刻意的设计取舍：round66 刚根治过的"零交互也 PUT `fx_compare_preference`"这条护栏（`hasUserInteractedRef` 只在四个真实操作入口置 true）一个字没动，`effectiveChannelExpanded` 纯粹是每次渲染时用现有 state 和 props 算出来的一个布尔值，不写任何新状态，天然不会触发保存 effect。
+
+**顺带处理的一个 UI 细节**：0 行强制展开时，原来"看换汇渠道参考价 ▾"/"收起换汇渠道参考价 ▲"这颗切换按钮渲染条件从 `channelGroupRows.length > 0` 改成 `channelGroupRows.length > 0 && cardGroupRows.length > 0`——因为这颗按钮点了也不会改变任何东西（`effectiveChannelExpanded` 恒为真），留着是个死按钮，不如不显示。这是这次在任务书字面要求之外做的一个新判断（任务书没有明确提到这颗按钮该怎么处理），如实记录，如果 Remy 觉得这颗按钮应该保留（哪怕点了没反应）方便她理解"这是自动展开的"，需要她确认要不要加回来或者换成一句纯说明文字。
+
+**单测清单**（`fx-compare-card.test.tsx` 新增 3 条）：
+- 情况①`hasPaymentMethods={false}`：挂载即看到渠道行（"Wise"），没有"看/收起换汇渠道参考价"按钮，0 次 PUT。
+- 情况②"我持有"存档恢复成 `USD`（本位币 `MYR`）：同样挂载即看到渠道行，没有切换按钮，0 次 PUT。
+- 对照组：有可比支付方式（`hasPaymentMethods=true` 且"我持有"=本位币）时维持默认收起，点"看换汇渠道参考价 ▾"才展开，按钮文案正确切换成"收起..."。
+
+三条测试全部覆盖了"0 次 PUT"这个 round66 护栏——分别在挂载后等待 1 秒确认 `putSpy` 没被调用过，没有另外单独跑 mutation（因为改动本身没有新增/修改任何跟 PUT 相关的代码路径，`markUserInteracted()`/保存 effect 一个字没动，round66 那 3 处已有的 mutation 验证覆盖的正是这条护栏本身）。
+
+**Remy 真实「🇭🇰2026香港」行程验证——如实说明做到什么程度**：这条真实行程的场景正好符合"0 行"（她持有 MYR，本位币 HKD，两者不一致）。D1 层面已确认：验证前后 `expense`=11、`wallet`=3、`fx_compare_preference.updated_at`=1790266709619 三个基准数字完全没变（部署前后各查了一遍，逐字节相同）——这条至少证明了部署这个改动本身、以及 Remy 正常使用不会触发额外的 D1 写入。**没有做到**的是"真的用她的身份链接登录、打开这张卡截图确认渠道参考价真的自动展开"这一步真机视觉验证——受限于这次执行环境（子 agent 嵌套深度到顶，没能再调独立 `ui-auditor` 走浏览器），只做到了组件测试层面的验证（上面情况①②两条用例本质就是在模拟"持有非本位币/没有支付方式"这两种跟真实行程完全对应的场景，测试是用真实组件树跑的，不是纯逻辑推演），但没有一张来自真实浏览器、真实账号的截图证据。**这条必须由下一次独立 `ui-auditor` 走查补上**（可以用真实身份直连链接 `https://trip-expense-ledger.remybali.workers.dev/id/<identityToken>` 登录后直接打开 `https://trip-expense-ledger.remybali.workers.dev/trips/f78a6b5e-8612-4097-8bfd-88a5db664045`，全程零点击，只截图确认），在那之前不能算"已验证生效"。
+
+### 三、部署 + D1 基准核对
+
+`git fetch` 确认无新并行提交（HEAD 与 `origin/main` 一致，`5cb1122`）后 `safe_commit.py` 提交（commit `dd759b7`，仓库根 cwd 下执行）、`git push origin HEAD:main` fast-forward 成功、`./deploy.sh` 五关全过（lint / typecheck / 231 单测 / opennextjs-cloudflare build / wrangler deploy），Version ID `d00007cd-f671-4a1b-8c56-aeed051fc352`，`/api/health` 回读 200。
+
+D1 基准数字前后对照（部署前、部署后各查了一遍，`wrangler d1 execute --remote`）：
+
+| 字段 | 部署前 | 部署后 |
+|---|---|---|
+| `expense`（真实行程） | 11 | 11 |
+| `wallet`（真实行程） | 3 | 3 |
+| `fx_compare_preference.updated_at`（真实行程） | 1790266709619 | 1790266709619 |
+
+三个数字全程没变，符合预期（这轮改动本身不涉及对真实行程的任何写操作）。
+
+### 四、这轮明确没做到的事（如实列出，不含糊）
+
+1. **没有独立 `ui-auditor` 真机走查**——受限于这次执行环境，子 agent 嵌套深度到顶（`Subagent nesting limit reached (depth 3 of 3)`），尝试调用 `ui-auditor` 被系统拦截，没能补上。这是本项目"UI 改动完工前必须过 ui-auditor 真机走查"这条硬性关卡明确没有满足的一项，J/K 都不能算"已完成"，需要 lifeos-pm 或 Remy 在一个新的顶层对话里另外触发一次独立 `ui-auditor` 走查（不要在这条已经嵌套很深的会话线里再试）。
+2. **J 没有做到测试行程里真实提交+查 D1**——只做到 jsdom 组件测试层面（真实 DOM 事件+真实 onChange 链路+mutation 验证），没有真实浏览器提交+真实 D1 查询这一层。
+3. **K 没有做到 Remy 真实行程的真机截图**——只做到 D1 三个基准数字前后核对没有变化，没有真的打开她的行程截图确认视觉效果。
+4. **移动端数字键盘没有真机确认**——10 处新增的 `inputMode="decimal"` 输入框，只是跟 `fx-compare-card.tsx` 已经用了一轮的同一个属性值保持一致，理论上（MDN 文档）会弹带小数点的数字键盘，没有拿真实 iOS/Android 设备/模拟器点开确认。
+5. **`quick-add-expense.tsx` 主金额输入框宽度 `w-[74px]` 有没有被"9,999.99"这类更长的展示字符串撑爆/截断，没有真机截图确认**，这轮没有动这个宽度（怕没证据支撑就顺手改样式），留给 ui-auditor 走查时一并确认，需要的话再改。
+6. **上面"K 顺带去掉死按钮"这个新判断**——任务书没有明确说这颗按钮该怎么处理，这是这次替 Remy 做的新判断，需要她确认认不认可"0 行时不显示切换按钮"这个做法。
+
+claim 板两条（`2026-09-25_081517_49d566f5` J / `2026-09-25_081519_3d4ebee0` K）这轮都还留在 `in_progress`，没有标 `done`——因为上面第四节列的缺口都还没补上，按这个项目自己的规矩，没过 ui-auditor 真机走查的 UI 改动不能算完成。
+
 ## 【2026-09-25，第六十六轮，根治汇率比价卡"零交互也 PUT fx_compare_preference"（round64/65 遗留）+ 顺带修基准换算卡片网格排列不对称（Bug G），claim id=2026-09-25_003154_9119dcee（主任务）+ 2026-09-25_003315_ac3f9760（Bug G），commit `8a7bd2a`+`380695a`，Version ID `73092143-3582-4afd-a581-3e8890fcc309`（主任务）+ `1c5d56fd-a9a7-444a-83b2-bb97314d737c`（Bug G）】
 
 背景：跟第六十四/六十五轮（钱包深链冷启动+展开残留，commit `9fb5061`+`571d0ad`；钱包卡间距/收据按钮瘦身/渠道组收起，commit `dcdf9bc`+`3156c82`）同一批交付的收尾，复用同一个 worktree（`trip-expense-ledger-worktrees/wallet-deeplink-and-form-reset`，分支 `fix/wallet-deeplink-and-form-reset`）。round64/65 都发现"汇率比价卡只要打开行程主页就会 PUT 一次 `fx-compare-preference`，零交互"，两轮各自只是猜测根因（round64 猜"新卡默认勾选"、round65 猜"`setTimeout(0)` 防抖没生效"），都没有坐实，这轮要求先用证据确认根因再动手。
