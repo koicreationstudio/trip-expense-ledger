@@ -50,6 +50,15 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
     return NextResponse.json({ error: 'invalid_payer' }, { status: 400 });
   }
 
+  // fix(2026-09-25 第七十轮，追加2 那条"记账不选支付方式显示成现金HKD"bug 的根治
+  // 防线)：代垫人是记录人自己时，必须选支付方式——不知道自己用哪张卡/钱包付的钱
+  // 这件事本身就不合理，不能让它静默落成任何默认值。代垫人不是自己（别人代垫）时
+  // 不强制，因为记录人本来就不一定知道对方用什么支付方式付的钱。前端已经用禁用
+  // 提交按钮拦过一层，这里是后端最后一道关卡，不能只信前端。
+  if (body.payerParticipantId === identity.participantId && !body.paymentMethodId) {
+    return NextResponse.json({ error: 'payment_method_required' }, { status: 400 });
+  }
+
   let fxRateUsed = 1;
   let amountBaseCurrency = body.amount;
 

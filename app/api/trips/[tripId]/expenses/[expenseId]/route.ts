@@ -65,6 +65,15 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
     return NextResponse.json({ error: 'invalid_payer' }, { status: 400 });
   }
 
+  // fix(2026-09-25 第七十轮)：跟 POST 同一条规则——编辑后代垫人如果是记录人自己，
+  // 支付方式不能是空的。PATCH 是部分更新语义，body 里没传的字段要按"维持原值"
+  // 算最终结果，再判断这个最终结果是否合规，不能只看这次请求body 里有没有传。
+  const nextPayerParticipantId = body.payerParticipantId ?? existing.payerParticipantId;
+  const nextPaymentMethodId = body.paymentMethodId !== undefined ? body.paymentMethodId : existing.paymentMethodId;
+  if (nextPayerParticipantId === identity.participantId && !nextPaymentMethodId) {
+    return NextResponse.json({ error: 'payment_method_required' }, { status: 400 });
+  }
+
   const amountOrCurrencyChanged = body.amount !== undefined || body.currency !== undefined;
   // 金额/币种一变，旧的 splits 总和肯定跟新总额对不上，必须在同一个请求里一起重传，
   // 不允许留一个「总额已经变了但分摊还是旧值」的中间态。
