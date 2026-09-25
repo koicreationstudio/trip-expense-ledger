@@ -85,6 +85,22 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
 
   const expenseId = crypto.randomUUID();
 
+  // fix(2026-09-26 第七十一轮，任务⑤)：新记一笔账，在"手动排序"里默认排到这趟
+  // 行程流水账的最末位（sortOrder = 当前最大值 + 1），不是天然排最前——新记的账
+  // 多半是"最近发生的事"，直觉上接在更早消费后面比突然插到最前面更符合"流水账"
+  // 的心智模型，这是这次的产品判断，需要 Remy 确认认不认可。按整趟行程算最大值
+  // （不按 enteredByParticipantId 收窄）——活动流现在是整趟行程共享的一条流水
+  // （page.tsx 第 64-66 行注释："整个行程的消费都要看见……不再按
+  // enteredByParticipantId 过滤"），手动排序顺序也是所有人看到的同一份共享顺序，
+  // 不是"我自己"专属的排序。
+  const maxSortOrderRow = await db
+    .select({ sortOrder: expenses.sortOrder })
+    .from(expenses)
+    .where(eq(expenses.tripId, params.tripId))
+    .orderBy(desc(expenses.sortOrder))
+    .limit(1);
+  const nextSortOrder = (maxSortOrderRow[0]?.sortOrder ?? -1) + 1;
+
   const insertExpense = db.insert(expenses).values({
     id: expenseId,
     tripId: params.tripId,
@@ -100,6 +116,7 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
     merchant: body.merchant || null,
     note: body.note ?? null,
     excludeFromSplit: body.excludeFromSplit ?? false,
+    sortOrder: nextSortOrder,
     expenseDate: new Date(body.expenseDate),
   });
   const insertSplits = db.insert(expenseSplits).values(

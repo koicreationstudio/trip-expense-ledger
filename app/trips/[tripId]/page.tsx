@@ -310,6 +310,7 @@ export default async function TripPage({ params }: { params: { tripId: string } 
               ? paymentMethodLabelById.get(e.paymentMethodId) ?? '其他人的支付方式'
               : null,
             excludeFromSplit: e.excludeFromSplit,
+            sortOrder: e.sortOrder,
           }))}
         />
       </section>

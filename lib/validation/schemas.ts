@@ -191,3 +191,22 @@ export const createExchangeRecordSchema = z
     message: 'fromAmount 要跟 fromWalletId 同时有或同时没有',
     path: ['fromAmount'],
   });
+
+// fix(2026-09-26 第七十一轮，任务⑥)：活动流排序模式 + 4 个筛选条件云端同步，跟
+// fxComparePreferenceSchema 同一套模式——'ALL' 是 expense-list.tsx 既有的
+// "不筛选"字面量，原样存字符串。
+export const expenseListPreferenceSchema = z.object({
+  sortMode: z.enum(['manual', 'date', 'amount']),
+  categoryFilter: z.string().trim().min(1).max(120),
+  payerFilter: z.string().trim().min(1).max(120),
+  dateFilter: z.string().trim().min(1).max(120),
+  paymentMethodFilter: z.string().trim().min(1).max(120),
+});
+
+// fix(2026-09-26 第七十一轮，任务⑤)：活动流拖拽重排，一次提交"新顺序的完整 id
+// 数组"（这趟行程当前手动排序模式下可见的全部消费 id，按拖拽后的新顺序），后端按
+// 数组下标批量重算 sortOrder（下标本身就是新的相对顺序，不需要客户端自己算具体
+// 数值）。数组长度上限跟这个项目其它列表类接口一致做个宽松上限，防止异常大请求。
+export const reorderExpensesSchema = z.object({
+  orderedExpenseIds: z.array(z.string().min(1)).min(1).max(2000),
+});

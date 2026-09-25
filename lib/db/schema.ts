@@ -236,6 +236,17 @@ export const expenses = sqliteTable(
     // 字段纯粹是 Hero 卡怎么分组显示的开关，故意不跟结算逻辑绑死，免得以后
     // 理解错了还要跟着改一遍算法。
     excludeFromSplit: integer('exclude_from_split', { mode: 'boolean' }).notNull().default(false),
+    // 活动流"手动排序"模式下的顺序（2026-09-26 第七十一轮，任务⑤，Remy 明确要求
+    // "拖拽支持"）。数字越小排越前，同一趟行程内不要求连续，只要求相对大小正确——
+    // 拖拽落位后前端重算受影响区间的新序号一次性 PATCH 回来，不需要整趟行程的全部
+    // 消费重新编号。新建消费默认给 0，落库时由 API 层追加到当前行程"手动排序"最末位
+    // （查询当前最大 sortOrder + 1），不是让它天然排最前——这是这次的产品判断，
+    // 理由是新记的账多半是"最近发生的事"，直觉上排在列表末尾（更早消费的后面）比
+    // 突然插到最前面更符合"流水账"的心智模型，需要 Remy 确认认不认可。旧数据（这次
+    // 上线前的历史消费）不会自然获得这个顺序，需要一次性回填脚本按当前展示顺序
+    // （expenseDate 倒序，这是现有默认排序）赋值，见
+    // `scripts/backfill-expense-sort-order.ts`。
+    sortOrder: integer('sort_order').notNull().default(0),
     expenseDate: integer('expense_date', { mode: 'timestamp_ms' }).notNull(),
     createdAt: createdAt(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
@@ -524,6 +535,51 @@ export const fxComparePreferences = sqliteTable(
     // payment_method 那边默契一致，不需要额外的 partial index 语法。
     userTripIdx: uniqueIndex('fx_compare_preference_user_trip_idx').on(table.userId, table.tripId),
     participantTripIdx: uniqueIndex('fx_compare_preference_participant_trip_idx').on(
+      table.participantId,
+      table.tripId
+    ),
+  })
+);
+
+// ---------------------------------------------------------------------------
+// expense_list_filter_preference：活动流（expense-list.tsx）的排序模式 + 4 个
+// 筛选条件，2026-09-26 第七十一轮任务⑥新增——之前这组选项也是纯 useState，刷新
+// 页面/换设备就丢。跟 fx_compare_preference 同一套双轨 owner 归属（有账号按
+// user_id，访客按 participant_id）、同一套"只在真实交互时才 PUT"防护
+// （hasUserInteractedRef + 内容比对双保险，见 expense-list.tsx 和
+// lib/domain/expense-list-preference-diff.ts）。
+//
+// sortMode 也算进这张偏好表（不是只存 4 个筛选条件）——排序模式同样是"用户这次
+// 想怎么看这份流水账"的一部分，没有理由只记筛选不记排序，这是这次的产品判断，
+// 需要 Remy 确认认不认可。
+// ---------------------------------------------------------------------------
+export const expenseListPreferences = sqliteTable(
+  'expense_list_filter_preference',
+  {
+    id: id(),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    participantId: text('participant_id').references(() => participants.id, { onDelete: 'cascade' }),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    sortMode: text('sort_mode', { enum: ['manual', 'date', 'amount'] })
+      .notNull()
+      .default('manual'),
+    // 4 个筛选条件的当前值——'ALL' 是这个项目里"不筛选/全部"的既定字面量
+    // （expense-list.tsx 里的 ALL 常量），原样存字符串，不是布尔开关，值失效
+    // （比如筛的那个人被移出了行程）时前端渲染自然过滤/退回 ALL，这个表自己
+    // 不做级联清理，跟 fx_compare_preference 的既有取舍一致。
+    categoryFilter: text('category_filter').notNull().default('ALL'),
+    payerFilter: text('payer_filter').notNull().default('ALL'),
+    dateFilter: text('date_filter').notNull().default('ALL'),
+    paymentMethodFilter: text('payment_method_filter').notNull().default('ALL'),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch('subsec') * 1000)`),
+  },
+  (table) => ({
+    userTripIdx: uniqueIndex('expense_list_filter_preference_user_trip_idx').on(table.userId, table.tripId),
+    participantTripIdx: uniqueIndex('expense_list_filter_preference_participant_trip_idx').on(
       table.participantId,
       table.tripId
     ),
