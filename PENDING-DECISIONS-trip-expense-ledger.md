@@ -21,6 +21,152 @@
 
 ---
 
+## 【2026-09-26，第七十一轮批次完整交接记录（trip-expense-ledger-pm 补记，接手 lifeos-pm 一整晚盯的批次）】
+
+背景：Remy 睡前要求"跟进处理干净，明早起来要看到已经完成"，lifeos-pm 盯了一整晚的执行、主会话也旁听核实了几个点，但这份文档一直只有上面那节"D1 迁移安全核对"，round71 这一整批 C①-⑧ + B1 + 更新7-11 的完整交接记录从没写过。这节由 trip-expense-ledger-pm 重新过一遍 `git log`（commit 区间 `3b278c8^..4c81454`，共 19 个 commit）+ 独立调用 `ui-auditor` 真机走查后补写，逐条附证据。
+
+**先说一个 lifeos-pm 交接时没提到、我自己核实 git log 才发现的缺口**：lifeos-pm 报的部署 Version 是 `50459b6f-2f62-4390-bbb2-597d6f341e49`（2026-09-25T20:03:25Z），但 `npx wrangler deployments list` 显示这**不是**当前生产环境实际在跑的版本——20:03 之后还有一次部署 `10f8866e-cdae-4ffe-98f9-646300a9cac4`（2026-09-25T20:26:02Z，`npx wrangler deployments status` 确认这是当前 active 版本）。查 `lib/build-info.ts`（deploy.sh 的 prebuild 钩子写的，`BUILD_COMMIT="4c81454"`，`BUILD_TIME="2026-09-25T20:25:23.725Z"`）+ `git rev-parse HEAD`=`4c8145...` 确认：这次多出来的部署对应的是 commit `4c81454`——round71 结束后，独立 `ui-auditor` 走查又抓到一个真 bug（见下面"第七十一轮第二版"一节），修完立刻又走了一次 `deploy.sh` 重新部署。**结论：现在线上跑的确实是最新代码（4c81454，包含这个后续修复），不是 lifeos-pm 报的那个中间版本，代码层面没有问题，只是她报的 Version ID 不是最终那次部署，这里更正一下留档。**
+
+### 一、B1：钱包直接扣款口径根治（commit `3b278c8`）
+
+真实事故：htoo 自己垫付"归还钱"US$7,500，Remy 帮他代录进系统，但这笔钱被误从 Remy 自己的 USDT 钱包扣掉——根因是 `expenses/route.ts` 记账自动扣款判断用的是 `enteredByParticipantId`（谁把这笔记录敲进系统，Remy 一个人代录全部参与者的消费，这个字段几乎永远是她自己），应该用 `payerParticipantId`（真正掏钱的人）。
+
+修复内容：
+1. `lib/domain/wallet-balance.ts` 新增 chokepoint `findDirectDebitWallet()`，统一判断"这笔消费该不该扣这个钱包"，四个条件：付款人就是钱包主人本人 + 支付方式精确匹配 + 币种精确匹配 + 钱包还没"设置过当前余额"（`balanceUpdatedAt` 为 null，锚点模式的钱包走另一套现算逻辑）。
+2. `expenses/[expenseId]/route.ts` 的 PATCH（改支付方式/改代垫人/改金额）、DELETE 补上了新旧钱包回滚重算——这两处之前**完全没有回滚逻辑**，是真实缺口（编辑/删除一笔已经扣过款的消费，钱包余额不会跟着改），不是这次改动引入的新问题。
+3. `expenses/route.ts` POST、`wallets/route.ts` POST（钱包诞生前历史消费回填）两处统一改用 `findDirectDebitWallet`/`payerParticipantId` 口径。
+
+验证：新增/扩充测试覆盖 PATCH 改支付方式/改金额/改代垫人、DELETE 回滚、POST 代录场景，commit message 记录逐条 mutation 验证过（改坏对应逻辑确认测试真的失败，改回后 `git diff --stat` 核对字节级恢复）——这层是我抽查过代码内容属实（trip-expense-ledger-pm 之前的 sonnet 抽查记录），这次没有重新跑一遍 mutation。
+
+**唯一没被这次改动处理的残留缺口**（`wallet-balance.ts` 顶部注释原话）：还停留在"旧的可变累加"模式（`balanceUpdatedAt` 为 null）的钱包，编辑/删除消费依然不会回滚余额——这是从 v1 就有的既有缺口，这次只是新增了 PATCH/DELETE 的回滚代码路径本身，但 B2 里查到的 USDT 钱包正好就是这类"旧模式"钱包，历史累积的偏差需要人工一次性校正（见下面 B2 独立记录）。
+
+### 二、C①：记账表单汇率自动带入 + 当地金额预览（commit `60ea0cf`）
+
+非本位币消费的汇率框改成自动带入：`GET /api/trips/{tripId}/fx-mid-rates` + `deriveMidRate` 算出建议值，用户手动改过、或者币种没变时不覆盖用户已输入的值。金额框旁新增"当地金额（约）"只读预览，跟原始金额、汇率框左右并排展示（Remy 需求原话是"两个数字要放在一起方便对照"）。
+
+### 三、C②：不计入分摊改成纯粹由分类派生（commit `60ea0cf`）
+
+删掉手动勾选框，`excludeFromSplit` 改成完全由消费分类（机票/宝石）自动派生，不再让用户手动勾选。**遗留提醒**（commit message 原话）：历史上有 33 条非机票/宝石分类、但之前被手动标记过 `excludeFromSplit=true` 的记录，这些记录以后被编辑一次就会静默改回"计入分摊"（因为新逻辑只看分类，不看这个历史手动标记）——这是这次改动的副作用，已经写进代码注释，没有专门去处理这 33 条历史数据，需要 Remy 知情。
+
+### 四、C⑦：代垫人是自己时支付方式必填（commit `60ea0cf` + `4a292dd`）
+
+代垫人是 Remy 自己时，支付方式必填：前端 disabled 提交按钮 + 提交前二次拦截 + 后端 POST/PATCH 双重校验；代垫给别人（比如帮 htoo 垫钱）不强制。没有可选支付方式时引导去设置页，不卡死。`quick-add-expense.tsx`（快速记账）之前完全没有支付方式选择器，这次补齐。
+
+**这条本身在合并后被 PM 复核抓到一个真 bug，同一晚修掉了（commit `4a292dd`）**：`paymentMethods.length===0`（这趟行程压根没启用任何支付方式）时，"必选"判断没有豁免，导致下拉永远选不出值、提交按钮永久禁用——用户除了先去设置页配一个支付方式之外完全没有退路，连"先记下来以后再补"都做不到，比"卡死"更糟。修法：跟后端早就有的 `loadEnabledPaymentMethodIds(db, tripId, identity).size > 0` 才强制这条规则的口径对齐，零可选时不强制，允许先不选正常提交。
+
+### 五、更新8/9：排查"不选支付方式时列表显示成现金HKD"这个疑似 bug（commit `60ea0cf`，**没有复现出来**）
+
+这是这批里唯一一条**排查结论是"没找到 bug"**的，如实记录、不要美化：核对了 `page.tsx` 309-311 行 `paymentMethodLabel` 派生逻辑（`e.paymentMethodId ? paymentMethodLabelById.get(e.paymentMethodId) ?? '其他人的支付方式' : null`）、`expense-list.tsx` 渲染逻辑、`SelectDropdown` 组件本体，以及真实行程里唯一一条 `payment_method_id=NULL` 的记录（`c8f2268b`，商家"袜子 oyem"），当前代码这几条路径都是对的：没选支付方式（`null`）时标签就是 `null`（不渲染），不会显示成"现金HKD"，没有复现出这个 bug。trip-expense-ledger-pm 独立重读了一遍 `page.tsx` 这几行代码（见上面引用），确认跟 commit message 描述一致，不是空话。**如果 Remy 之后又看到这个现象，需要她提供更具体的复现步骤（哪一趟行程/哪一笔消费/什么操作顺序），这条目前处于"排查过、没查到"的状态，不是"已修复"。**
+
+### 六、C⑧：收据按钮尺寸收紧 + 设置余额占位块动态高度（commit `60ea0cf` 收据部分 + `50bba59` h-screen 部分）
+
+收据按钮从 `rounded-full`/11px 收到 `rounded-lg`/10px，横向 padding 8px→6px，跟文件名的间距 8px→6px，触控高度 `min-h-[32px]` 保留不再往下砍（保留无障碍触控面积）。
+
+设置余额占位块：从写死 `h-screen`（100vh）改成按"目标区块距视口顶部的实际缺口"动态算出最小够用高度，这是这批**唯一被独立 `ui-auditor` 真机走查抓到还有问题、当晚又出了第二版修复**的一条，详见下面单独一节。
+
+### 七、C③：汇率比价卡"我持有≠本位币"支持 + 徽章跨全组比较（commit `eca594f`）
+
+四个子需求：
+1. 推翻 `showCards` 旧门槛（我持有必须 === 本位币），改成 `hasPaymentMethods` 即有资格；具体列哪几张卡改用 `settlementCurrency === effectiveHold` 筛，不再看是否等于本位币。
+2. `fx-recommendation` 请求显式传 `compareCurrency=effectiveHold`（不再依赖服务器端默认退回 `trip.baseCurrency`），费用/文案单位同步从 `baseCurrency` 改 `effectiveHold`。
+3. "✓最划算"徽章从 round65 的"只在我的支付方式内部比"改回**跨当前可见行比较**（渠道换汇参考价 + 我的支付方式，渠道组折叠时不参与）。
+4. 顶部新增一行结论"💡最划算：XX，比YY多换Z%"，跟徽章共用同一份数据源，不会说法不一致。
+
+**这条对应 lifeos-pm 提到的"更新10：新加坡行程'无推荐'连带修复"**——之前"我持有"非本位币时卡片直接不显示（`showCards` 旧门槛把整组卡片砍掉），导致 Remy 的「🇸🇬2026新加坡柔佛」行程（本位币 SGD，她持有 MYR/USD 现金）打开汇率比价卡看到"无推荐"或空白。这批修完之后**我独立调了一次 `ui-auditor` 用 Remy 真实新加坡行程账号真机验证**，结果见文末"独立 ui-auditor 走查结论"一节。
+
+### 八、C④：行程切换下拉去标题行+新建行程挪到列表底（commit `50bba59`）
+
+`trip-header-nav.tsx`：下拉面板去掉"展开：切到其它行程/管理行程"这句说明文字标题行，"＋新建行程"从标题行挪到列表最底部，作为列表最后一项（跟其它行程项同一套列表节奏）。**我独立走查时顺带发现了一张旧截图 `17_trip_switcher_mobile_missing_trips_bug.png`（文件名自带"bug"字样，之前没人跟进），专门让 ui-auditor 用正确的身份链接重测这个下拉是不是真的漏列了其它行程——结果见文末一节。**
+
+### 九、C⑤+⑥：活动流手动拖拽排序 + 筛选条件云端同步（commit `339af5d`）
+
+- C⑤：`expense` 表加 `sort_order` 字段（迁移 0012），拖拽用原生 Pointer Events 统一处理鼠标/触摸（电脑按住即拖，手机 350ms 长按激活）。落位后 `PATCH /api/trips/{tripId}/expenses/reorder` 一次性批量重算（`db.batch` 原子提交）。筛选任一条件非"全部"时禁用拖拽。历史消费一次性回填脚本 `scripts/backfill-expense-sort-order.sql`——**这个脚本已经在上面那节"D1 迁移安全核对"里确认对生产库跑过并核对过三项不变量，全部通过**，不重复记录。
+- C⑥：新表 `expense_list_filter_preference`，存 `sortMode` + 4 个筛选条件，照抄 `fx-compare-card.tsx` 的 `hasUserInteractedRef`/`markUserInteracted` 双保险，只在真实交互后才 PUT。
+
+测试：`lib/domain/reorder.test.ts`（9）、`expense-list-preference-diff.test.ts`（5）、两个新 API 路由测试（5+4）、`expense-list.test.tsx`（7）。commit message 记录"全量 `npx tsc --noEmit` 0 错误、`npx vitest run` 42 文件 266 条全过"。
+
+### 十、周边基础设施修复（commit `f481122`/`4d17728`/`0b0b084`/`bcaad72`，非用户可见功能，一并记录完整性）
+
+这批夹杂了几个"嵌套 worktree 目录污染主 checkout 构建"的坑：`tsconfig.json`/`vitest.config.ts` 没排除 `trip-expense-ledger-worktrees/`，导致别的分支未合并的代码被一起扫进 typecheck/测试，报一堆无关错误掩盖真正该关注的信号；`.eslintrc.json` 加 `root: true` 防嵌套 worktree 触发父目录配置误报冲突；`deploy.sh`/`migrate-remote.sh` 的 dirty-check 排除清单本来就该对齐、这次顺手对齐 + 补上 `migrate-remote.sh` 漏掉的 `design-references/`。**截至这次巡查，`trip-expense-ledger-worktrees/`（主 checkout 内部）+ 外层 `trip-expense-ledger-worktrides/` 一共还挂着 16 个历史 worktree（`account-page`/`category-combobox`/`delete-trip`/`fab-avoid` 等，多数已经合并进主线但没清理），这次任务范围不包括清理，如实记录这个观察，不是本轮遗留的新问题。**
+
+### 十一、第七十一轮第二版：设置余额面板深链滚动，独立 ui-auditor 抓到真 bug（commit `4c81454`，lifeos-pm 交接时完全没提到这一条）
+
+这是我梳理 `git log` 时才发现的：round71 第一版（第八条 h-screen 部分）把"深链跳转后滚不到设置余额面板"这个坑从写死 `h-screen` 改成"按缺口精算高度"的占位 div，本地单测/E2E 探针都过。但当晚**独立调用的 `ui-auditor` 用 Remy 真实行程真机走查抓到**：这条路径手机端往下拉依然有一大片突兀空白（展开态比折叠态多出 752px，但实际新增可见内容目测只有约 500px，中间 250px+ 说不通地空着）——这正是我看到的 `ui-audit-round71/08_payment_methods_deeplink_mobile.png` 系列几张截图（08b/08c/08d/08e）记录的问题状态。
+
+根因：只要这趟行程内容短（这个面板就是页面最后一节），"精算出来的缺口"本身就等于"要凭空造出多少空白才能把目标顶到视口最上面"——精算得再准，只要目标之后的真实内容撑不满一屏，造出来的部分就是纯空白，跟写死 `h-screen` 是同一类问题，只是块头小一点。
+
+改法：不再造任何占位 div。目标区块之后的真实内容本来就 >= 一屏时才用 `scrollIntoView({block:'start'})`（round39 原本的处理）；内容短时改成 `window.scrollTo` 到文档真实的最底部（不额外撑高文档），目标区块自然尽量往上走但不强求精确顶到视口最上端——"能看到、看到全部"优先于"精确顶到最顶端"。单测两条改写验证新分支行为，mutation 验证过。全量 tsc/lint/vitest（44 文件 290 条）全过。
+
+**这条修完后立刻重新走了一次 `deploy.sh`，对应部署 Version `10f8866e-cdae-4ffe-98f9-646300a9cac4`（2026-09-25T20:26:02Z）——就是上面提到的"当前生产环境实际在跑的版本"。这条修复代码层面我读过（`payment-methods-manager.tsx` 100-165 行），逻辑跟 commit message 描述一致，但从没有人拿这次修复之后的新截图确认视觉效果，是这轮明确留下的验证缺口，已经在这次的独立 ui-auditor 走查里一并交代（见下节）。**
+
+### 十二、独立 `ui-auditor` 走查结论（trip-expense-ledger-pm 本轮新调，用 Remy 真实身份链接，只读，覆盖上面标记"待验证"的三条）
+
+全程用 Remy 真实身份链接登录（她名下真实有🇭🇰2026香港/🇸🇬2026新加坡柔佛/2026曼谷三趟行程），只读操作（导航、下拉切换、展开/收起卡片），没有提交任何表单、没有新增/删除任何消费/钱包/支付方式。
+
+**结论 A：C③"我持有≠本位币"支持 + 徽章跨全组比较——真机验证通过，覆盖到了最关键的用例。** 在「🇸🇬2026新加坡柔佛」行程（本位币 SGD）依次把"我持有"切换成 MYR/USD/CNY 三种，三次都出现正常的"💡最划算"结论行 + "✓最划算"徽章，没有"无推荐"。**CNY 这个用例是最能验证这次修复的**：Remy 名下 CNY 只配了一张支付方式（支付宝，折算 S$188.25），如果徽章逻辑还停留在"只在我的支付方式内部比"（round65 旧逻辑），支付宝会被误判成"最划算"（因为它是唯一一张卡）；这次实测徽章正确跨组比较后落在了渠道组的 Wise（S$188.78，比支付宝高），结论行显示"💡最划算：Wise，比 支付宝 多换 0.3%"——这证明修复是真的生效了，不是巧合。截图 `/Users/linotan/Desktop/Claude/taskA_fx_compare_cny_singapore.png`（trip-expense-ledger-pm 本人也看过这张截图核实过，内容属实）、`taskA_fx_compare_usd_singapore.png`。**round71 遗留的"更新10 新加坡行程无推荐"这个缺口，到这里补上了完整的真机证据，可以视为已验证。**
+
+**结论 B：C④"行程切换下拉缺行程"这个旧截图标记的 bug——这次没有复现，判断是旧截图登录状态问题。** 用正确的身份链接分别在桌面宽度和手机宽度（375×812）打开香港行程切换器下拉，两次都正确列出了 Remy 名下另外两趟行程（曼谷+新加坡柔佛），截图 `taskB_trip_switcher_desktop_hk.png`/`taskB_trip_switcher_mobile_hk_retest.png` 为证。trip-expense-ledger-pm 也看过标记"bug"的那张旧截图（`17_trip_switcher_mobile_missing_trips_bug.png`），确实只显示了一趟行程——结合这次重测结果，判断旧截图当时大概率不是用完整账号身份登录的（比如只是某趟行程的访客 session，没有关联到 Remy 的账号），不是代码里 `otherTrips` 真的传空这个 bug，**这条排查结论是"没有复现，不是代码 bug"，不是"已修复"（因为压根没有对应的代码改动）。**
+
+**走查过程中意外撞见、不在这次任务范围内、但如实报告的两条新线索（都不是这次 round71 改动直接导致的，需要 Remy/后续排期决定要不要专门查）**：
+1. **偶发 404**：在切换器下拉点某个具体行程名字，有一次点击后 URL 跳到 `/trips`（不带行程 ID）、页面显示"404: This page could not be found"，重新走一遍同样的点击序列却又正常跳转成功，没能稳定复现，怀疑是行程 id 还没 hydrate 完就点到的一次性竞态。**这次没有留下真正的 404 页面截图**（`taskB_trip_switcher_click_404.png` 这个文件名虽然带"404"字样，trip-expense-ledger-pm 打开核对过，实际拍到的是重试后成功跳转的正常香港行程主页，不是 404 页面本身——ui-auditor 报告文字里说了"没能稳定复现"，这点属实，只是没配到真正的证据图，这里更正一下）。
+2. **地址栏硬跳转有时停在"上一次活跃"的行程**：直接在地址栏输入某趟行程完整 URL，有几次没有落地到目标行程，反而停在最近操作过的另一趟行程，行为不太一致，ui-auditor 自己判断更像是 Playwright 硬导航和客户端路由的时序噪音，不下定论。
+
+这两条都只是这次走查顺带撞见的疑似问题，样本量只有各 1-2 次，没有可靠复现步骤，**这次不作为"发现新 bug"记入待修复清单，只作为线索留档**——如果 Remy 自己用的时候也遇到类似"点行程名跳错/跳 404"，可以拿这条线索去专门复现排查。
+
+**顺带的审美观察（不是这次改动引入的，既有状态，按清单要求如实指出）**：`04_expense_form_desktop_default.png`/`09_payment_methods_deeplink_desktop_fullpage.png` 这两张桌面宽视口截图，主内容区固定贴左上角一个偏窄宽度，右侧/下方留大片空白，跟移动端截图那种撑满视口的观感比，明显是"没做桌面自适应，手机宽度容器直接摆大屏幕里"。这是项目桌面布局一直以来的既有问题，不是本轮引入的，这次也没有花时间去改，留给 Remy 决定要不要专门排一轮"桌面响应式"的任务。
+
+**其余截图扫描**：ui-auditor 把 `ui-audit-round71/` 目录里全部截图（01-17，含 08b-08e）都看过一遍，除了上面两条，整体排版层级、字体、圆角、按钮风格统一，没发现新的错位/截断/颜色异常。console 全程 0 error（只有字体 preload 的无害警告）。
+
+### 十三、claim 活动板核对
+
+`python3 ~/Desktop/Claude/scripts/claim.py list --dept trip-expense-ledger` 当前只有 2 条 active：
+- `2026-09-25_175403_9e2e903e`（离线支持 backlog，stage=backlog，跟这轮 C/B 批次无关，按计划留到下一轮先出计划）
+- `2026-09-25_195320_9651866e`（"本轮 Remy 确认批量任务"总追踪条，stage=in_progress，agent=lifeos-pm）
+
+没有发现其它挂着没处理的 C 项/B 项子任务条目。D 项两条设计稿相关 claim（`2026-09-25_195339_dde3bc77`/`2026-09-25_200512_486cd396`）保持 lifeos-pm 设的 `stage=review`，这次没有碰。
+
+---
+
+## 【2026-09-26，B2：USDT 钱包 `7b9a57d5` 校正数字（trip-expense-ledger-pm 推导，未落库，待 Remy 确认）】
+
+背景：B1（钱包扣款口径根治，commit `3b278c8`）已经把"live 记账自动扣款"和"钱包诞生前历史消费回填"两条路径都改成用 `payerParticipantId` 判断，往后新发生的消费不会再错扣。但这次错扣造成的**历史累积偏差**留在了 `current_balance` 这个字段里，代码没法自动纠正——这类"旧的可变累加"模式钱包（`balanceUpdatedAt` 为 null）的过去累积值，只能靠人工核对历史记录后一次性校正。round70 已经用同样方法校正过 USD 现金钱包（`82badf0e`）和 HKD 现金钱包（`872246bc`），这两个已经锁定，**这次不碰**。USDT 钱包 `7b9a57d5` 一直没人处理，这节补上校正推导。
+
+**钱包现状（`wrangler d1 execute --remote` 查证，2026-09-26）**：
+- `wallet.id = 7b9a57d5-b14f-4661-a3e9-b6c94cf0cd00`，label"USDT钱包"，owner participant = remy（`5a81e7ae-72d1-4d9d-9fbf-bee617458dea`，🇭🇰2026香港行程），currency=USD，`payment_method_id = d4c0e89a-5abf-4a49-986a-e001e19dcfaf`（同名"USDT钱包"支付方式，settlement_currency=USD，挂在 Remy 账号 `a54c9824-c44d-45f7-94b9-5bf3f8fcacc8` 下）。
+- **`current_balance = -860500`（-US$8,605.00），`balance_updated_at = NULL`**（从来没被"设置当前余额"锚定过，一直走旧的可变累加模式）。
+- `historical_backfill_applied_at = created_at = 1790331538165`（2026-09-25T10:18:58 UTC，钱包创建那一刻）。
+- 0 条 `exchange_record` 涉及这个钱包（`from_wallet_id`/`to_wallet_id` 都查过，没有换汇记录会影响它）。
+
+**匹配这个钱包的全部历史消费（trip=🇭🇰2026香港、payment_method_id=`d4c0e89a`、currency=USD，只有这 2 笔，查证于 `wrangler d1 execute --remote`）**：
+
+| expense id | 金额 | payer（真实付款人） | entered_by（代录人） | expense_date | created_at | 商家 |
+|---|---|---|---|---|---|---|
+| `486f0d0d-09fc-44b3-9e2e-67e6c02f2a97` | US$1,105.10 | **remy**（=钱包主人） | remy | 2026-09-19 | 2026-09-25T10:18:09 UTC | Decorous Star - 钻石 |
+| `4c09fc33-dcf6-4624-bf0a-a2fec599b29d` | US$7,500.00 | **htoo**（≠钱包主人） | remy | 2026-09-19 | 2026-09-25T11:28:21 UTC | 归还钱 |
+
+**时间线还原**（`git log` 核对 `3b278c8` 修复提交时间 = 2026-09-25T12:56:18 UTC）：
+- 钱包创建/历史回填发生在 10:18:58 UTC，早于修复。此时 `wallets/route.ts` 的回填查询用的是**旧版**`enteredByParticipantId` 判断（round70 才改成 `payerParticipantId`，见 `git log -p` 对这个文件的改动记录）。但第一笔消费 payer=entered_by=remy，两种判断口径结果一样，回填正确扣了 US$1,105.10，**不受这个 bug 影响**。
+- 第二笔"归还钱"消费创建于 11:28:21 UTC，同样早于 12:56:18 UTC 的修复提交，走的是**旧版**live 记账自动扣款逻辑（`enteredByParticipantId` 判断）——entered_by=remy（她代录的），匹配钱包主人，被误判"该扣"，实际 payer 是 htoo，这笔钱根本没有从 Remy 的 USDT 钱包出账，**这正是 wallet-balance.ts 顶部注释里点名的那次真实事故**。
+
+**校正推导（反推法，两步）**：
+1. 求钱包创建时 Remy 输入的原始"起初余额"（这个数字从没被单独存过，`current_balance` 是"起初余额 − 历史回填扣款"的结果）：
+   `原始起初余额 = 当前 current_balance + 已扣的第一笔（正确) + 被误扣的第二笔（错误）`
+   `= -860500 + 110510 + 750000 = 10`（即 **US$0.10**）
+2. 校正后的余额 = 原始起初余额 − 只保留正确的那笔扣款（第一笔，第二笔不该扣）：
+   `校正值 = 10 − 110510 = -110500`（即 **-US$1,105.00**）
+
+**校正值与当前值的差额 = 750000（US$7,500.00），跟被误扣的"归还钱"金额分毫不差，互相印证，这个推导内部自洽。**
+
+**结论：这个钱包的 `current_balance` 建议从 `-860500` 校正为 `-110500`（差额 +US$7,500.00，加回被误扣的部分）。**
+
+**没有做的事（如实说明）**：
+1. **没有改任何生产数据**——只做了只读查询和推导，`current_balance`/`balance_updated_at` 两个字段原样未动。
+2. 反推出来的"原始起初余额"只有 US$0.10，这个数字本身有点奇怪（USDT 钱包起初余额几乎是 0），值得 Remy 自己核实一下这是不是她记得的数字——如果她记得的起初余额不是这个数，说明除了这 2 笔以外可能还有别的因素没被这次推导覆盖到（比如钱包创建前的某次操作、或者这次反推的假设本身有遗漏），需要她确认。
+3. 沿用 USD/HKD 两个钱包的先例，如果 Remy 确认这个校正值没问题，下一步除了直接 PATCH `current_balance` 之外，也可以选择顺带把这个钱包切换成"锚点+推导"模式（设置 `balance_updated_at`，参照 `lib/domain/wallet-balance.ts` 的架构），这样往后编辑/删除消费才会自动重算余额，不会再有"旧模式不回滚"这个已知缺口——这是要不要一并做的产品判断，这次没有替她拍板，留给她连同校正数字一起确认。
+4. 这次只查了跟这一个钱包直接绑定的支付方式（`d4c0e89a`）名下的消费+换汇记录，没有扩大排查"USDT 钱包扣款口径 bug"是不是还影响了 Remy 名下其它行程的其它钱包——如果她担心还有别的钱包受影响，需要另外一轮全 class 扫描，这次任务范围不包括这个。
+
+---
+
 ## 【2026-09-25，第六十八轮，J：约 14 处金额输入框统一加千分位（重新 grep 后落地 10 处） + K：汇率比价卡可比支付方式 0 行时渠道参考价自动展开，claim id=2026-09-25_081517_49d566f5（J）+ 2026-09-25_081519_3d4ebee0（K），commit `dd759b7`，Version ID `d00007cd-f671-4a1b-8c56-aeed051fc352`】
 
 **先说明一个交接缺口（2026-09-25 补记：已解决）**：这轮开工前发现第六十七轮（任务 H"兑换金额输入框加千分位"+ 任务 I"说明文字断行优化"，commit `ae15f24`+`5cb1122`）从来没有补写进这份文档——commit message 里有记录，但没有对应的 PENDING-DECISIONS 章节。这轮没有花时间补写那个历史空档（不在这次任务范围内），如实记录这个缺口。**后续更新**：kongsi-trip 转发层任务（claim id `2026-09-25_165045_670f0109`）开工时，工作树里发现这段第六十七轮记录其实一直存在于本地磁盘、只是没被提交进 git（大概率是 round67 那次 session 写完文档忘了 commit），已经补提交并按时间顺序插回文档正确位置（本节下方），不用再去 git log 翻 commit message 查了。
