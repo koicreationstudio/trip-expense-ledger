@@ -16,9 +16,31 @@
  * 再在新字符串（格式化后）里定位，不能颠倒顺序或者只用一半。
  */
 
-/** 剥掉千分位逗号，拿回纯数字字符串。跟 `formatThousands` 反向配对使用。 */
+/**
+ * fix(第六十九轮，全角字符吞键 bug)：Mac 中文输入法开着的时候，按小数点键实际
+ * 打出来的是全角句号「。」或全角句点「．」，按数字键在某些输入法状态下也可能
+ * 打出全角数字「０-９」，千分位逗号同理可能打成全角逗号「，」。这些字符原本
+ * 一律通不过 `/^\d*\.?\d*$/` 校验，被当成"非法输入"整个按键静默吞掉（用户感觉
+ * "打不出小数点"）。这个函数把这几类全角字符原样转换成对应的半角字符——
+ * 每个字符转换后还是恰好一个字符（不会变长变短），所以可以放在
+ * `stripThousands`/`countMeaningfulCharsBefore` 最前面统一做，不影响后续基于
+ * 字符位置的计数和光标换算。
+ */
+export function normalizeAmountChars(raw: string): string {
+  return raw
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xff10 + 0x30))
+    .replace(/[．。]/g, '.')
+    .replace(/，/g, ',');
+}
+
+/**
+ * 剥掉千分位逗号，拿回纯数字字符串。跟 `formatThousands` 反向配对使用。
+ * 先过 `normalizeAmountChars` 把全角数字/句号/逗号转回半角，再剥逗号——
+ * 这是唯一的 chokepoint，所有金额输入框的 onChange 都经过这个函数，不用
+ * 逐个文件单独处理全角字符。
+ */
 export function stripThousands(raw: string): string {
-  return raw.replace(/,/g, '');
+  return normalizeAmountChars(raw).replace(/,/g, '');
 }
 
 /**
@@ -46,10 +68,15 @@ export function formatThousands(raw: string): string {
  * 是同一个语义锚点，逗号只是展示层加的分隔符，不改变这个计数。
  */
 export function countMeaningfulCharsBefore(str: string, index: number): number {
+  // 先归一化全角字符再数——`str` 这里传进来的是浏览器原生 `e.target.value`，
+  // 可能包含用户刚用输入法打出来的全角数字/句号，不归一化的话这些字符会被
+  // `/[0-9.]/` 判定成"不算数"，导致光标位置算错。`normalizeAmountChars` 保证
+  // 每个字符转换前后还是一对一（不变长），下标语义不受影响。
+  const normalized = normalizeAmountChars(str);
   let count = 0;
-  const end = Math.min(index, str.length);
+  const end = Math.min(index, normalized.length);
   for (let i = 0; i < end; i++) {
-    if (/[0-9.]/.test(str.charAt(i))) count++;
+    if (/[0-9.]/.test(normalized.charAt(i))) count++;
   }
   return count;
 }

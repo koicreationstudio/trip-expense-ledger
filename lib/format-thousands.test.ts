@@ -4,6 +4,7 @@ import {
   stripThousands,
   countMeaningfulCharsBefore,
   positionForMeaningfulCount,
+  normalizeAmountChars,
 } from './format-thousands';
 
 describe('formatThousands / stripThousands（第六十七轮任务 H，往返一致）', () => {
@@ -86,5 +87,42 @@ describe('countMeaningfulCharsBefore / positionForMeaningfulCount（光标定位
   it('meaningfulCount 为 0 或负数时落在开头', () => {
     expect(positionForMeaningfulCount('1,234', 0)).toBe(0);
     expect(positionForMeaningfulCount('1,234', -1)).toBe(0);
+  });
+});
+
+describe('全角字符归一化（第六十九轮，Mac 中文输入法打小数点被吞的 bug）', () => {
+  it('normalizeAmountChars 把全角数字/句号/句点/逗号转成半角，其它字符原样保留', () => {
+    expect(normalizeAmountChars('。')).toBe('.');
+    expect(normalizeAmountChars('．')).toBe('.');
+    expect(normalizeAmountChars('，')).toBe(',');
+    expect(normalizeAmountChars('０１２３４５６７８９')).toBe('0123456789');
+    expect(normalizeAmountChars('abc')).toBe('abc');
+  });
+
+  it('stripThousands 先归一化全角字符再剥逗号：全角句号/句点能正确变成半角小数点', () => {
+    // 复现 Remy 报的 bug：中文输入法状态下按小数点键，实际打出来的是全角句号。
+    expect(stripThousands('11051。')).toBe('11051.');
+    expect(stripThousands('11051．')).toBe('11051.');
+    // 剥出来的结果要能通过金额输入框那条校验正则，不能被当成非法字符吞掉。
+    expect(/^\d*\.?\d*$/.test(stripThousands('11051。'))).toBe(true);
+    expect(/^\d*\.?\d*$/.test(stripThousands('11051．'))).toBe(true);
+  });
+
+  it('stripThousands 处理全角数字+全角逗号+全角句号混合输入', () => {
+    // "１１，０５１。５" 全部用全角字符打出的 "11,051.5"
+    expect(stripThousands('１１，０５１。５')).toBe('11051.5');
+  });
+
+  it('formatThousands(stripThousands(...)) 完整往返：全角输入最终展示成正常带逗号的半角格式', () => {
+    const candidate = stripThousands('11051。5');
+    expect(formatThousands(candidate)).toBe('11,051.5');
+  });
+
+  it('countMeaningfulCharsBefore 认识全角数字/句号，不会把它们当成"不算数"的字符', () => {
+    // 模拟用户在 "11051" 后面用输入法打了一个全角句号，浏览器 value 变成 "11051。"，
+    // 光标停在句号后面（index 6）。归一化前如果只认半角 '.'，这个位置会被漏数。
+    const rawAfterKeystroke = '11051。';
+    const meaningfulBefore = countMeaningfulCharsBefore(rawAfterKeystroke, rawAfterKeystroke.length);
+    expect(meaningfulBefore).toBe(6); // '1','1','0','5','1','。'(算作小数点) 共 6 个
   });
 });
