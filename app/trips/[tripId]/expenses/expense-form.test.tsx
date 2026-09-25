@@ -313,6 +313,31 @@ describe('ExpenseForm — 第七十一轮任务⑦：代垫人是自己时必须
     expect(link.getAttribute('href')).toBe(`/trips/${TRIP_ID}/payment-methods`);
   });
 
+  it('PM 复核补充：零支付方式可选时不能卡死——提交按钮必须是可点的，POST 能正常发出（不带 paymentMethodId）', async () => {
+    // 这条锁的是一个真 bug：round71 checkpoint 版本的 paymentMethodMissing 没有
+    // 豁免"paymentMethods.length===0"这个情况，导致这趟行程没配支付方式时提交
+    // 按钮永久禁用，用户完全没法记账。后端 POST 早就用
+    // `loadEnabledPaymentMethodIds` 非空才强制这条规则，前端要跟上同一条豁免。
+    const postSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(postSpy));
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={[]}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '100', selectionStart: 3 } });
+    const submitButton = screen.getByRole('button', { name: '记这笔账' }) as HTMLButtonElement;
+    expect(submitButton.disabled).toBe(false);
+
+    fireEvent.click(submitButton);
+    await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(1));
+    expect(callArg(postSpy).paymentMethodId).toBeUndefined();
+  });
+
   it('代垫人是自己、有支付方式可选但没选：提交按钮禁用 + 提交被拦下不发请求', async () => {
     const postSpy = vi.fn();
     vi.stubGlobal('fetch', mockFetch(postSpy));

@@ -302,10 +302,19 @@ export function ExpenseForm({
 
   // fix(2026-09-25 第七十轮，任务⑦)：代垫人是记录人自己时必须选支付方式（不知道
   // 自己用哪张卡/钱包付的钱不合理），代垫人是别人时不强制（记录人不一定知道对方
-  // 用什么付的）。这里同时覆盖"零支付方式可选"（paymentMethods.length===0 时
-  // selectedPaymentMethodId 永远选不出来，下面按钮天然保持禁用）和"有得选但还没选"
-  // 两种情况，是同一条判断，不是两条规则。
-  const paymentMethodRequired = payerParticipantId === myParticipantId;
+  // 用什么付的）。
+  // fix(2026-09-26 第七十一轮，PM 复核时抓到的真 bug)：上一版这里的注释写着"零
+  // 支付方式可选时下面按钮天然保持禁用"——这句话本身就是问题：这趟行程压根没
+  // 配置任何支付方式时，`selectedPaymentMethodId` 永远选不出来，会导致提交按钮
+  // **永久禁用**，用户完全没有办法记账（连"先记下来，以后再补支付方式"这个退路
+  // 都没有）。跟后端 `app/api/trips/[tripId]/expenses/route.ts` POST 的校验逻辑
+  // 对比：后端已经正确地"只在 `loadEnabledPaymentMethodIds` 非空时才要求必选"，
+  // 前端这里没有跟上同一条豁免规则，导致前端比后端更严格——后端愿意接受的请求，
+  // 前端却先一步把提交按钮锁死，用户永远发不出这个请求。这里补上跟后端一致的
+  // `paymentMethods.length > 0` 门槛：没有任何支付方式可选时不强制，跟上面
+  // "还没有启用的支付方式，先去支付方式设置"那条引导配合，用户这种情况下可以先
+  // 不选、正常记账，以后再回来把这笔账编辑加上支付方式。
+  const paymentMethodRequired = payerParticipantId === myParticipantId && paymentMethods.length > 0;
   const paymentMethodMissing = paymentMethodRequired && !selectedPaymentMethodId;
 
   function handleSelectSplitMode(mode: SplitMode) {

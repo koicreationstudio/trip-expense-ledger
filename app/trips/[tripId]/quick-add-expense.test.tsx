@@ -244,6 +244,29 @@ describe('QuickAddExpense — 第七十一轮任务⑦：支付方式必填', ()
     expect(screen.getByRole('link', { name: '支付方式设置' }).getAttribute('href')).toBe(
       `/trips/${TRIP_ID}/payment-methods`
     );
-    expect((screen.getByRole('button', { name: '记' }) as HTMLButtonElement).disabled).toBe(true);
+    // fix(2026-09-26 第七十一轮，PM 复核时改正)：这里原本断言 disabled===true——
+    // 那是个真 bug，零支付方式可选时把提交按钮永久锁死，用户完全没法记账（后端
+    // POST 早就用 `loadEnabledPaymentMethodIds` 非空才强制这条规则，前端没跟上
+    // 同一条豁免）。改成断言按钮可点，跟后端行为一致。
+    expect((screen.getByRole('button', { name: '记' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('PM 复核补充：零支付方式可选时提交能正常发出（不带 paymentMethodId），不是永久卡死', async () => {
+    const postSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(postSpy));
+    render(
+      <QuickAddExpense
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={[]}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '50', selectionStart: 2 } });
+    fireEvent.change(screen.getByLabelText('分类'), { target: { value: '🍜 餐饮' } });
+    fireEvent.click(screen.getByRole('button', { name: '记' }));
+    await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(1));
+    expect(callArg(postSpy).paymentMethodId).toBeUndefined();
   });
 });

@@ -137,9 +137,14 @@ export function QuickAddExpense({
   );
   const splitMismatch = splitMode === 'custom' && splitCentsTotal !== amountCentsTotal;
   // fix(第七十一轮，任务⑦)：代垫人恒等于自己（见组件顶部大注释），支付方式没有
-  // "代垫给别人不强制"这条例外，永远必填。`paymentMethods.length===0` 时选不出
-  // 任何值，这里天然为 true，提交按钮保持禁用，UI 另外给一句引导去配置。
-  const paymentMethodMissing = !selectedPaymentMethodId;
+  // "代垫给别人不强制"这条例外。
+  // fix(2026-09-26 第七十一轮，PM 复核时抓到的真 bug，跟 expense-form.tsx 同一个
+  // 问题)：`paymentMethods.length===0` 时如果不豁免，`selectedPaymentMethodId`
+  // 永远选不出来，提交按钮会永久禁用，用户完全没法记账——这不是"提交按钮保持
+  // 禁用"这么轻描淡写，是彻底堵死。后端 POST 校验已经用
+  // `loadEnabledPaymentMethodIds` 非空才强制，这里补上同一条豁免，没有支付方式
+  // 可选时不强制，配合下面"去支付方式设置"的引导，用户可以先不选正常记账。
+  const paymentMethodMissing = paymentMethods.length > 0 && !selectedPaymentMethodId;
 
   function handleEqualizeSplit() {
     if (includedParticipants.length === 0) return;
