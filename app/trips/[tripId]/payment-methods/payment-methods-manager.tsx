@@ -133,10 +133,41 @@ export function PaymentMethodsManager({
   // 照这个思路补的"可滚动余量"，保证不管这趟行程有几个钱包/几张支付方式（内容多短都一样）
   // 这个 effect 永远有足够空间把目标滚到视口顶部。这个 effect 本身的逻辑（等两份数据都
   // 到齐、`{block:'start'}`）不用改，问题不在这里。
+  // fix(2026-09-26 第七十一轮，Remy 明确要求"手机端往下拉会多出一大片空白，别再
+  // 写死 h-screen")：上面第三十九轮那版根因分析（纯几何限制，浏览器滚动距离上限
+  // 不够）本身没有错，这次不推翻它，只是把"补多少可滚动余量"从固定 100vh 改成
+  // 按实际缺口动态算——量出"要把 #set-balance 顶到视口最上面还差多少可滚动距离"，
+  // 只补这么多（+24px 安全余量防四舍五入差一点点又卡住），不再无脑补一整屏。
+  // 这一步必须在补高度的占位 div 还没撑开页面之前测量（`scrollHeadroomPx` 初始
+  // 是 0，首次渲染时占位 div 高度就是 0，测量到的 `currentScrollHeight` 是"不算
+  // 这块占位"的真实页面高度），算完写进 state 触发重渲染。
+  const [scrollHeadroomPx, setScrollHeadroomPx] = useState(0);
   useEffect(() => {
     if (!defaultOpenBalancePanel || wallets === null || methods === null) return;
-    document.getElementById('set-balance')?.scrollIntoView({ block: 'start' });
+    const target = document.getElementById('set-balance');
+    if (!target) return;
+    const targetAbsoluteTop = target.getBoundingClientRect().top + window.scrollY;
+    const viewportHeight = window.innerHeight;
+    const currentScrollHeight = document.documentElement.scrollHeight;
+    const currentMaxScrollY = Math.max(0, currentScrollHeight - viewportHeight);
+    // deficit>0：现在页面滚到底也够不到"目标顶部=视口顶部"这个位置，还差这么多
+    // 可滚动余量；deficit<=0：内容本来就够长，完全不需要额外占位。
+    const deficit = targetAbsoluteTop - currentMaxScrollY;
+    setScrollHeadroomPx(deficit > 0 ? Math.ceil(deficit) + 24 : 0);
   }, [defaultOpenBalancePanel, wallets, methods]);
+
+  // 第二步：等上面算出来的 `scrollHeadroomPx` 真的写进 DOM、撑开了页面高度之后
+  // （这个 effect 把 scrollHeadroomPx 也列进依赖数组，占位 div 高度变化触发的
+  // 重渲染提交后这个 effect 才会重新跑一次），再执行滚动——用 requestAnimationFrame
+  // 让浏览器先完成一次布局/绘制，保证 `scrollIntoView` 看到的是补完余量之后的
+  // 真实可滚动范围，不是补之前的旧状态。
+  useEffect(() => {
+    if (!defaultOpenBalancePanel || wallets === null || methods === null) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById('set-balance')?.scrollIntoView({ block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [defaultOpenBalancePanel, wallets, methods, scrollHeadroomPx]);
 
   async function loadMethods() {
     // 走行程范围的端点（不是账号范围的 /api/payment-methods）：这份响应每条支付方式
@@ -720,13 +751,17 @@ export function PaymentMethodsManager({
         )}
       </section>
 
-      {/* fix(2026-09-24 第三十九轮，第四版)：纯几何占位，不是视觉内容——保证上面那个
-          `useEffect` 在把 `#set-balance` 滚到视口顶部时，页面底下永远有至少一屏的
+      {/* fix(2026-09-24 第三十九轮，第四版)：纯几何占位，不是视觉内容——保证上面那两个
+          `useEffect` 在把 `#set-balance` 滚到视口顶部时，页面底下有足够的
           "可滚动余量"，不会因为这趟行程钱包/支付方式配得少、页面本来就不够长而滚不动
-          （根因见上面 effect 里的完整分析）。只在深链自动展开这个场景渲染——平时手动点
-          "⚙设置当前余额"展开不需要这块空白，面板收起时也跟着收掉，不会在页面底下
-          永久留一块空白区域。`aria-hidden` 防屏幕阅读器读到一个空 div。 */}
-      {defaultOpenBalancePanel && balancePanelOpen && <div aria-hidden="true" className="h-screen" />}
+          （根因见上面 effect 里的完整分析）。fix(2026-09-26 第七十一轮)：高度从写死
+          `h-screen`（100vh）改成 `scrollHeadroomPx`（按实际缺口动态算出来的最小
+          够用高度），不再在手机端往下拉出一整屏空白。只在深链自动展开这个场景渲染——
+          平时手动点"⚙设置当前余额"展开不需要这块空白，面板收起时也跟着收掉，不会在
+          页面底下永久留一块空白区域。`aria-hidden` 防屏幕阅读器读到一个空 div。 */}
+      {defaultOpenBalancePanel && balancePanelOpen && scrollHeadroomPx > 0 && (
+        <div aria-hidden="true" style={{ height: scrollHeadroomPx }} />
+      )}
 
       <ConfirmDialog
         open={confirmingId !== null}
