@@ -133,3 +133,71 @@ describe('PaymentMethodsManager — 第六十八轮任务 J：钱包"设置当�
     expect(callArg(patchSpy).currentBalance).toBe(1250075);
   });
 });
+
+describe('PaymentMethodsManager — 第七十一轮：滚动占位块从固定 h-screen 改成按需动态计算', () => {
+  it('内容很短时，占位块高度是按缺口算出来的具体数字，不是整屏(innerHeight)那么大', async () => {
+    // jsdom 没实现 scrollIntoView，手动打桩；rAF 同步跑回调，跳过真实动画帧等待。
+    const scrollIntoViewSpy = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewSpy;
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    // 模拟"内容本来很短"这个第三十九轮踩过的场景：视口 800px，目标区块距页面顶部
+    // 900px（比一屏还深），但页面总高度只有 1000px（可滚动余量只有 200px），远不够
+    // 把目标顶到视口最上面——缺口 = 900 - (1000-800) = 700，加 24px 安全余量 = 724。
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
+    Object.defineProperty(document.documentElement, 'scrollHeight', { value: 1000, configurable: true });
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.id === 'set-balance') {
+        return { top: 900, left: 0, right: 0, bottom: 900, width: 0, height: 0, x: 0, y: 0, toJSON() {} } as DOMRect;
+      }
+      return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON() {} } as DOMRect;
+    });
+
+    vi.stubGlobal('fetch', mockFetch({}));
+    render(<PaymentMethodsManager tripId={TRIP_ID} defaultOpenBalancePanel />);
+    await waitFor(() => expect(screen.getByText('现金钱包')).toBeTruthy());
+
+    await waitFor(() => expect(scrollIntoViewSpy).toHaveBeenCalled());
+
+    const placeholder = document.querySelector('div[aria-hidden="true"][style]') as HTMLElement | null;
+    expect(placeholder).not.toBeNull();
+    const heightPx = Number(placeholder!.style.height.replace('px', ''));
+    expect(heightPx).toBe(724);
+    // 核心断言：占位高度是按缺口算出来的具体值，不是整屏 800px（更不是写死的一个
+    // 固定常量），证明这次改动真的不再是无脑补一整屏。
+    expect(heightPx).not.toBe(window.innerHeight);
+
+    vi.restoreAllMocks();
+  });
+
+  it('内容已经够长（缺口<=0）时，完全不渲染占位块', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    // 视口 800，页面总高度 2000（可滚动余量 1200），目标区块只在 500px 处——早就
+    // 够得到，不需要任何额外占位。
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
+    Object.defineProperty(document.documentElement, 'scrollHeight', { value: 2000, configurable: true });
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.id === 'set-balance') {
+        return { top: 500, left: 0, right: 0, bottom: 500, width: 0, height: 0, x: 0, y: 0, toJSON() {} } as DOMRect;
+      }
+      return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON() {} } as DOMRect;
+    });
+
+    vi.stubGlobal('fetch', mockFetch({}));
+    render(<PaymentMethodsManager tripId={TRIP_ID} defaultOpenBalancePanel />);
+    await waitFor(() => expect(screen.getByText('现金钱包')).toBeTruthy());
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+
+    expect(document.querySelector('div[aria-hidden="true"][style]')).toBeNull();
+
+    vi.restoreAllMocks();
+  });
+});
