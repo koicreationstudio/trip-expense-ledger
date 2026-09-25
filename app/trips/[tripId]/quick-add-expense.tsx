@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { COMMON_CATEGORIES } from '@/lib/domain/categories';
@@ -9,6 +9,12 @@ import type { SplitShare } from '@/lib/domain/split';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { CategoryCombobox } from '@/components/category-combobox';
 import { SelectDropdown } from '@/components/select-dropdown';
+import {
+  formatThousands,
+  stripThousands,
+  countMeaningfulCharsBefore,
+  positionForMeaningfulCount,
+} from '@/lib/format-thousands';
 
 interface Participant {
   id: string;
@@ -59,6 +65,23 @@ export function QuickAddExpense({
   const router = useRouter();
 
   const [amountYuan, setAmountYuan] = useState('');
+  // fix(第六十八轮，任务 J)：千分位光标定位，跟 fx-compare-card.tsx/expense-form.tsx
+  // 同一套模式。`resetForm()`（下面）提交成功后会把 `amountYuan` 设回 `''`——那不是
+  // "用户刚打字"触发的变化，不会设置 `pendingCursorMeaningfulCountRef`，下面的
+  // effect 判断到 pending 是 null 就直接跳过，不会对一个已经清空的输入框做多余的
+  // 光标定位。
+  const amountInputRef = useRef<HTMLInputElement>(null);
+  const pendingCursorMeaningfulCountRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const pendingCount = pendingCursorMeaningfulCountRef.current;
+    if (pendingCount === null) return;
+    pendingCursorMeaningfulCountRef.current = null;
+    const input = amountInputRef.current;
+    if (!input) return;
+    const displayValue = formatThousands(amountYuan);
+    const pos = positionForMeaningfulCount(displayValue, pendingCount);
+    input.setSelectionRange(pos, pos);
+  }, [amountYuan]);
   const [category, setCategory] = useState('');
   const [currency, setCurrency] = useState(baseCurrency);
   const [merchant, setMerchant] = useState('');
@@ -71,6 +94,21 @@ export function QuickAddExpense({
     Object.fromEntries(participants.map((p) => [p.id, true]))
   );
   const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({});
+  // fix(第六十八轮，任务 J)：自定义分摊逐人金额输入框，跟 expense-form.tsx 同一个
+  // 理由——同一段 JSX 会因参与者人数渲染出多份 input，按 participant id 索引。
+  const splitAmountInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const pendingSplitCursorRef = useRef<Record<string, number | null>>({});
+  useLayoutEffect(() => {
+    for (const [participantId, pendingCount] of Object.entries(pendingSplitCursorRef.current)) {
+      if (pendingCount === null) continue;
+      pendingSplitCursorRef.current[participantId] = null;
+      const input = splitAmountInputRefs.current[participantId];
+      if (!input) continue;
+      const displayValue = formatThousands(splitAmounts[participantId] ?? '');
+      const pos = positionForMeaningfulCount(displayValue, pendingCount);
+      input.setSelectionRange(pos, pos);
+    }
+  }, [splitAmounts]);
 
   const needsManualFxRate = currency !== baseCurrency;
   const currencyOptions = Array.from(new Set([baseCurrency, ...COMMON_CURRENCIES]));
@@ -231,11 +269,19 @@ export function QuickAddExpense({
             triggerClassName="field-input-dark shrink-0"
           />
           <input
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={amountYuan}
-            onChange={(e) => setAmountYuan(e.target.value)}
+            ref={amountInputRef}
+            type="text"
+            inputMode="decimal"
+            value={formatThousands(amountYuan)}
+            onChange={(e) => {
+              const rawInput = e.target.value;
+              const selectionStart = e.target.selectionStart ?? rawInput.length;
+              const meaningfulBefore = countMeaningfulCharsBefore(rawInput, selectionStart);
+              const candidate = stripThousands(rawInput);
+              if (!/^\d*\.?\d*$/.test(candidate)) return;
+              pendingCursorMeaningfulCountRef.current = meaningfulBefore;
+              setAmountYuan(candidate);
+            }}
             placeholder="金额"
             aria-label="金额"
             className="field-input-dark w-[74px] font-serif tabular-nums"
@@ -311,12 +357,22 @@ export function QuickAddExpense({
                 />
                 <span className="w-14 shrink-0 truncate text-[10.5px] text-white">{p.displayName}</span>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  ref={(el) => {
+                    splitAmountInputRefs.current[p.id] = el;
+                  }}
+                  type="text"
+                  inputMode="decimal"
                   disabled={!(splitIncluded[p.id] ?? true)}
-                  value={splitAmounts[p.id] ?? ''}
-                  onChange={(e) => setSplitAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                  value={formatThousands(splitAmounts[p.id] ?? '')}
+                  onChange={(e) => {
+                    const rawInput = e.target.value;
+                    const selectionStart = e.target.selectionStart ?? rawInput.length;
+                    const meaningfulBefore = countMeaningfulCharsBefore(rawInput, selectionStart);
+                    const candidate = stripThousands(rawInput);
+                    if (!/^\d*\.?\d*$/.test(candidate)) return;
+                    pendingSplitCursorRef.current[p.id] = meaningfulBefore;
+                    setSplitAmounts((prev) => ({ ...prev, [p.id]: candidate }));
+                  }}
                   placeholder="0.00"
                   aria-label={`${p.displayName} 分摊金额`}
                   className="field-input-dark w-20 font-serif tabular-nums"

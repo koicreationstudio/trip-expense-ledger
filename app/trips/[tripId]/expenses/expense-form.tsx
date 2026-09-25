@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
@@ -11,6 +11,12 @@ import { COMMON_CATEGORIES } from '@/lib/domain/categories';
 import { CategoryCombobox } from '@/components/category-combobox';
 import { SelectDropdown } from '@/components/select-dropdown';
 import { Switch } from '@/components/switch';
+import {
+  formatThousands,
+  stripThousands,
+  countMeaningfulCharsBefore,
+  positionForMeaningfulCount,
+} from '@/lib/format-thousands';
 
 interface Participant {
   id: string;
@@ -134,6 +140,22 @@ export function ExpenseForm({
   const initialSplitState = initialExpense ? deriveInitialSplitState(initialExpense, participants) : null;
 
   const [amountYuan, setAmountYuan] = useState(initialExpense ? String(centsToYuan(initialExpense.amount)) : '');
+  // fix(第六十八轮，任务 J)：千分位光标定位——跟 fx-compare-card.tsx `id="fx-compare-amount"`
+  // 那套完全同一个模式，`amountInputRef`/`pendingCursorMeaningfulCountRef` 只服务这一个
+  // 主金额输入框（跟下面"自定义分摊"逐人金额输入框是分开的两套 ref，那边是"同一段 JSX
+  // 会因参与者人数渲染出多份 input"，单一 ref 不够用，见下面 `splitAmountInputRefs`）。
+  const amountInputRef = useRef<HTMLInputElement>(null);
+  const pendingCursorMeaningfulCountRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const pendingCount = pendingCursorMeaningfulCountRef.current;
+    if (pendingCount === null) return;
+    pendingCursorMeaningfulCountRef.current = null;
+    const input = amountInputRef.current;
+    if (!input) return;
+    const displayValue = formatThousands(amountYuan);
+    const pos = positionForMeaningfulCount(displayValue, pendingCount);
+    input.setSelectionRange(pos, pos);
+  }, [amountYuan]);
   const [currency, setCurrency] = useState(initialExpense?.currency ?? baseCurrency);
   const [payerParticipantId, setPayerParticipantId] = useState(initialExpense?.payerParticipantId ?? myParticipantId);
   // fix(2026-09-17 第十九轮)：Artifact 这一屏的分类字段是预填了"🍜 餐饮"的选择器
@@ -183,6 +205,23 @@ export function ExpenseForm({
     initialSplitState?.splitIncluded ?? Object.fromEntries(participants.map((p) => [p.id, true]))
   );
   const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>(initialSplitState?.splitAmounts ?? {});
+  // fix(第六十八轮，任务 J)：自定义分摊逐人金额输入框——同一段 JSX 会因为
+  // `includedParticipants` 人数渲染出多份 input，跟上面主金额输入框那种"整个组件
+  // 只有一个"的情况不一样，一个 `useRef<HTMLInputElement>` 不够用，改成按
+  // participant id 索引的 ref 映射 + 待定光标计数映射，每个人各自的输入框互不干扰。
+  const splitAmountInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const pendingSplitCursorRef = useRef<Record<string, number | null>>({});
+  useLayoutEffect(() => {
+    for (const [participantId, pendingCount] of Object.entries(pendingSplitCursorRef.current)) {
+      if (pendingCount === null) continue;
+      pendingSplitCursorRef.current[participantId] = null;
+      const input = splitAmountInputRefs.current[participantId];
+      if (!input) continue;
+      const displayValue = formatThousands(splitAmounts[participantId] ?? '');
+      const pos = positionForMeaningfulCount(displayValue, pendingCount);
+      input.setSelectionRange(pos, pos);
+    }
+  }, [splitAmounts]);
 
   const needsManualFxRate = currency !== baseCurrency;
 
@@ -339,12 +378,23 @@ export function ExpenseForm({
           </label>
           <input
             id="amount"
-            type="number"
-            min="0.01"
-            step="0.01"
+            ref={amountInputRef}
+            type="text"
+            inputMode="decimal"
             required
-            value={amountYuan}
-            onChange={(e) => setAmountYuan(e.target.value)}
+            value={formatThousands(amountYuan)}
+            onChange={(e) => {
+              const rawInput = e.target.value;
+              // fix(第六十八轮，任务 J)：光标锚点必须在"剥逗号之前"算，理由跟
+              // fx-compare-card.tsx 那处一模一样——逗号数量在剥逗号前后会变，
+              // "有意义字符之前有几个"这个计数才是不受影响的锚点。
+              const selectionStart = e.target.selectionStart ?? rawInput.length;
+              const meaningfulBefore = countMeaningfulCharsBefore(rawInput, selectionStart);
+              const candidate = stripThousands(rawInput);
+              if (!/^\d*\.?\d*$/.test(candidate)) return;
+              pendingCursorMeaningfulCountRef.current = meaningfulBefore;
+              setAmountYuan(candidate);
+            }}
             placeholder="0.00"
             className="field-input font-serif font-medium tabular-nums"
           />
@@ -678,18 +728,30 @@ export function ExpenseForm({
                     <div key={p.id} className="flex items-center gap-2">
                       <span className="w-24 shrink-0 text-[12.5px]">{p.displayName}</span>
                       <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={splitAmounts[p.id] ?? ''}
+                        ref={(el) => {
+                          splitAmountInputRefs.current[p.id] = el;
+                        }}
+                        type="text"
+                        inputMode="decimal"
+                        value={formatThousands(splitAmounts[p.id] ?? '')}
                         onChange={(e) => {
-                          const nextVal = e.target.value;
+                          const rawInput = e.target.value;
+                          const selectionStart = e.target.selectionStart ?? rawInput.length;
+                          const meaningfulBefore = countMeaningfulCharsBefore(rawInput, selectionStart);
+                          // fix(第六十八轮，任务 J)：candidate（剥完逗号的纯数字字符串）
+                          // 才是"2 人自动算另一人余数"这段联动该用的值——原来这里叫 nextVal，
+                          // 现在展示层带了逗号，如果直接拿 e.target.value 去 Number() 算余数，
+                          // 带逗号的字符串会被 Number() 解析成 NaN，联动直接算错，必须用
+                          // 剥完逗号之后的 candidate。
+                          const candidate = stripThousands(rawInput);
+                          if (!/^\d*\.?\d*$/.test(candidate)) return;
+                          pendingSplitCursorRef.current[p.id] = meaningfulBefore;
                           setSplitAmounts((prev) => {
-                            const next = { ...prev, [p.id]: nextVal };
+                            const next = { ...prev, [p.id]: candidate };
                             if (includedParticipants.length === 2) {
                               const other = includedParticipants.find((o) => o.id !== p.id);
                               if (other) {
-                                const remainderCents = amountCentsTotal - yuanToCents(Number(nextVal) || 0);
+                                const remainderCents = amountCentsTotal - yuanToCents(Number(candidate) || 0);
                                 next[other.id] = String(centsToYuan(Math.max(0, remainderCents)));
                               }
                             }

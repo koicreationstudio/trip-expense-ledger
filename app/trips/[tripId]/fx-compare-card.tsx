@@ -621,12 +621,22 @@ export function FxCompareCard({
   // 按 Remy 截图里出现的先后——渠道在前、我的支付方式在后。
   const channelGroupRows = indexedRows.filter((r) => r.kind === 'channel');
   const cardGroupRows = indexedRows.filter((r) => r.kind === 'card');
+  // fix(第六十八轮，任务 K，Remy 明确要求)："我的支付方式"这组可比较的行数是 0
+  // 时（两种情况：①「我持有」的币种不是这趟行程的本位币，②这趟行程根本没配置
+  // 任何支付方式——`showCards`/`cardRows` 在这两种情况下本来就已经是空，
+  // `cardGroupRows.length === 0` 天然覆盖这两种情况，不用另外判断），用户此刻
+  // 完全看不到任何"我的支付方式"数据，"渠道换汇"是唯一能看的参考数据，不该还
+  // 要求他们多点一下才能看到——这里把它跟手动的 `channelGroupExpanded` 状态
+  // 做 OR，纯粹是渲染时的派生值，不新增 state、不碰 `markUserInteracted()`，
+  // 跟 round66"零交互也不该 PUT"的原则完全不冲突（`channelGroupExpanded` 本身
+  // 的写入路径一个字没动，见下面 fx-compare-card.test.tsx 新增的 0 PUT 用例）。
+  const effectiveChannelExpanded = channelGroupExpanded || cardGroupRows.length === 0;
   // fix(第六十五轮，Remy 明确要求)："渠道换汇"这组默认收起（`channelGroupExpanded`
   // 初始 false），只有展开时才算进"可见分组"列表。`visibleGroups` 只用来决定要不要
   // 渲染组标题——只剩一组可见时（最常见的默认态：只有"我的支付方式"）标题是多余的，
   // 两组都可见（用户点开"看换汇渠道参考价"之后）才各自需要标题区分。
   const groups: { key: string; title: string; rows: typeof indexedRows }[] = [
-    ...(channelGroupExpanded && channelGroupRows.length > 0
+    ...(effectiveChannelExpanded && channelGroupRows.length > 0
       ? [{ key: 'channel', title: '渠道换汇', rows: channelGroupRows }]
       : []),
     ...(cardGroupRows.length > 0 ? [{ key: 'card', title: '我的支付方式', rows: cardGroupRows }] : []),
@@ -983,13 +993,18 @@ export function FxCompareCard({
                   </ul>
                 </div>
               ))}
-              {channelGroupRows.length > 0 && (
+              {/* fix(第六十八轮，任务 K)：这颗按钮的意义是"要不要在已经看得到我的
+                  支付方式之外，额外多看一组渠道参考价"——`cardGroupRows.length === 0`
+                  时渠道参考价已经是唯一能看的数据、被强制展开，点这颗按钮不会改变
+                  任何东西（`effectiveChannelExpanded` 恒真），干脆不渲染，免得留一个
+                  点了没反应的死按钮。 */}
+              {channelGroupRows.length > 0 && cardGroupRows.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setChannelGroupExpanded((v) => !v)}
                   className="self-start text-[9.5px] text-neutral-dk underline underline-offset-2"
                 >
-                  {channelGroupExpanded ? '收起换汇渠道参考价 ▲' : '看换汇渠道参考价 ▾'}
+                  {effectiveChannelExpanded ? '收起换汇渠道参考价 ▲' : '看换汇渠道参考价 ▾'}
                 </button>
               )}
             </div>

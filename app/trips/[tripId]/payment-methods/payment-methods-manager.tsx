@@ -1,12 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import { PAYMENT_METHOD_SETTLEMENT_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { SelectDropdown } from '@/components/select-dropdown';
 import { Switch } from '@/components/switch';
 import { MissingWalletRow, type CreatedWalletDto } from '../missing-wallet-row';
+import {
+  formatThousands,
+  stripThousands,
+  countMeaningfulCharsBefore,
+  positionForMeaningfulCount,
+} from '@/lib/format-thousands';
 
 interface PaymentMethod {
   id: string;
@@ -56,6 +62,21 @@ export function PaymentMethodsManager({
 }) {
   const [methods, setMethods] = useState<PaymentMethod[] | null>(null);
   const [form, setForm] = useState(emptyForm);
+  // fix(第六十八轮，任务 J)："固定费（结算币种，元）"——`form` 是个多字段对象，
+  // 这个 ref/pending 只服务 `form.fixedFeeYuan` 这一个字段，跟 `form` 里其它
+  // 字段（百分比/币种/名称）无关。
+  const fixedFeeInputRef = useRef<HTMLInputElement>(null);
+  const pendingFixedFeeCursorRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const pendingCount = pendingFixedFeeCursorRef.current;
+    if (pendingCount === null) return;
+    pendingFixedFeeCursorRef.current = null;
+    const input = fixedFeeInputRef.current;
+    if (!input) return;
+    const displayValue = formatThousands(form.fixedFeeYuan);
+    const pos = positionForMeaningfulCount(displayValue, pendingCount);
+    input.setSelectionRange(pos, pos);
+  }, [form.fixedFeeYuan]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -70,6 +91,23 @@ export function PaymentMethodsManager({
   const [wallets, setWallets] = useState<Wallet[] | null>(null);
   const [editingWalletId, setEditingWalletId] = useState<string | null>(null);
   const [balanceYuan, setBalanceYuan] = useState('');
+  // fix(第六十八轮，任务 J)："当前余额"输入框——虽然渲染在 `visibleWallets.map` 循环
+  // 里，但 `editingWalletId` 同时只会等于一个钱包 id，任一时刻最多只有一份这个 input
+  // 真的挂载在 DOM 上（其它钱包行走的是 `editingWalletId !== w.id` 的"设置"按钮分支，
+  // 不渲染 input），所以不需要像 expense-form.tsx/quick-add-expense.tsx 那样按
+  // participant id 建 ref 映射，单一 ref 就够。
+  const balanceInputRef = useRef<HTMLInputElement>(null);
+  const pendingBalanceCursorRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const pendingCount = pendingBalanceCursorRef.current;
+    if (pendingCount === null) return;
+    pendingBalanceCursorRef.current = null;
+    const input = balanceInputRef.current;
+    if (!input) return;
+    const displayValue = formatThousands(balanceYuan);
+    const pos = positionForMeaningfulCount(displayValue, pendingCount);
+    input.setSelectionRange(pos, pos);
+  }, [balanceYuan]);
   const [balanceDate, setBalanceDate] = useState('');
   const [balanceSubmitting, setBalanceSubmitting] = useState(false);
   const [balanceError, setBalanceError] = useState<string | null>(null);
@@ -452,11 +490,19 @@ export function PaymentMethodsManager({
               </label>
               <input
                 id="pm-fixed-fee"
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.fixedFeeYuan}
-                onChange={(e) => setForm((f) => ({ ...f, fixedFeeYuan: e.target.value }))}
+                ref={fixedFeeInputRef}
+                type="text"
+                inputMode="decimal"
+                value={formatThousands(form.fixedFeeYuan)}
+                onChange={(e) => {
+                  const rawInput = e.target.value;
+                  const selectionStart = e.target.selectionStart ?? rawInput.length;
+                  const meaningfulBefore = countMeaningfulCharsBefore(rawInput, selectionStart);
+                  const candidate = stripThousands(rawInput);
+                  if (!/^\d*\.?\d*$/.test(candidate)) return;
+                  pendingFixedFeeCursorRef.current = meaningfulBefore;
+                  setForm((f) => ({ ...f, fixedFeeYuan: candidate }));
+                }}
                 className="field-input font-serif tabular-nums"
               />
             </div>
@@ -607,10 +653,19 @@ export function PaymentMethodsManager({
                           </label>
                           <input
                             id={`wallet-balance-${w.id}`}
-                            type="number"
-                            step="0.01"
-                            value={balanceYuan}
-                            onChange={(e) => setBalanceYuan(e.target.value)}
+                            ref={balanceInputRef}
+                            type="text"
+                            inputMode="decimal"
+                            value={formatThousands(balanceYuan)}
+                            onChange={(e) => {
+                              const rawInput = e.target.value;
+                              const selectionStart = e.target.selectionStart ?? rawInput.length;
+                              const meaningfulBefore = countMeaningfulCharsBefore(rawInput, selectionStart);
+                              const candidate = stripThousands(rawInput);
+                              if (!/^\d*\.?\d*$/.test(candidate)) return;
+                              pendingBalanceCursorRef.current = meaningfulBefore;
+                              setBalanceYuan(candidate);
+                            }}
                             className="field-input w-28 font-serif tabular-nums"
                           />
                         </div>

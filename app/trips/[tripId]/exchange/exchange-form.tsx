@@ -1,11 +1,53 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan } from '@/lib/money';
 import { SelectDropdown } from '@/components/select-dropdown';
+import {
+  formatThousands,
+  stripThousands,
+  countMeaningfulCharsBefore,
+  positionForMeaningfulCount,
+} from '@/lib/format-thousands';
+
+/**
+ * fix(第六十八轮，任务 J)：这个表单四个金额字段（拿出多少/换到.../存多少（第二个
+ * 钱包）/存款手续费）各自都是"整个组件只有一个实例"（不是 participant 循环那种
+ * 会渲染出多份的场景），复用同一套"每个字段自己一对 ref + pendingCursor"就够，
+ * 抽成一个小 hook 避免四份几乎一样的样板代码分别写四次、以后改一处忘改另外三处。
+ * 跟 fx-compare-card.tsx/expense-form.tsx 主金额输入框的实现逻辑完全一致，只是
+ * 抽了一层复用。
+ */
+function useThousandsField(value: string, setValue: (next: string) => void) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pendingCursorRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const pendingCount = pendingCursorRef.current;
+    if (pendingCount === null) return;
+    pendingCursorRef.current = null;
+    const input = inputRef.current;
+    if (!input) return;
+    const displayValue = formatThousands(value);
+    const pos = positionForMeaningfulCount(displayValue, pendingCount);
+    input.setSelectionRange(pos, pos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const rawInput = e.target.value;
+    const selectionStart = e.target.selectionStart ?? rawInput.length;
+    const meaningfulBefore = countMeaningfulCharsBefore(rawInput, selectionStart);
+    const candidate = stripThousands(rawInput);
+    if (!/^\d*\.?\d*$/.test(candidate)) return;
+    pendingCursorRef.current = meaningfulBefore;
+    setValue(candidate);
+  }
+
+  return { inputRef, displayValue: formatThousands(value), onChange };
+}
 
 export interface WalletOption {
   id: string;
@@ -64,6 +106,15 @@ export function ExchangeForm({
   const [toAmountYuan, setToAmountYuan] = useState('');
   const [toAmount2Yuan, setToAmount2Yuan] = useState('');
   const [depositFeeYuan, setDepositFeeYuan] = useState('');
+  // fix(第六十八轮，任务 J)：四个金额字段各自套 `useThousandsField`——`本次汇率`
+  // （`rate` state）不在这四个里面，判断依据见文件顶部 import 附近没有的独立说明：
+  // 这个表单支持的 8 个币种互相换算出的隐含汇率最大也就 3 位数（1 USD≈329 LKR
+  // 量级），千分位分组对一个永远不到 4 位数的数字没有实际意义，维持 `type="number"`
+  // 不变。
+  const fromAmountField = useThousandsField(fromAmountYuan, setFromAmountYuan);
+  const toAmountField = useThousandsField(toAmountYuan, setToAmountYuan);
+  const toAmount2Field = useThousandsField(toAmount2Yuan, setToAmount2Yuan);
+  const depositFeeField = useThousandsField(depositFeeYuan, setDepositFeeYuan);
   const [exchangeDate, setExchangeDate] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -307,11 +358,11 @@ export function ExchangeForm({
           <div className="flex items-center gap-1.5">
             <input
               id="from-amount"
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={fromAmountYuan}
-              onChange={(e) => setFromAmountYuan(e.target.value)}
+              ref={fromAmountField.inputRef}
+              type="text"
+              inputMode="decimal"
+              value={fromAmountField.displayValue}
+              onChange={fromAmountField.onChange}
               className="field-input flex-1 font-serif tabular-nums"
               placeholder="0.00"
             />
@@ -377,11 +428,11 @@ export function ExchangeForm({
         </label>
         <input
           id="to-amount"
-          type="number"
-          min="0.01"
-          step="0.01"
-          value={toAmountYuan}
-          onChange={(e) => setToAmountYuan(e.target.value)}
+          ref={toAmountField.inputRef}
+          type="text"
+          inputMode="decimal"
+          value={toAmountField.displayValue}
+          onChange={toAmountField.onChange}
           className="field-input font-serif tabular-nums"
           placeholder="0.00"
         />
@@ -424,11 +475,11 @@ export function ExchangeForm({
               </label>
               <input
                 id="to-amount-2"
-                type="number"
-                min="0"
-                step="0.01"
-                value={toAmount2Yuan}
-                onChange={(e) => setToAmount2Yuan(e.target.value)}
+                ref={toAmount2Field.inputRef}
+                type="text"
+                inputMode="decimal"
+                value={toAmount2Field.displayValue}
+                onChange={toAmount2Field.onChange}
                 className="field-input font-serif tabular-nums"
                 placeholder="0.00"
               />
@@ -439,11 +490,11 @@ export function ExchangeForm({
               </label>
               <input
                 id="deposit-fee"
-                type="number"
-                min="0"
-                step="0.01"
-                value={depositFeeYuan}
-                onChange={(e) => setDepositFeeYuan(e.target.value)}
+                ref={depositFeeField.inputRef}
+                type="text"
+                inputMode="decimal"
+                value={depositFeeField.displayValue}
+                onChange={depositFeeField.onChange}
                 className="field-input font-serif tabular-nums"
                 placeholder="0.00"
               />

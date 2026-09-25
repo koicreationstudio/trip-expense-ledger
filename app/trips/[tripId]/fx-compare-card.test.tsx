@@ -39,13 +39,13 @@ const SAVED_PREFERENCE = {
   amountYuan: 1000,
 };
 
-function mockFetch(putSpy: (url: string, body: string) => void) {
+function mockFetch(putSpy: (url: string, body: string) => void, preference: unknown = SAVED_PREFERENCE) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     const method = (init?.method ?? 'GET').toUpperCase();
 
     if (url.includes('/fx-compare-preference') && method === 'GET') {
-      return new Response(JSON.stringify({ preference: SAVED_PREFERENCE }), { status: 200 });
+      return new Response(JSON.stringify({ preference }), { status: 200 });
     }
     if (url.includes('/fx-compare-preference') && method === 'PUT') {
       putSpy(url, String(init?.body ?? ''));
@@ -280,5 +280,72 @@ describe('FxCompareCard — 第六十七轮任务 H：兑换金额输入框千�
     await waitFor(() => expect(screen.getByText('DIAG测试卡')).toBeTruthy());
     const input = screen.getByLabelText(/兑换金额/) as HTMLInputElement;
     expect(input.value).toBe('1,000');
+  });
+});
+
+describe('FxCompareCard — 第六十八轮任务 K：可比支付方式 0 行时渠道参考价自动展开', () => {
+  it('情况①这趟行程根本没配置任何支付方式（hasPaymentMethods=false）——挂载即看到渠道参考价，不用点，且 0 次 PUT', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy, SAVED_PREFERENCE));
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={false} enabledCurrencies={['MYR', 'THB']} />
+    );
+
+    // hasPaymentMethods=false 时组件根本不会去拉"我的支付方式"推荐（showCards
+    // 恒 false），不能再拿 "DIAG测试卡" 当挂载完成信号，改等一个渠道行的文案。
+    await waitFor(() => expect(screen.getByText('Wise')).toBeTruthy());
+
+    // 不需要点"看换汇渠道参考价"——这颗按钮在这个场景下应该干脆不渲染（点了
+    // 也不会有任何变化，属于死按钮，不如不显示）。
+    expect(screen.queryByText(/看换汇渠道参考价/)).toBeNull();
+    expect(screen.queryByText(/收起换汇渠道参考价/)).toBeNull();
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(putSpy).not.toHaveBeenCalled();
+  });
+
+  it('情况②「我持有」的币种不是行程本位币（持有 USD，本位币 MYR）——即使配置过支付方式，挂载即看到渠道参考价，且 0 次 PUT', async () => {
+    const putSpy = vi.fn();
+    const preferenceHoldNotBase = {
+      holdCurrency: 'USD',
+      targetCurrency: 'THB',
+      enabledCompareKeys: ['channel:wise', 'channel:tng', 'channel:atm', 'channel:moneychanger', 'channel:alipay'],
+      amountYuan: 1000,
+    };
+    vi.stubGlobal('fetch', mockFetch(putSpy, preferenceHoldNotBase));
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB', 'USD']} />
+    );
+
+    await waitFor(() => expect(screen.getByText('Wise')).toBeTruthy());
+    // 「我持有」应该已经从存档恢复成 USD（跟本位币 MYR 不同），这是这个场景成立的前提。
+    expect(screen.getByText('💰 我持有 USD')).toBeTruthy();
+
+    expect(screen.queryByText(/看换汇渠道参考价/)).toBeNull();
+    expect(screen.queryByText(/收起换汇渠道参考价/)).toBeNull();
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(putSpy).not.toHaveBeenCalled();
+  });
+
+  it('对照组：有可比支付方式（行数 > 0）时维持默认收起，需要点一下才展开', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy, SAVED_PREFERENCE));
+
+    render(
+      <FxCompareCard tripId={TRIP_ID} baseCurrency="MYR" hasPaymentMethods={true} enabledCurrencies={['MYR', 'THB']} />
+    );
+
+    await waitFor(() => expect(screen.getByText('DIAG测试卡')).toBeTruthy());
+
+    // 默认收起：看得到"看换汇渠道参考价 ▾"按钮，但渠道行（比如 "Wise"）还不可见。
+    expect(screen.getByText('看换汇渠道参考价 ▾')).toBeTruthy();
+    expect(screen.queryByText('Wise')).toBeNull();
+
+    fireEvent.click(screen.getByText('看换汇渠道参考价 ▾'));
+    await waitFor(() => expect(screen.getByText('Wise')).toBeTruthy());
+    expect(screen.getByText('收起换汇渠道参考价 ▲')).toBeTruthy();
   });
 });
