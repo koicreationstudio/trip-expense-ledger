@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useLayoutEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { PAYMENT_METHOD_SETTLEMENT_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -60,8 +61,18 @@ export function PaymentMethodsManager({
   // 面板，不用让人自己找到底部那颗折叠按钮点开。
   defaultOpenBalancePanel?: boolean;
 }) {
+  const router = useRouter();
   const [methods, setMethods] = useState<PaymentMethod[] | null>(null);
   const [form, setForm] = useState(emptyForm);
+  // 「点名字进入编辑态」改名（round72b）：只在"已配置的支付方式"这一份账号级清单上
+  // 加编辑入口——下面"本行程启用的支付方式"那份清单的 `m.label` 是 `<label htmlFor>`
+  // 指向勾选开关的可点击目标，改名按钮跟"点文字=切开关"这个语义冲突，两份清单显示的
+  // 是同一个 `PaymentMethod.label`，改一处、`loadMethods()` 刷新后另一处自然同步，
+  // 不需要重复做一份编辑入口。
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [labelDraft, setLabelDraft] = useState('');
+  const [labelSaving, setLabelSaving] = useState(false);
+  const [labelError, setLabelError] = useState<string | null>(null);
   // fix(第六十八轮，任务 J)："固定费（结算币种，元）"——`form` 是个多字段对象，
   // 这个 ref/pending 只服务 `form.fixedFeeYuan` 这一个字段，跟 `form` 里其它
   // 字段（百分比/币种/名称）无关。
@@ -280,6 +291,58 @@ export function PaymentMethodsManager({
     await loadMethods();
   }
 
+  /** 点名字进入改名编辑态（round72b）。 */
+  function startEditLabel(m: PaymentMethod) {
+    setEditingLabelId(m.id);
+    setLabelDraft(m.label);
+    setLabelError(null);
+  }
+
+  function cancelEditLabel() {
+    setEditingLabelId(null);
+    setLabelError(null);
+  }
+
+  /**
+   * 保存改名——后端 `PATCH /api/payment-methods/{id}` 早就支持 `label` 单字段更新
+   * （`body.label ?? existing.label`），这里不用新开端点。空字符串在前端就拦（trim
+   * 后长度要 >0），失败（网络错误/非 2xx）都要显示清楚的错误，不静默、不让编辑态
+   * 卡死、也不让人以为"看起来已经改了"其实没成功——`labelDraft` 只有真的保存成功
+   * 才清掉编辑态，失败时原样留在编辑态让人重试。
+   *
+   * 注：钱包卡片显示的名字是建钱包那一刻复制过去的独立字段（`wallet.label`），
+   * 跟这里改的 `paymentMethod.label` 之后互不联动——这是已知的产品设计缺口，这次
+   * 明确不处理（钱包名字要不要跟着改、还是钱包该转成读关联支付方式的名字，留给
+   * Remy 下一轮拍板方向）。
+   */
+  async function handleSaveLabel(id: string) {
+    const next = labelDraft.trim();
+    if (!next) {
+      setLabelError('名称不能空着');
+      return;
+    }
+    setLabelError(null);
+    setLabelSaving(true);
+    try {
+      const res = await fetch(`/api/payment-methods/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ label: next }),
+      });
+      if (!res.ok) {
+        setLabelError('改名失败，检查一下网络再试一次');
+        return;
+      }
+      setEditingLabelId(null);
+      await loadMethods();
+      router.refresh();
+    } catch {
+      setLabelError('改名失败，检查一下网络再试一次');
+    } finally {
+      setLabelSaving(false);
+    }
+  }
+
   /**
    * 「本行程启用的支付方式」勾选/取消勾选（2026-09-15 落地 Artifact Version 10
    * 遗留缺口）——乐观更新先翻转本地状态，请求失败再翻回去，跟这个文件里
@@ -362,10 +425,58 @@ export function PaymentMethodsManager({
                   {m.kind === 'card' ? '💳' : '💵'}
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col">
-                  {/* Artifact `#scr-payment .nm{font-size:10px}` */}
-                  <span className="text-[10px] font-medium">
-                    {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
-                  </span>
+                  {/* fix(round72b)："点名字进入编辑态"改名交互——原来 `m.label` 是纯文字，
+                      没有任何点击/编辑入口。改名跟点上面 my-trips.tsx `TripCard` 那处
+                      改行程名字同一套模式（field-input + 保存/取消），差别是这里不用
+                      绝对定位覆盖卡片（这一行本身不是可点开的大按钮，不会跟别的点击区
+                      抢事件），编辑态直接原地展开在这两行文字的位置。 */}
+                  {editingLabelId === m.id ? (
+                    <div className="flex flex-col gap-1.5 py-0.5">
+                      <input
+                        autoFocus
+                        value={labelDraft}
+                        onChange={(e) => setLabelDraft(e.target.value)}
+                        disabled={labelSaving}
+                        placeholder="支付方式名称"
+                        aria-label="支付方式名称"
+                        className="field-input"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={labelSaving}
+                          onClick={() => handleSaveLabel(m.id)}
+                          className="btn-secondary"
+                        >
+                          {labelSaving ? '保存中…' : '保存'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={labelSaving}
+                          onClick={cancelEditLabel}
+                          className="tap-link text-[11px] text-muted"
+                        >
+                          取消
+                        </button>
+                      </div>
+                      {labelError && <p className="text-[10px] text-coral">{labelError}</p>}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => startEditLabel(m)}
+                      aria-label={`编辑支付方式名称「${m.label}」`}
+                      className="flex items-center gap-1 self-start text-left text-[10px] font-medium hover:text-ink"
+                    >
+                      {/* Artifact `#scr-payment .nm{font-size:10px}` */}
+                      <span>
+                        {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
+                      </span>
+                      <span aria-hidden="true" className="text-muted">
+                        ✎
+                      </span>
+                    </button>
+                  )}
                   {/* Artifact `#scr-payment .tag-note{font-size:8.5px}`——之前是10px。 */}
                   <span className="mt-0.5 border-t border-dashed border-sand pt-1 text-[8.5px] text-muted">
                     汇率加点 {m.fxMarkupPercent}% · 境外手续费 {m.foreignTxnFeePercent}% · 返现 {m.cashbackPercent}%
