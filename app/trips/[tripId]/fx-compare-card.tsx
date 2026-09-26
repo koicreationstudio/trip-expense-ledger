@@ -765,7 +765,10 @@ export function FxCompareCard({
                 .map((h) => ({ value: h, label: h }))}
               ariaLabel="我持有的币种"
               triggerClassName="rounded-full bg-neutral-lt px-[9px] py-[5px] text-[10px] font-medium text-neutral-dk"
-              panelClassName="absolute left-0 top-full z-10 mt-1 min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
+              // fix(2026-09-26，方案 C 手机底部弹层)：panelClassName 收窄成只管外观，
+              // 定位/z-index/圆角/max-height 这几项现在固定由 SelectDropdown 组件本体
+              // 算好（窄屏底部抽屉/宽屏悬浮面板两套定位），这里不用再重复传一遍。
+              panelClassName="min-w-[110px] border border-sand bg-white p-1 shadow-card"
               renderValue={() => `💰 我持有 ${effectiveHold || '…'}`}
             />
 
@@ -779,7 +782,7 @@ export function FxCompareCard({
               options={targetCandidates.map((c) => ({ value: c, label: TARGET_CURRENCY_LABELS[c] ?? c }))}
               ariaLabel="目标币种"
               triggerClassName="rounded-full bg-neutral-lt px-[9px] py-[5px] text-[10px] font-medium text-neutral-dk"
-              panelClassName="absolute left-0 top-full z-10 mt-1 min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
+              panelClassName="min-w-[110px] border border-sand bg-white p-1 shadow-card"
               renderValue={() => '🎯 目标币种'}
             />
 
