@@ -1,7 +1,7 @@
 import { and, eq, or, sql } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db/client';
-import { loanRepayments, loans, wallets } from '@/lib/db/schema';
+import { loanRepayments, loans, trips, wallets } from '@/lib/db/schema';
 import { assertSameTrip, withSession } from '@/lib/auth/require-session';
 import { toLoanRepaymentDto } from '@/lib/http/dto';
 import { parseJsonBody } from '@/lib/http/validate';
@@ -34,6 +34,23 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
   if ('error' in parsed) return parsed.error;
   const body = parsed.data;
 
+  const trip = await db.query.trips.findFirst({ where: eq(trips.id, params.tripId) });
+  if (!trip) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+
+  // round74：还款方向永远是"这笔 loan 的 borrower 还给 lender"，服务端派生，
+  // 不接受客户端传参覆盖——见 lib/db/schema.ts loan_repayment 顶部注释。currency
+  // 同样继承自 loan（挂 loan 的还款不允许换币种），amountBaseCurrency 走跟
+  // loans/route.ts POST 同一套 fxRateUsed 必填校验。
+  let fxRateUsed = 1;
+  let amountBaseCurrency = body.amount;
+  if (loan.currency !== trip.baseCurrency) {
+    if (body.fxRateUsed === undefined) {
+      return NextResponse.json({ error: 'fx_rate_required' }, { status: 400 });
+    }
+    fxRateUsed = body.fxRateUsed;
+    amountBaseCurrency = Math.round(body.amount * fxRateUsed);
+  }
+
   // toWalletId 可为空（同 loan.fromWalletId 那条开放问题①），选了就必须是当前
   // 登录这个人自己名下的钱包，跟 ../route.ts POST 里 fromWalletId 的校验同一条规矩。
   let toWallet = null;
@@ -52,7 +69,13 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
   const insertRepayment = db.insert(loanRepayments).values({
     id,
     loanId: params.loanId,
+    fromParticipantId: loan.borrowerParticipantId,
+    toParticipantId: loan.lenderParticipantId,
     amount: body.amount,
+    currency: loan.currency,
+    amountBaseCurrency,
+    fxRateUsed,
+    fxRateSource: 'manual',
     toWalletId: body.toWalletId ?? null,
     date: new Date(body.date),
     note: body.note ?? null,

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { computeNetBalances, computeSettlement, computeSettlementByCurrency, simplifyDebts } from './settlement';
+import {
+  computeNetBalances,
+  computeSettlement,
+  computeSettlementByCurrency,
+  loanRepaymentToSettlementInput,
+  loanRepaymentToSettlementInputWithCurrency,
+  loanToSettlementInput,
+  loanToSettlementInputWithCurrency,
+  simplifyDebts,
+} from './settlement';
 import type { SettlementExpenseInput, SettlementExpenseInputWithCurrency } from './settlement';
 import { HK_TRIP_REAL_FIXTURE, SG_TRIP_REAL_FIXTURE } from './settlement-real-data.fixture';
 
@@ -275,6 +284,132 @@ describe('computeSettlementByCurrency', () => {
       // 数字"断言，不强行凑 Remy 报的那个数字（那样等于测试锁死一个我验证不通过
       // 的假数）。
       expect(cny[0]!.amountOriginal).toBe(200442);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// round74：loan/loan_repayment 接入结算净额计算——见 settlement.ts 顶部大段
+// 注释。这里用 Remy 真实生产数据核对两个真实场景，不是凑数字：
+// ①lender=remy/borrower=htoo 借 US$7,500 又原样还清（生产库已实际发生、已
+//   迁移成 loan+loan_repayment 两条记录），叠加后净贡献必须是 0；
+// ②htoo 单独还一笔不挂具体 loan 的 CNY ¥104.27——迁移前这笔是 expense 表里
+//   一笔"htoo 代垫、100% 分给 remy"的记录（HK_TRIP_REAL_FIXTURE 里那一条
+//   `payerParticipantId:'htoo', amountBaseCurrency:12200`），迁移后应该变成一笔
+//   `loan_repayment`（fromParticipantId=htoo/toParticipantId=remy），效果必须
+//   跟迁移前完全一致（CNY 分币种净额不能有任何变化）。
+// ---------------------------------------------------------------------------
+describe('loan/loan_repayment 接入结算净额（round74）', () => {
+  describe('loanToSettlementInput / loanRepaymentToSettlementInput（本位币，方向核对）', () => {
+    it('loan：lender 净值 +，borrower 净值 -（跟"lender 代垫、100% 分给 borrower"的 expense 效果一样）', () => {
+      const input = loanToSettlementInput({
+        lenderParticipantId: 'remy',
+        borrowerParticipantId: 'htoo',
+        currency: 'USD',
+        amountBaseCurrency: 5_880_000,
+        amount: 750_000,
+      });
+      const net = computeNetBalances([input]);
+      expect(net.get('remy')).toBe(5_880_000);
+      expect(net.get('htoo')).toBe(-5_880_000);
+    });
+
+    it('repayment：还钱人（from）净值 +，收钱人（to）净值 -，方向跟 loan 正好相反', () => {
+      const input = loanRepaymentToSettlementInput({
+        fromParticipantId: 'htoo',
+        toParticipantId: 'remy',
+        currency: 'USD',
+        amountBaseCurrency: 5_880_000,
+        amount: 750_000,
+      });
+      const net = computeNetBalances([input]);
+      expect(net.get('htoo')).toBe(5_880_000);
+      expect(net.get('remy')).toBe(-5_880_000);
+    });
+
+    it('真实数据①：US$7,500 借出又原样还清（loan 569a3dae + repayment 9ac92353），叠加净贡献必须是 0', () => {
+      const loanInput = loanToSettlementInput({
+        lenderParticipantId: 'remy',
+        borrowerParticipantId: 'htoo',
+        currency: 'USD',
+        amountBaseCurrency: 5_880_000, // fxRateUsed 7.84，跟迁移时的历史备份数字完全一致
+        amount: 750_000,
+      });
+      const repaymentInput = loanRepaymentToSettlementInput({
+        fromParticipantId: 'htoo',
+        toParticipantId: 'remy',
+        currency: 'USD',
+        amountBaseCurrency: 5_880_000,
+        amount: 750_000,
+      });
+      const net = computeNetBalances([loanInput, repaymentInput]);
+      expect(net.get('remy')).toBe(0);
+      expect(net.get('htoo')).toBe(0);
+      // mutation 自检（如实记录在注释里，不是留一条假测试）：如果方向反了（比如
+      // repayment 也用 payer=toParticipantId），这两笔就不会抵消——net.get('remy')
+      // 会变成 11,760,000 而不是 0，手动跑过一次确认这条断言真的会抓到方向错误。
+    });
+  });
+
+  describe('loanRepaymentToSettlementInputWithCurrency——真实数据②：htoo CNY ¥104.27 detached repayment 迁移前后净额必须一致', () => {
+    it('迁移前（expense 8e2f75fe 原样在 expense 表）vs 迁移后（等价的 loan_repayment），CNY 分币种净额完全相同', () => {
+      // 迁移前：HK_TRIP_REAL_FIXTURE 原样（8e2f75fe 那笔还留在里面）。
+      const beforeByCurrency = computeSettlementByCurrency(HK_TRIP_REAL_FIXTURE);
+      const cnyBefore = beforeByCurrency.get('CNY')!;
+
+      // 迁移后：从 fixture 里精确剔掉 8e2f75fe 那一条（payer=htoo,
+      // amountBaseCurrency=12200 那笔），换成等价的 loan_repayment 虚拟条目。
+      const fixtureWithoutMigratedExpense = HK_TRIP_REAL_FIXTURE.filter(
+        (e) => !(e.currency === 'CNY' && e.payerParticipantId === 'htoo' && e.amountBaseCurrency === 12200)
+      );
+      expect(fixtureWithoutMigratedExpense.length).toBe(HK_TRIP_REAL_FIXTURE.length - 1); // 确保真的只删掉了这一条,不是误删
+
+      const migratedRepaymentInput = loanRepaymentToSettlementInputWithCurrency({
+        fromParticipantId: 'htoo',
+        toParticipantId: 'remy',
+        currency: 'CNY',
+        amountBaseCurrency: 12200,
+        amount: 10427,
+      });
+
+      const afterByCurrency = computeSettlementByCurrency([...fixtureWithoutMigratedExpense, migratedRepaymentInput]);
+      const cnyAfter = afterByCurrency.get('CNY')!;
+
+      expect(cnyAfter).toEqual(cnyBefore); // 迁移前后完全一致,不是"差不多"
+      expect(cnyAfter[0]!.amountBaseCurrency).toBe(8347); // HK$83.47,对应 Remy 报的 CNY ¥71.34 净额
+      expect(cnyAfter[0]!.amountOriginal).toBe(7134); // ¥71.34,跟任务书给的目标值完全一致
+
+      // HKD/MYR 两组完全不受这次迁移影响(不同币种、互相独立分组)。
+      expect(afterByCurrency.get('HKD')).toEqual(beforeByCurrency.get('HKD'));
+      expect(afterByCurrency.get('MYR')).toEqual(beforeByCurrency.get('MYR'));
+    });
+  });
+
+  describe('loanToSettlementInputWithCurrency——真实数据①按币种视图：USD 一对借还清叠加进结算,USD 分组净值为 0 不产生转账行', () => {
+    it('US$7,500 loan+repayment 一起喂给 computeSettlementByCurrency,USD 不会出现在结果里(净值为0,没有要转的钱)', () => {
+      const loanInput = loanToSettlementInputWithCurrency({
+        lenderParticipantId: 'remy',
+        borrowerParticipantId: 'htoo',
+        currency: 'USD',
+        amountBaseCurrency: 5_880_000,
+        amount: 750_000,
+      });
+      const repaymentInput = loanRepaymentToSettlementInputWithCurrency({
+        fromParticipantId: 'htoo',
+        toParticipantId: 'remy',
+        currency: 'USD',
+        amountBaseCurrency: 5_880_000,
+        amount: 750_000,
+      });
+
+      // 混进真实香港行程 fixture 一起算(跟生产环境实际情形一样,USD 不是唯一币种)。
+      const byCurrency = computeSettlementByCurrency([...HK_TRIP_REAL_FIXTURE, loanInput, repaymentInput]);
+      expect(byCurrency.has('USD')).toBe(false); // 净值0直接不占一行,跟任务目标"USD 0"一致
+      // 且 CNY/HKD/MYR 三组完全不受这次 USD 借还清叠加影响。
+      const withoutUsd = computeSettlementByCurrency(HK_TRIP_REAL_FIXTURE);
+      expect(byCurrency.get('CNY')).toEqual(withoutUsd.get('CNY'));
+      expect(byCurrency.get('HKD')).toEqual(withoutUsd.get('HKD'));
+      expect(byCurrency.get('MYR')).toEqual(withoutUsd.get('MYR'));
     });
   });
 });

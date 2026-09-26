@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db/client';
-import { loanRepayments, loans, participants, wallets } from '@/lib/db/schema';
+import { loanRepayments, loans, participants, trips, wallets } from '@/lib/db/schema';
 import { assertSameTrip, withSession } from '@/lib/auth/require-session';
 import { toLoanDto } from '@/lib/http/dto';
 import { parseJsonBody } from '@/lib/http/validate';
@@ -48,7 +48,11 @@ export const GET = withSession<Context>(async (_request, { params }, identity) =
       .from(loanRepayments)
       .where(inArray(loanRepayments.loanId, loanIds))
       .groupBy(loanRepayments.loanId);
-    for (const r of rows) repaymentSums.set(r.loanId, Number(r.total));
+    // round74：loanId 改可空之后（支持"不挂具体借款"的还款），groupBy 出来的行
+    // 理论上不会出现 loanId=null（这条查询本身就是拿"确定存在的 loanIds" 去
+    // inArray 收窄），但类型上已经允许 null——这里加一道显式判断，不挂具体 loan
+    // 的还款不计入任何一笔 loan 自己的还款进度，语义上也说得通。
+    for (const r of rows) if (r.loanId) repaymentSums.set(r.loanId, Number(r.total));
   }
 
   return NextResponse.json({
@@ -72,6 +76,21 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
 
   if (body.lenderParticipantId === body.borrowerParticipantId) {
     return NextResponse.json({ error: 'lender_borrower_same' }, { status: 400 });
+  }
+
+  const trip = await db.query.trips.findFirst({ where: eq(trips.id, params.tripId) });
+  if (!trip) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+
+  // round74：接入结算净额计算需要固化本位币金额，跟 expenses/route.ts POST
+  // 同一套 fxRateUsed 必填校验（currency !== trip.baseCurrency 时）。
+  let fxRateUsed = 1;
+  let amountBaseCurrency = body.amount;
+  if (body.currency !== trip.baseCurrency) {
+    if (body.fxRateUsed === undefined) {
+      return NextResponse.json({ error: 'fx_rate_required' }, { status: 400 });
+    }
+    fxRateUsed = body.fxRateUsed;
+    amountBaseCurrency = Math.round(body.amount * fxRateUsed);
   }
 
   const tripParticipants = await db.select().from(participants).where(eq(participants.tripId, params.tripId));
@@ -110,6 +129,9 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
     borrowerParticipantId: body.borrowerParticipantId,
     amount: body.amount,
     currency: body.currency,
+    amountBaseCurrency,
+    fxRateUsed,
+    fxRateSource: 'manual',
     fromWalletId: body.fromWalletId ?? null,
     date: new Date(body.date),
     note: body.note ?? null,

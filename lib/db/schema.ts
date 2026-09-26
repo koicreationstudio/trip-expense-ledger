@@ -531,6 +531,15 @@ export const loans = sqliteTable(
       .references(() => participants.id),
     amount: integer('amount').notNull(), // 原始币种最小货币单位
     currency: text('currency').notNull(),
+    // round74 新增：接入结算净额计算（lib/domain/settlement.ts）需要固定的本位币
+    // 金额，跟 expense.amountBaseCurrency 同一套"录入时就换算固化，结算时不再重新
+    // 拉汇率"的架构（见 expense 表顶部注释）——不是动态换算，是这笔借出发生那一刻
+    // 的汇率算一次、写死。currency===trip.baseCurrency 时 fxRateUsed 固定是 1。
+    amountBaseCurrency: integer('amount_base_currency').notNull(),
+    fxRateUsed: real('fx_rate_used').notNull().default(1),
+    fxRateSource: text('fx_rate_source', { enum: ['manual', 'fetched'] })
+      .notNull()
+      .default('manual'),
     // 为空＝不经过任何钱包的现金往来，见上方大段注释；非空时钱包余额联动走
     // lib/domain/wallet-balance.ts（未锚定钱包在 API 路由里直接扣、已锚定钱包
     // 走推导公式，两条路径跟 expense/exchange_record 完全同一套架构）。
@@ -548,29 +557,42 @@ export const loans = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
-// loan_repayment：一笔 loan 的还款记录，一笔 loan 可以对应多条 repayment（支持
-// 部分还款，累加到还清）。故意不存 currency 字段——跟 exchange_record 的
-// fromAmount/toAmount 是同一套省字段哲学：这笔金额的币种由 toWalletId 那个钱包的
-// currency 隐式决定（选了钱包，钱包币种就是这笔的币种）；toWalletId 留空（同上
-// 开放问题①，"不经过任何钱包的现金往来"）时这笔的币种就没有任何字段能确定，
-// 这轮的简化假设是"跟对应 loan 的 currency 一致"，只用在 UI 展示格式化，不影响
-// 下面这条重要警告——
+// loan_repayment：一笔还款记录。round72b 原本只支持"挂在某笔具体 loan 名下"
+// （一笔 loan 可以对应多条 repayment，支持部分还款累加到还清）。round74 起改成
+// loanId 可空——支持"不挂具体借款、单独记一笔谁还给谁"的还款（比如历史上很多
+// 还款是零散记录的，事后已经分不清对应哪一笔具体的借出）。
 //
-// ⚠️ 开放问题（没有自己拍板，需要 Remy/PM 确认）：还款进度条"已还/借出总额"这个
-// 百分比，是把这笔 loan 名下所有 repayment.amount 直接相加再除以 loan.amount，
-// 完全没做汇率换算。如果借出是 USD、还款存进的是 USDT 钱包（题目描述的正常场景），
-// repayment.amount 实际单位是 USDT 最小单位，跟 loan.amount 的 USD 最小单位直接
-// 相除在数学上不严谨。这版先照字面数字算（多数真实场景应该是同币种还款），需要
-// Remy/PM 确认要不要加汇率换算，或者限制"跨币种还款只显示金额、不计入百分比"。
+// 因为不再保证一定有 loan 可以反查"谁欠谁"，round74 新增 fromParticipantId
+// （还钱的人）/toParticipantId（收钱的人）——不管挂不挂 loan 都必填，跟结算净额
+// 计算（lib/domain/settlement.ts::loanRepaymentToSettlementInput）直接读这两个
+// 字段，不用去 join loan 表反推方向。loanId 非空时，创建/编辑这笔的 API 路由要
+// 保证 fromParticipantId===loan.borrowerParticipantId、
+// toParticipantId===loan.lenderParticipantId（还款方向永远是"借的人还给借出的
+// 人"），不能允许两边对不上。
+//
+// currency/amountBaseCurrency/fxRateUsed/fxRateSource 同理——round72b 原本没有
+// currency 字段（隐式假设跟 toWalletId 那个钱包或者 loan.currency 一致），
+// round74 起改成显式字段（跟 expense 表同一套"录入时固化"架构），因为脱离了
+// loan 之后，没有任何字段能兜底推出这笔的币种。
 // ---------------------------------------------------------------------------
 export const loanRepayments = sqliteTable(
   'loan_repayment',
   {
     id: id(),
-    loanId: text('loan_id')
+    loanId: text('loan_id').references(() => loans.id, { onDelete: 'cascade' }),
+    fromParticipantId: text('from_participant_id')
       .notNull()
-      .references(() => loans.id, { onDelete: 'cascade' }),
-    amount: integer('amount').notNull(), // 最小货币单位，币种见上方注释
+      .references(() => participants.id),
+    toParticipantId: text('to_participant_id')
+      .notNull()
+      .references(() => participants.id),
+    amount: integer('amount').notNull(), // 原始币种最小货币单位
+    currency: text('currency').notNull(),
+    amountBaseCurrency: integer('amount_base_currency').notNull(),
+    fxRateUsed: real('fx_rate_used').notNull().default(1),
+    fxRateSource: text('fx_rate_source', { enum: ['manual', 'fetched'] })
+      .notNull()
+      .default('manual'),
     toWalletId: text('to_wallet_id').references(() => wallets.id, { onDelete: 'set null' }),
     date: integer('date', { mode: 'timestamp_ms' }).notNull(),
     note: text('note'),
@@ -579,6 +601,8 @@ export const loanRepayments = sqliteTable(
   (table) => ({
     loanIdx: index('loan_repayment_loan_idx').on(table.loanId),
     toWalletIdx: index('loan_repayment_to_wallet_idx').on(table.toWalletId),
+    fromParticipantIdx: index('loan_repayment_from_participant_idx').on(table.fromParticipantId),
+    toParticipantIdx: index('loan_repayment_to_participant_idx').on(table.toParticipantId),
   })
 );
 
@@ -819,6 +843,8 @@ export const participantsRelations = relations(participants, ({ one, many }) => 
   exchangeRecords: many(exchangeRecords),
   loansLent: many(loans, { relationName: 'lender' }),
   loansBorrowed: many(loans, { relationName: 'borrower' }),
+  loanRepaymentsFrom: many(loanRepayments, { relationName: 'repaymentFrom' }),
+  loanRepaymentsTo: many(loanRepayments, { relationName: 'repaymentTo' }),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -916,6 +942,16 @@ export const loansRelations = relations(loans, ({ one, many }) => ({
 
 export const loanRepaymentsRelations = relations(loanRepayments, ({ one }) => ({
   loan: one(loans, { fields: [loanRepayments.loanId], references: [loans.id] }),
+  fromParticipant: one(participants, {
+    fields: [loanRepayments.fromParticipantId],
+    references: [participants.id],
+    relationName: 'repaymentFrom',
+  }),
+  toParticipant: one(participants, {
+    fields: [loanRepayments.toParticipantId],
+    references: [participants.id],
+    relationName: 'repaymentTo',
+  }),
   toWallet: one(wallets, {
     fields: [loanRepayments.toWalletId],
     references: [wallets.id],

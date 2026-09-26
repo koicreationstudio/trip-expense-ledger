@@ -19,6 +19,8 @@ let expensesPostHandler: typeof import('../expenses/route').POST;
 let settlementGetHandler: typeof import('./route').GET;
 let confirmPostHandler: typeof import('./confirmations/route').POST;
 let confirmDeleteHandler: typeof import('./confirmations/route').DELETE;
+let loansPostHandler: typeof import('../loans/route').POST;
+let repaymentsPostHandler: typeof import('../loans/[loanId]/repayments/route').POST;
 
 function jsonRequest(url: string, method: string, token: string | undefined, body?: unknown, userToken?: string) {
   const headers = new Headers({ 'content-type': 'application/json' });
@@ -40,6 +42,8 @@ beforeAll(async () => {
   ({ POST: expensesPostHandler } = await import('../expenses/route'));
   ({ GET: settlementGetHandler } = await import('./route'));
   ({ POST: confirmPostHandler, DELETE: confirmDeleteHandler } = await import('./confirmations/route'));
+  ({ POST: loansPostHandler } = await import('../loans/route'));
+  ({ POST: repaymentsPostHandler } = await import('../loans/[loanId]/repayments/route'));
 });
 
 afterAll(async () => {
@@ -159,5 +163,67 @@ describe('结算按币种拆开显示：端到端', () => {
       where: (t, { eq }) => eq(t.tripId, tripId),
     });
     expect(confirmRowsAfterDelete).toHaveLength(0);
+  });
+
+  // round74：loan/loan_repayment 接入结算净额计算——端到端集成测试，真的打
+  // POST /loans + POST /loans/[loanId]/repayments + GET /settlement 三个真实
+  // HTTP handler，确认 settlement-query.ts 那层查询真的把 loan/repayment 拼进了
+  // 结算净额，不是只有 lib/domain/settlement.ts 纯函数单测过、查询层没接上。
+  it('借出 US$1,000 部分还了 US$300，结算 GET 应该出现 htoo→remy 净欠 US$700 的一行', async () => {
+    const provisionRes = await provisionHandler(
+      jsonRequest('http://localhost/api/account/provision', 'POST', undefined)
+    );
+    const userToken = provisionRes.cookies.get(USER_SESSION_COOKIE_NAME)?.value!;
+    const createTripRes = await tripsPostHandler(
+      jsonRequest(
+        'http://localhost/api/trips',
+        'POST',
+        undefined,
+        { name: '借还钱接入结算测试行程', baseCurrency: 'HKD', ownerDisplayName: 'remy', participantNames: ['htoo'] },
+        userToken
+      )
+    );
+    const tripBody = (await createTripRes.json()) as any;
+    const tripId: string = tripBody.trip.id;
+    const remyToken = createTripRes.cookies.get(SESSION_COOKIE_NAME)?.value!;
+    const remyId: string = tripBody.trip.ownerParticipantId;
+    const htooId: string = tripBody.participants.find((p: any) => p.displayName === 'htoo').id;
+
+    const loanRes = await loansPostHandler(
+      jsonRequest(`http://localhost/api/trips/${tripId}/loans`, 'POST', remyToken, {
+        lenderParticipantId: remyId,
+        borrowerParticipantId: htooId,
+        amount: 100000, // US$1,000
+        currency: 'USD',
+        fxRateUsed: 7.8,
+        date: new Date().toISOString(),
+      }),
+      { params: { tripId } }
+    );
+    expect(loanRes.status).toBe(201);
+    const loanId: string = ((await loanRes.json()) as any).loan.id;
+
+    const repaymentRes = await repaymentsPostHandler(
+      jsonRequest(`http://localhost/api/trips/${tripId}/loans/${loanId}/repayments`, 'POST', remyToken, {
+        amount: 30000, // US$300，部分还款
+        fxRateUsed: 7.8,
+        date: new Date().toISOString(),
+      }),
+      { params: { tripId, loanId } }
+    );
+    expect(repaymentRes.status).toBe(201);
+
+    const settlementRes = await settlementGetHandler(
+      jsonRequest(`http://localhost/api/trips/${tripId}/settlement`, 'GET', remyToken),
+      { params: { tripId } }
+    );
+    expect(settlementRes.status).toBe(200);
+    const settlementBody = (await settlementRes.json()) as any;
+    const usdTransfer = settlementBody.transfers.find(
+      (t: any) => t.currency === 'USD' && t.fromParticipantId === htooId && t.toParticipantId === remyId
+    );
+    expect(usdTransfer).toBeDefined();
+    expect(usdTransfer.amountOriginal).toBe(70000); // US$700 净欠，跟"借1000还300"完全对上
+    expect(usdTransfer.amountBaseCurrency).toBe(Math.round(70000 * 7.8)); // 546000
   });
 });

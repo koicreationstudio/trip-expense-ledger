@@ -85,6 +85,9 @@ async function insertLoan(args: {
     borrowerParticipantId: args.borrowerId,
     amount: args.amount,
     currency: 'USD',
+    amountBaseCurrency: args.amount,
+    fxRateUsed: 1,
+    fxRateSource: 'manual',
     fromWalletId: args.fromWalletId,
     date: args.date ?? AFTER_ANCHOR,
   });
@@ -92,10 +95,22 @@ async function insertLoan(args: {
 }
 
 async function insertRepayment(args: { loanId: string; amount: number; toWalletId: string | null; date?: Date }) {
+  // round74：loan_repayment 现在必填 fromParticipantId/toParticipantId/
+  // currency/amountBaseCurrency——这个测试文件的还款永远挂着具体 loan，方向
+  // 直接从对应 loan 反查（borrower 还给 lender），跟真实 API 路由
+  // (loans/[loanId]/repayments/route.ts) 的派生逻辑保持一致，不是另外发明。
+  const loan = await db.query.loans.findFirst({ where: eq(loans.id, args.loanId) });
+  if (!loan) throw new Error('loan not found');
   await db.insert(loanRepayments).values({
     id: crypto.randomUUID(),
     loanId: args.loanId,
+    fromParticipantId: loan.borrowerParticipantId,
+    toParticipantId: loan.lenderParticipantId,
     amount: args.amount,
+    currency: 'USD',
+    amountBaseCurrency: args.amount,
+    fxRateUsed: 1,
+    fxRateSource: 'manual',
     toWalletId: args.toWalletId,
     date: args.date ?? LATER,
   });
