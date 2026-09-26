@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>trip-expense-ledger 记账本改版提案 — 第72轮⑤离线支持逐屏对照+分期计划</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#373736; --paper:#F7F7F6; --sand:#DBDAD6; --neutral:#A4A3A0;
+    --neutral-lt:#EDECE9; --neutral-dk:#6E6E6C; --muted:#6E6E6C;
+    --coral:#991B14; --negative:#A63926; --positive:#3D6141;
+    --ok:#4C7A50; --ok-bg:#E3ECE0; --live:#3E7787; --live-bg:#DFEAEC;
+    --cream:#F3E9D2; --accent-700:#373736;
+    --hero-label: color-mix(in srgb, var(--sand) 70%, white);
+    --font-sans:'Inter',system-ui,sans-serif; --font-serif:'IBM Plex Serif',serif; --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:var(--font-sans); background:#EFEEEA; color:var(--ink); -webkit-font-smoothing:antialiased;}
+  .topbar{background:var(--ink); color:#fff; padding:18px 28px; display:flex; flex-direction:column; gap:4px;}
+  .topbar h1{margin:0; font-size:18px; font-weight:700;}
+  .topbar p{margin:0; font-size:12px; color:var(--hero-label); line-height:1.6; max-width:1000px;}
+  .layout{display:flex; align-items:flex-start; min-height:100vh;}
+  .sidebar{width:220px; flex-shrink:0; background:#fff; border-right:1px solid var(--sand); min-height:100vh; padding:14px 0; position:sticky; top:0;}
+  .sidebar-group-label{font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--neutral-dk); font-weight:600; padding:10px 16px 4px;}
+  .nav-btn{display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer; padding:9px 16px; font-size:12.5px; font-family:var(--font-sans); color:var(--ink); border-left:3px solid transparent; line-height:1.4;}
+  .nav-btn small{display:block; font-size:9.5px; color:var(--muted); margin-top:1px; font-weight:400;}
+  .nav-btn:hover{background:var(--neutral-lt);}
+  .nav-btn.active{background:var(--neutral-lt); border-left:3px solid var(--ink); font-weight:600;}
+  .main{flex:1; padding:26px 32px 80px; min-width:0;}
+  .screen{display:none;} .screen.active{display:block;}
+  .screen-head{margin-bottom:16px;}
+  .screen-head h2{font-size:17px; margin:0 0 4px;}
+  .screen-head .tag{display:inline-block; font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--live-bg); color:var(--live); margin-right:6px; vertical-align:middle;}
+  .screen-body{display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;}
+  .phone-col{display:flex; flex-direction:column; gap:10px; flex-shrink:0;}
+  .phone-label{font-size:10.5px; font-weight:600; color:var(--neutral-dk); text-align:center;}
+  .phone{width:390px; background:var(--paper); border-radius:34px; border:8px solid #1c1c1c; box-shadow:0 14px 30px rgba(0,0,0,.18); overflow:hidden; position:relative;}
+  .phone-screen{max-height:720px; overflow-y:auto; padding:0 0 20px; position:relative;}
+  .compare-row{display:flex; gap:16px; flex-wrap:wrap;}
+  .note-card{flex:1; min-width:320px; max-width:560px; background:#fff; border:1px solid var(--sand); border-radius:14px; padding:16px 18px; box-shadow:0 1px 2px rgba(55,55,54,.06);}
+  .note-card h3{font-size:12.5px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.06em; color:var(--neutral-dk); font-weight:700;}
+  .note-card h4{font-size:11.5px; margin:14px 0 6px; color:var(--ink); font-weight:700;}
+  .note-card p{font-size:11.5px; line-height:1.7; margin:0 0 8px; color:var(--ink);}
+  .note-card ul,.note-card ol{margin:0 0 8px; padding-left:18px;} .note-card li{font-size:11.5px; line-height:1.7; margin-bottom:4px;}
+  .note-card table{width:100%; border-collapse:collapse; margin:0 0 10px; font-size:10.5px;}
+  .note-card th{text-align:left; font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--neutral-dk); padding:4px 6px; border-bottom:1px solid var(--sand);}
+  .note-card td{padding:5px 6px; border-bottom:1px solid rgba(55,55,54,.06); vertical-align:top;}
+  .note-card .diff{background:var(--neutral-lt); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:11px; line-height:1.7;}
+  .note-card .diff del{color:var(--coral); opacity:.75; text-decoration:line-through;}
+  .note-card .diff b{color:var(--positive); font-weight:700;}
+  .note-card .open-q{background:var(--ok-bg); border:1px solid var(--ok); border-radius:8px; padding:8px 10px; font-size:11px; line-height:1.7; color:var(--ink); margin-top:10px;}
+  .note-card .open-q b{color:var(--ok);}
+  .note-card .warn{background:#FBEEEC; border:1px solid var(--coral); border-radius:8px; padding:8px 10px; font-size:11px; line-height:1.7; color:var(--ink); margin-top:10px;}
+  .note-card .warn b{color:var(--coral);}
+  code{font-family:var(--font-mono); font-size:10px; background:var(--neutral-lt); padding:1px 4px; border-radius:4px;}
+  .exp-row{display:flex; align-items:center; gap:7px; padding:7px 14px; border-top:1px solid var(--sand);}
+  .exp-row:first-child{border-top:none;}
+  .exp-icon{width:24px; text-align:center; font-size:15px; flex-shrink:0;}
+  .exp-mid{flex:1; min-width:0; display:flex; flex-direction:column;}
+  .exp-name{font-size:12px; font-weight:500;}
+  .exp-meta{font-size:9.5px; color:var(--muted);}
+  .exp-amt{font-family:var(--font-serif); font-size:12.5px; font-weight:600; flex-shrink:0; text-align:right;}
+  .offline-bar{background:#3a3a38; color:#fff; font-size:10px; padding:6px 14px; display:flex; align-items:center; gap:6px;}
+  .offline-bar.stale{background:#7a5f13;}
+  .sync-badge{display:inline-flex; align-items:center; border-radius:999px; background:var(--cream); color:#7a5f13; padding:1px 6px; font-size:8.5px; font-weight:700; gap:3px;}
+  .sync-badge.done{background:var(--ok-bg); color:var(--ok);}
+  .sync-badge.error{background:#FBEEEC; color:var(--coral);}
+  .phase-card{border:1px solid var(--sand); background:var(--paper); border-radius:12px; padding:10px 12px; margin-bottom:8px;}
+  .phase-card h5{margin:0 0 4px; font-size:11.5px;}
+  .phase-tag{display:inline-block; font-size:9px; font-weight:700; padding:1px 7px; border-radius:999px; margin-right:6px;}
+  .phase-tag.p1{background:var(--ok-bg); color:var(--ok);}
+  .phase-tag.p2{background:var(--live-bg); color:var(--live);}
+  footer.pagefoot{padding:20px 32px; font-size:10.5px; color:var(--neutral-dk); border-top:1px solid var(--sand); margin-top:10px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>trip-expense-ledger 记账本改版提案 — 第72轮任务⑤离线支持逐屏对照 + 分期实施计划（只出稿+计划，不动代码）</h1>
+  <p>Remy 原话：①离线能看（SW + 数据快照 + 顶部"📴 离线，数据截至 xx:xx"）②离线记账待同步队列（"⏳ 待同步"，恢复网络自动上传，处理冲突，离线汇率用缓存）。这个 app 目前完全没有 service worker（只有 <code>app/manifest.ts</code> 这个 PWA 元数据，没有任何离线缓存机制），是全新架构，这份稿子先把两期的画面和判断都摆出来，SW 部分照 remy-calc/remy-gold 已经验证过的部署守护套路（版本号同步/<code>node --check</code>/SW 导航回归测试/回读），不是这次任务范围（部署守护是代码实现阶段的事，这份稿子只定 UI/交互/分期顺序）。活动板已有一条 backlog（<code>2026-09-25_175403_9e2e903e</code>），这份稿子出完+ Remy 拍板之后就推进那条，不新开重复条目。</p>
+</div>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-group-label">第一期：离线能看</div>
+    <button class="nav-btn active" data-target="s1">① 离线打开 app，看到上次的数据快照
+      <small>SW + IndexedDB/localStorage 快照</small></button>
+    <button class="nav-btn" data-target="s2">② 顶部离线状态条
+      <small>"📴 离线，数据截至 xx:xx"</small></button>
+    <div class="sidebar-group-label">第二期：离线记账</div>
+    <button class="nav-btn" data-target="s3">③ 离线记一笔账，进待同步队列
+      <small>"⏳ 待同步" 标记</small></button>
+    <button class="nav-btn" data-target="s4">④ 恢复网络：自动上传 + 冲突处理
+      <small>同步队列 + 冲突弹窗</small></button>
+    <div class="sidebar-group-label">总体</div>
+    <button class="nav-btn" data-target="s5">⑤ 分期实施计划 + 风险
+      <small>先做①②，②③留第二期</small></button>
+  </nav>
+
+  <main class="main">
+
+    <!-- ============ SCREEN 1 ============ -->
+    <section class="screen active" id="s1">
+      <div class="screen-head">
+        <h2>① 离线打开 app：不是白屏，是显示上一次成功加载的数据快照</h2>
+        <span class="tag">第一期</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改前 · 现状（没有任何离线机制，断网直接白屏/加载失败）</div>
+            <div class="phone"><div class="phone-screen" style="padding:60px 20px; text-align:center;">
+              <p style="font-size:12px; color:var(--muted);">⚠️ 无法连接到服务器<br>请检查网络连接后重试</p>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后 · 断网打开，看到最后一次成功加载的真实数据（🇭🇰香港行程 58 笔）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="offline-bar">📴 离线，数据截至 09:15</div>
+              <div class="exp-row"><span class="exp-icon">🏨</span><div class="exp-mid"><span class="exp-name">Woody House</span><span class="exp-meta">remy · 09-14 · 住宿</span></div><span class="exp-amt">HK$1,184.13</span></div>
+              <div class="exp-row"><span class="exp-icon">🚗</span><div class="exp-mid"><span class="exp-name">MTR</span><span class="exp-meta">remy · 09-19 · 交通</span></div><span class="exp-amt">HK$35.00</span></div>
+              <div class="exp-row"><span class="exp-icon">🍜</span><div class="exp-mid"><span class="exp-name">Luk On Kui 点心</span><span class="exp-meta">remy · 09-19 · 餐饮</span></div><span class="exp-amt">HK$333.00</span></div>
+            </div></div>
+          </div>
+        </div>
+        <div class="note-card">
+          <h3>改了什么</h3>
+          <div class="diff">
+            <del>没有 service worker，没有任何离线缓存——断网时所有 fetch 请求直接失败，Next.js 的 server component 数据请求拿不到任何东西，页面渲染失败或者卡在浏览器原生的"无法连接"提示</del><br>
+            <b>加 SW（<code>public/sw.js</code>），首次成功加载任何一趟行程主页/活动流/结算页时，把渲染用到的关键数据（消费列表/钱包余额/汇率缓存）写进一份本地快照（<code>localStorage</code> 或 <code>IndexedDB</code>，具体选哪个见下面④的判断），断网时页面从这份快照渲染，不再依赖网络请求</b>
+          </div>
+          <h4>为什么不是"离线也能操作全部功能"，只是"离线也能看"</h4>
+          <p>这个 app 现在几乎每个数据请求都要么读 D1（server component 直接查库），要么走 API route（client fetch）——两者断网都会失败。真正做到"离线也能看"，最小可行的做法是给几个最常看的只读页面（行程主页/活动流/结算页）各自存一份"最后成功渲染时的数据快照"，断网时检测到 <code>navigator.onLine === false</code> 或者 fetch 失败，就退回渲染这份快照，不是要把整个 app 的每个 server component 都改成离线可用（那个工程量大得多，也不是 Remy 这次提的诉求——她提的是"离线能看"，不是"离线能做所有事"）。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 ============ -->
+    <section class="screen" id="s2">
+      <div class="screen-head">
+        <h2>② 顶部离线状态条——什么时候显示、文案怎么变</h2>
+        <span class="tag">第一期</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">在线（不显示状态条，跟现在一样）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="exp-row"><span class="exp-icon">🏨</span><div class="exp-mid"><span class="exp-name">Woody House</span></div><span class="exp-amt">HK$1,184.13</span></div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">离线 &lt; 1 小时（灰色，正常语气）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="offline-bar">📴 离线，数据截至 09:15</div>
+              <div class="exp-row"><span class="exp-icon">🏨</span><div class="exp-mid"><span class="exp-name">Woody House</span></div><span class="exp-amt">HK$1,184.13</span></div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">离线快照过期太久（＞24 小时，黄色提醒，措辞升级）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="offline-bar stale">📴 离线，数据是昨天 09:15 的，可能不是最新</div>
+              <div class="exp-row"><span class="exp-icon">🏨</span><div class="exp-mid"><span class="exp-name">Woody House</span></div><span class="exp-amt">HK$1,184.13</span></div>
+            </div></div>
+          </div>
+        </div>
+        <div class="note-card">
+          <h3>改了什么</h3>
+          <p>状态条贴在顶部导航栏下面，不挤掉任何现有内容（占一行高度，跟"设置余额占位块"那种撑高文档的坑不是一类，这条是加内容不是加空白）。文案两档：快照 24 小时内用灰色中性语气"📴 离线，数据截至 {时间}"；超过 24 小时换成暖黄色（跟系统里"待处理"这类提醒同色系）"📴 离线，数据是{昨天/更早}{时间}的，可能不是最新"，提醒她这份数据可能已经过期，去查证前先留个心。恢复网络那一刻，这条状态条立刻消失（不需要用户手动刷新才消失）。</p>
+          <div class="open-q"><b>需要 Remy 确认：</b>"24 小时"这个过期阈值是我暂定的一个合理值，如果她觉得应该更短（比如 2 小时，出差每天都要记账，隔太久没同步风险更高）或者更长，这次没有资料判断她的真实使用节奏，需要她给一个具体数字。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 3 ============ -->
+    <section class="screen" id="s3">
+      <div class="screen-head">
+        <h2>③ 离线时记一笔账：立刻显示在列表里，标「⏳ 待同步」</h2>
+        <span class="tag">第二期</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">离线记账后，活动流立刻看到这一笔（本地先渲染，不等网络）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="offline-bar">📴 离线，数据截至 09:15</div>
+              <div class="exp-row"><span class="exp-icon">☕</span><div class="exp-mid"><span class="exp-name">咖啡 <span class="sync-badge">⏳ 待同步</span></span><span class="exp-meta">remy · 刚刚 · 咖啡</span></div><span class="exp-amt">HK$28.00</span></div>
+              <div class="exp-row"><span class="exp-icon">🏨</span><div class="exp-mid"><span class="exp-name">Woody House</span></div><span class="exp-amt">HK$1,184.13</span></div>
+            </div></div>
+          </div>
+        </div>
+        <div class="note-card">
+          <h3>怎么做</h3>
+          <p>离线提交表单时，先把这笔消费的完整表单数据（跟正常提交给后端一样的 payload）存进一个本地"待同步队列"（<code>IndexedDB</code>，理由见④），同时立刻在本地内存/UI 状态里插入一条"乐观渲染"的记录（跟这个项目已有的拖拽排序 <code>dragOrderOverride</code> 那种"乐观更新，等服务端确认再收敛"的模式是同一个思路，不是新发明一套状态管理），前面挂一个「⏳ 待同步」小标签。金额/分类/参与者选择跟在线时完全一样，不因为离线而阉割功能——差别只在"提交"这一步是存进本地队列还是直接打 API。</p>
+          <h4>离线时汇率怎么办</h4>
+          <p>Remy 原话"离线汇率用缓存"——记账表单需要自动带入汇率的场景（第一期任务①已经改好的"当地金额双向联动"那个功能），离线时改成读本地缓存的最近一次汇率（<code>/api/trips/{tripId}/fx-mid-rates</code> 这个接口第一期①的双向联动逻辑已经在用它，缓存下来的值离线时复用），不強制用户必须联网才能记账，缓存汇率可能不是当天最新，跟顶部离线状态条一样给个"缓存汇率，可能不是今天的"这类提示。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 4 ============ -->
+    <section class="screen" id="s4">
+      <div class="screen-head">
+        <h2>④ 恢复网络：自动上传队列 + 冲突怎么处理</h2>
+        <span class="tag">第二期</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">恢复网络，自动上传成功</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="exp-row"><span class="exp-icon">☕</span><div class="exp-mid"><span class="exp-name">咖啡 <span class="sync-badge done">✓ 已同步</span></span></div><span class="exp-amt">HK$28.00</span></div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">上传失败（比如同一时间另一台设备也改了这趟行程）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="exp-row"><span class="exp-icon">☕</span><div class="exp-mid"><span class="exp-name">咖啡 <span class="sync-badge error">⚠ 同步失败</span></span><span class="exp-meta">点击查看详情</span></div><span class="exp-amt">HK$28.00</span></div>
+            </div></div>
+          </div>
+        </div>
+        <div class="note-card">
+          <h3>存哪、怎么判断冲突</h3>
+          <p><b>本地待同步队列用 <code>IndexedDB</code>，不是 <code>localStorage</code></b>——待同步的记账表单数据结构化程度高（金额/分类/分摊明细/收据文件都可能有），<code>localStorage</code> 只能存字符串、有 5MB 上限，收据附件（如果离线也想拍照先存起来）更是塞不进去；<code>IndexedDB</code> 原生支持结构化数据+更大容量+能配合 SW 的 background sync，是这类"离线队列"场景的标准选择，不是过度设计。</p>
+          <p><b>冲突判定</b>：这个 app 目前没有版本号/乐观锁字段（<code>expense</code> 表没有 <code>version</code> 这类列），这次离线同步最简单可靠的冲突判定是"如果这笔账依赖的父资源（这趟行程/这个钱包）在离线期间被别人删除或者这个人自己的账号在别处被登出，上传时后端会用现有的 404/401 校验自然拒绝"——不新增一套复杂的版本号机制，只处理"上传时目标资源还合法存在"这一种冲突场景；真正"两台设备同时改同一笔消费"这种细粒度冲突，这次不做（这个 app 目前多设备协作本来就没有做这层保护，是个更大的既有缺口，不是离线功能这次要补的）。</p>
+          <h4>上传失败怎么办</h4>
+          <p>队列里这一条标"⚠ 同步失败"，点击可以看到失败原因（比如"这趟行程已经被删除"），提供"重试"或"放弃这笔（删除本地待同步记录）"两个选项，不自动静默丢弃，也不无限重试卡住整个队列（这一条失败不阻塞队列里其它条目继续上传）。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 5 ============ -->
+    <section class="screen" id="s5">
+      <div class="screen-head">
+        <h2>⑤ 分期实施计划</h2>
+        <span class="tag">总体计划</span>
+      </div>
+      <div class="screen-body">
+        <div class="note-card" style="max-width:760px;">
+          <div class="phase-card">
+            <h5><span class="phase-tag p1">第一期</span>离线能看（SW + 数据快照 + 顶部状态条）</h5>
+            <p><b>理由</b>：纯只读，不涉及任何写入/冲突/队列逻辑，风险最低、落地最快，能立刻解决"断网直接白屏"这个最基础的可用性问题，是"离线记账"这个更复杂功能的地基（第二期的队列也要靠 SW 拦截请求）。<b>风险</b>：SW 缓存策略如果写错，历史上 remy-calc/remy-gold 都踩过"SW 把旧版本 HTML/JS 缓存住，发新版之后用户还在用旧代码"的坑（remy-calc 2026-06-18 那次"裸推 SW 改挂 iOS 白屏"事故），这次必须照抄那两个项目已经验证过的 <code>deploy.sh</code> 五道关卡套路（版本号同步/<code>node --check</code>/SW 导航回归测试/部署后回读），不能简化。</p>
+          </div>
+          <div class="phase-card">
+            <h5><span class="phase-tag p2">第二期</span>离线记账待同步队列</h5>
+            <p><b>理由</b>：涉及本地队列存储、乐观渲染、恢复网络后的自动上传、失败/冲突处理，工程量和风险都明显高于第一期，且依赖第一期的 SW 基础设施先落地稳定。<b>风险</b>：这个 app 目前没有为多设备/多次编辑设计任何版本控制机制，离线队列本质上是在一个"本来就没有强并发保护"的系统上加一层"延迟提交"，如果 Remy 使用场景里经常两台设备同时离线记账同一趟行程，冲突处理这块可能需要比这次稿子设计的更完整，这次先按"单设备离线记账为主"这个假设设计，如果实际用起来发现冲突频繁，需要回头补强。</p>
+          </div>
+          <div class="open-q"><b>需要 Remy 确认：</b>①认不认可"先做第一期离线能看，第二期离线记账另外排期"这个顺序（不是一次性两期一起做）？②第一期的离线快照要覆盖哪几个页面——这份稿子先假设是"行程主页+活动流+结算页"这三个她最常看的页面，其它页面（支付方式设置/邀请管理等）离线时维持现状（显示网络错误），这个范围是否同意？</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="pagefoot">
+  trip-expense-ledger 第72轮任务⑤设计稿 · 本地文件 <code>DESIGN-BRIEF-round72-offline.html</code> · 全新架构（现状零离线机制），示例数据沿用 Remy 真实「🇭🇰2026香港」行程消费记录
+</footer>
+
+<script>
+  document.querySelectorAll('.nav-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+      window.scrollTo({top:0, behavior:'instant'});
+    });
+  });
+</script>
+
+</body>
+</html>

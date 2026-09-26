@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>trip-expense-ledger 桌面宽屏布局提案 — 第72轮逐屏对照</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#373736; --paper:#F7F7F6; --sand:#DBDAD6; --neutral:#A4A3A0;
+    --neutral-lt:#EDECE9; --neutral-dk:#6E6E6C; --muted:#6E6E6C;
+    --coral:#991B14; --negative:#A63926; --positive:#3D6141;
+    --negative-dk:#E6B1A8; --positive-dk:#B7D1A8;
+    --ok:#4C7A50; --ok-bg:#E3ECE0; --live:#3E7787; --live-bg:#DFEAEC;
+    --cream:#F3E9D2; --accent-700:#373736; --accent-800:#252524;
+    --hero-label: color-mix(in srgb, var(--sand) 70%, white);
+    --font-sans:'Inter',system-ui,sans-serif;
+    --font-serif:'IBM Plex Serif',serif;
+    --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:var(--font-sans); background:#EFEEEA; color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  .topbar{
+    background:var(--ink); color:#fff; padding:18px 28px;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  .topbar h1{margin:0; font-size:18px; font-weight:700;}
+  .topbar p{margin:0; font-size:12px; color:var(--hero-label); line-height:1.6; max-width:960px;}
+  .layout{display:flex; align-items:flex-start; min-height:100vh;}
+  .sidebar{
+    width:236px; flex-shrink:0; background:#fff; border-right:1px solid var(--sand);
+    min-height:100vh; padding:14px 0; position:sticky; top:0;
+  }
+  .sidebar-group-label{
+    font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--neutral-dk);
+    font-weight:600; padding:10px 16px 4px;
+  }
+  .nav-btn{
+    display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer;
+    padding:9px 16px; font-size:12.5px; font-family:var(--font-sans); color:var(--ink);
+    border-left:3px solid transparent; line-height:1.4;
+  }
+  .nav-btn small{display:block; font-size:9.5px; color:var(--muted); margin-top:1px; font-weight:400;}
+  .nav-btn:hover{background:var(--neutral-lt);}
+  .nav-btn.active{background:var(--neutral-lt); border-left:3px solid var(--ink); font-weight:600;}
+  .main{flex:1; padding:26px 32px 80px; min-width:0;}
+  .screen{display:none;}
+  .screen.active{display:block;}
+  .screen-head{margin-bottom:16px;}
+  .screen-head h2{font-size:17px; margin:0 0 4px;}
+  .screen-head .tag{
+    display:inline-block; font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px;
+    background:var(--live-bg); color:var(--live); margin-right:6px; vertical-align:middle;
+  }
+  .screen-body{display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;}
+  .compare-row{display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start;}
+  .note-card{
+    flex:1; min-width:320px; max-width:460px; background:#fff; border:1px solid var(--sand);
+    border-radius:14px; padding:16px 18px; box-shadow:0 1px 2px rgba(55,55,54,.06);
+  }
+  .note-card h3{font-size:12.5px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.06em; color:var(--neutral-dk); font-weight:700;}
+  .note-card h4{font-size:11.5px; margin:14px 0 6px; color:var(--ink); font-weight:700;}
+  .note-card p{font-size:11.5px; line-height:1.7; margin:0 0 8px; color:var(--ink);}
+  .note-card ul{margin:0 0 8px; padding-left:18px;}
+  .note-card li{font-size:11.5px; line-height:1.7; margin-bottom:4px;}
+  .note-card ol{margin:0 0 8px; padding-left:18px;}
+  .note-card ol li{font-size:11.5px; line-height:1.7; margin-bottom:4px;}
+  .note-card .diff{
+    background:var(--neutral-lt); border-radius:8px; padding:8px 10px; margin-bottom:8px;
+    font-size:11px; line-height:1.7;
+  }
+  .note-card .diff del{color:var(--coral); opacity:.75; text-decoration:line-through;}
+  .note-card .diff b{color:var(--positive); font-weight:700;}
+  .note-card .quote{
+    border-left:3px solid var(--neutral); background:var(--neutral-lt); padding:8px 10px;
+    font-size:10.5px; line-height:1.7; color:var(--neutral-dk); margin-bottom:8px; border-radius:0 6px 6px 0;
+  }
+  .note-card .open-q{
+    background:var(--ok-bg); border:1px solid var(--ok); border-radius:8px; padding:8px 10px;
+    font-size:11px; line-height:1.7; color:var(--ink); margin-top:10px;
+  }
+  .note-card .open-q b{color:var(--ok);}
+  .note-card .warn{
+    background:#FBEEEC; border:1px solid var(--coral); border-radius:8px; padding:8px 10px;
+    font-size:11px; line-height:1.7; color:var(--ink); margin-top:10px;
+  }
+  .note-card .warn b{color:var(--coral);}
+  code{font-family:var(--font-mono); font-size:10px; background:var(--neutral-lt); padding:1px 4px; border-radius:4px;}
+  .before-after-label{
+    display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    padding:2px 8px; border-radius:999px; margin-bottom:6px;
+  }
+  .before-after-label.before{background:rgba(153,27,20,.1); color:var(--coral);}
+  .before-after-label.after{background:rgba(76,122,80,.12); color:var(--ok);}
+  footer.pagefoot{padding:20px 32px; font-size:10.5px; color:var(--neutral-dk); border-top:1px solid var(--sand); margin-top:10px;}
+
+  /* ============ 桌面窗口 mockup（新增，round70 没有这套，那份只有手机 .phone） ============ */
+  .desktop-col{display:flex; flex-direction:column; gap:10px; flex:1; min-width:520px;}
+  .desktop-col-label{font-size:10.5px; font-weight:600; color:var(--neutral-dk); text-align:center;}
+  .desktop-frame{
+    width:100%; background:#fff; border-radius:10px; border:1px solid #cfcfcb;
+    box-shadow:0 10px 24px rgba(0,0,0,.14); overflow:hidden;
+  }
+  .browser-chrome{
+    background:#e7e6e2; padding:7px 10px; display:flex; align-items:center; gap:8px;
+    border-bottom:1px solid #cfcfcb;
+  }
+  .browser-dots{display:flex; gap:4px;}
+  .browser-dots span{width:8px; height:8px; border-radius:50%; background:#c7c6c2; display:inline-block;}
+  .browser-addr{
+    flex:1; background:#fff; border-radius:6px; padding:3px 10px; font-size:9.5px; color:var(--muted);
+    font-family:var(--font-mono);
+  }
+  .desktop-viewport{background:var(--paper); min-height:400px;}
+  .desktop-note{font-size:9px; color:var(--neutral-dk); text-align:center; margin-top:-2px;}
+
+  /* app 顶部导航（桌面版复用同一条 topbar-app） */
+  .topbar-app{display:flex; align-items:center; justify-content:space-between; padding:10px 20px; border-bottom:1px solid var(--sand); background:#fff;}
+  .topbar-app .tname{font-size:13px; font-weight:700;}
+  .topbar-app .tsub{font-size:9.5px; color:var(--muted);}
+  .topbar-app .links{display:flex; align-items:center; gap:12px; font-size:10px;}
+  .topbar-app .links a{color:var(--muted); text-decoration:underline;}
+  .topbar-app .toolbar-cta{
+    display:inline-flex; align-items:center; gap:4px; background:var(--accent-700); color:#fff; border-radius:999px;
+    padding:6px 13px; font-size:10.5px; font-weight:600;
+  }
+
+  /* 桌面居中定宽主栏 + 右侧信息栏 布局壳 */
+  .desk-shell{display:flex; gap:18px; padding:16px 20px 24px; align-items:flex-start;}
+  .desk-main-col{flex:1; max-width:340px; margin:0 auto; display:flex; flex-direction:column; gap:9px;}
+  .desk-side-col{width:190px; flex-shrink:0; display:flex; flex-direction:column; gap:10px;}
+  .desk-shell.two-col .desk-main-col{margin:0;}
+
+  .side-card{border:1px solid var(--sand); background:#fff; border-radius:10px; padding:9px 10px;}
+  .side-card h4{font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:var(--neutral-dk); margin:0 0 6px; font-weight:700;}
+  .side-card .row{display:flex; justify-content:space-between; font-size:10px; padding:2px 0;}
+  .side-card .row .amt{font-family:var(--font-serif); font-weight:600;}
+  .side-card .row .amt.neg{color:var(--negative);}
+  .side-card .row .amt.pos{color:var(--positive);}
+  .side-card p.mini{font-size:9px; color:var(--muted); line-height:1.6; margin:4px 0 0;}
+
+  /* 复刻的 app 组件（跟 round70 一致，缩小字号给桌面窄卡片用） */
+  .field-label{font-size:9px; font-weight:500; color:var(--ink); display:block; margin-bottom:2px;}
+  .field-input{
+    width:100%; border-radius:10px; border:1px solid var(--sand); padding:5px 7px; font-size:10px;
+    font-family:var(--font-sans); background:#fff; color:var(--ink);
+  }
+  .field-input.serif{font-family:var(--font-serif); font-weight:500;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+  .form-block{display:flex; flex-direction:column; gap:7px; margin-bottom:8px;}
+  .big-cta{
+    display:block; width:100%; background:var(--accent-700); color:#fff; border-radius:999px;
+    padding:7px; text-align:center; font-size:11px; font-weight:500; border:none; margin-top:6px;
+  }
+  .sort-row{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;}
+  .sort-chip{border-radius:999px; border:1px solid var(--sand); background:#fff; padding:0 9px; font-size:10px; font-weight:500; color:var(--ink); min-height:24px; display:inline-flex; align-items:center;}
+  .sort-chip.active{background:var(--ink); color:#fff; border-color:var(--ink);}
+  .exp-row{display:flex; align-items:center; gap:7px; padding:6px 2px; border-top:1px solid var(--sand);}
+  .exp-row:first-child{border-top:none;}
+  .exp-icon{width:22px; text-align:center; font-size:14px; flex-shrink:0;}
+  .exp-mid{flex:1; min-width:0; display:flex; flex-direction:column;}
+  .exp-name{font-size:11px; font-weight:500;}
+  .exp-meta{font-size:9px; color:var(--muted);}
+  .exp-amt{font-family:var(--font-serif); font-size:11.5px; font-weight:600; flex-shrink:0; text-align:right;}
+  .net-card{display:flex; flex-direction:column; border-radius:12px; border:1px solid var(--sand); background:rgba(164,163,160,.14); padding:3px 5px; margin-bottom:6px;}
+  .net-row{display:flex; align-items:center; gap:5px; padding:3px 0;}
+  .net-name{flex:1; font-size:10px;}
+  .net-amt{font-size:9.5px;}
+  .transfer-card{border-radius:12px; border:1px solid var(--sand); background:rgba(164,163,160,.14); padding:5px 7px; margin-bottom:6px;}
+  .transfer-head{display:flex; align-items:center; gap:5px; font-size:10px; padding:2px 0;}
+
+  /* 空白浪费演示（改前） */
+  .waste-block{background:var(--paper); min-height:400px; display:flex;}
+  .waste-narrow{width:300px; flex-shrink:0; border-right:1px dashed #cfcfcb; padding:0;}
+  .waste-empty{flex:1; display:flex; align-items:center; justify-content:center; color:#b9b8b4; font-size:11px; background:repeating-linear-gradient(135deg, #f2f1ed 0 10px, #ebeae6 10px 20px);}
+
+  /* 底部操作条演示 */
+  .actionbar-mobile-demo{position:relative; height:60px; border-top:1px solid var(--sand); background:var(--paper); display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--muted);}
+  .toolbar-desktop-demo{padding:8px 14px; border-bottom:1px solid var(--sand); background:#fff; display:flex; align-items:center; justify-content:space-between;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>trip-expense-ledger 桌面宽屏布局提案 — 第72轮任务⑥②逐屏对照（只出稿，不动代码）</h1>
+  <p>背景：这个 app 从第一版到现在只做过手机宽度的响应式设计，PC/平板宽屏打开时主内容区固定贴左上角一个偏窄宽度，右侧和下方留大片空白——第七十一轮独立 ui-auditor 真机走查用真实截图证实了这个现状（<code>04_expense_form_desktop_default.png</code> / <code>09_payment_methods_deeplink_desktop_fullpage.png</code>）。这份稿子只提方案定调性，Remy 确认方向之后才会真的动代码。下面的桌面窗口 mockup 按 1280px 宽浏览器窗口等比缩小示意（缩到约 860px 宽方便页面里两个对照并排放）。示例数字沿用真实「🇭🇰2026香港」行程（trip id <code>f78a6b5e-8612-4097-8bfd-88a5db664045</code>，本位币 HKD，参与者 remy／htoo），钱包余额是这趟行程真实的 D1 数字（<code>wrangler d1 execute --remote</code> 只读查询）。</p>
+</div>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-group-label">方向</div>
+    <button class="nav-btn active" data-target="s1">① 设计方向说明</button>
+    <div class="sidebar-group-label">行程主页</div>
+    <button class="nav-btn" data-target="s2">② 改前/改后对照</button>
+    <div class="sidebar-group-label">记账表单</div>
+    <button class="nav-btn" data-target="s3">③ 改前/改后对照</button>
+    <div class="sidebar-group-label">结算页</div>
+    <button class="nav-btn" data-target="s4">④ 改前/改后对照</button>
+    <div class="sidebar-group-label">底部操作条</div>
+    <button class="nav-btn" data-target="s5">⑤ 桌面方案</button>
+    <div class="sidebar-group-label">收尾</div>
+    <button class="nav-btn" data-target="s6">⑥ 需要 Remy 确认的问题</button>
+  </nav>
+
+  <main class="main">
+
+    <!-- ============ SCREEN 1：设计方向 ============ -->
+    <section class="screen active" id="s1">
+      <div class="screen-head">
+        <h2>① 设计方向：居中定宽主栏 + 右侧常驻信息栏（不是拉宽手机版）</h2>
+        <span class="tag">方案说明</span>
+      </div>
+      <div class="screen-body" style="display:block;">
+        <div class="note-card" style="max-width:820px;">
+          <h3>为什么不是"把手机版容器直接拉宽"</h3>
+          <p>手机版每个组件（输入框、按钮、卡片）都是按窄屏密度调出来的尺寸——直接把外层容器拉到 1280px 宽，输入框会变成一条又矮又宽的细长条，按钮横向占满整行却只有 44px 高，比例完全不对，看起来像"没做完"，不是"响应式"。</p>
+          <h3>选了哪个方向，排除了哪个</h3>
+          <table style="width:100%; border-collapse:collapse; margin-bottom:10px; font-size:10.5px;">
+            <tr><th style="text-align:left; padding:4px 6px; border-bottom:1px solid var(--sand); font-size:9.5px; color:var(--neutral-dk);">方案</th><th style="text-align:left; padding:4px 6px; border-bottom:1px solid var(--sand); font-size:9.5px; color:var(--neutral-dk);">做法</th><th style="text-align:left; padding:4px 6px; border-bottom:1px solid var(--sand); font-size:9.5px; color:var(--neutral-dk);">取舍</th></tr>
+            <tr><td style="padding:5px 6px; border-bottom:1px solid rgba(55,55,54,.06);">A. 居中定宽 + 右侧信息栏 <b style="color:var(--ok);">（这版选它）</b></td><td style="padding:5px 6px; border-bottom:1px solid rgba(55,55,54,.06);">主内容列维持跟手机版接近的密度（约 340-380px 等效宽度），整体居中，右侧加一条常驻信息栏放高频信息</td><td style="padding:5px 6px; border-bottom:1px solid rgba(55,55,54,.06);">改动量最小——现有组件、字号、间距全部不用重新设计，只是"外面多了一块地方可以放东西"，风险低，实现快</td></tr>
+            <tr><td style="padding:5px 6px;">B. 左侧导航栏 + 右侧主内容两栏</td><td style="padding:5px 6px;">把顶部那条挤在标题旁边的"行程切换下拉"升级成桌面左侧常驻导航栏，类似很多桌面财务软件</td><td style="padding:5px 6px;">信息架构改动更大（导航模式整个换掉），而且这个项目历史上有过"Remy 明确不想建平行的新导航形态，宁可塞进已有的表/视图，减少要维护的东西"这条反馈（<code>feedback_prefer_extending_existing_view_over_new_tab</code>）——现有的行程切换下拉已经够用，没必要为了桌面版另起一套导航范式，这次排除</td></tr>
+          </table>
+          <h3>断点</h3>
+          <p><b>视口宽度 ≥ 1024px 进入桌面布局，&lt;1024px 维持现有手机布局完全不变。</b>不做中间平板过渡态——1024px 以下（包括大多数平板竖屏）先归到手机布局那一边，两套布局之间没有第三档，减少要维护的组合数。</p>
+          <h3>右侧信息栏放什么——初版判断</h3>
+          <ul>
+            <li>钱包余额一览（现在要滚到页面偏下才看到，出差在外最常想确认的就是"手上这几个钱包还有多少"）</li>
+            <li>本位币净额摘要（我该收/该付多少，跟首页摘要同一套算法，只是常驻显示不用点进结算页）</li>
+            <li>汇率比价卡的"💡最划算"结论行（如果这次消费正打开着记账表单，这一条其实更适合放主栏内，右侧栏留给"没有正在做什么动作时也想看到"的信息）</li>
+          </ul>
+          <p>这份优先级排序是这次代做的判断，不是 Remy 定的——具体放哪几项、顺序怎么排，见最后一屏"需要确认的问题"。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2：行程主页 ============ -->
+    <section class="screen" id="s2">
+      <div class="screen-head">
+        <h2>② 行程主页 — 桌面改前/改后</h2>
+        <span class="tag">方案</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="desktop-col">
+            <span class="before-after-label before">改前 · 复现</span>
+            <div class="desktop-col-label">1280px 窗口，主内容贴左上角，右/下方大片空白（真实截图 09_payment_methods_deeplink_desktop_fullpage.png 的现状）</div>
+            <div class="desktop-frame">
+              <div class="browser-chrome"><div class="browser-dots"><span></span><span></span><span></span></div><div class="browser-addr">trip-expense-ledger.remybali.workers.dev/trips/f78a6b5e…</div></div>
+              <div class="waste-block">
+                <div class="waste-narrow">
+                  <div class="topbar-app" style="padding:8px 10px;">
+                    <div><div class="tname" style="font-size:11px;">🇭🇰2026香港</div><div class="tsub">本位币 HKD</div></div>
+                  </div>
+                  <div style="padding:8px 10px;">
+                    <div class="sort-row"><span class="sort-chip active">排序：手动</span><span class="sort-chip">分类：全部</span></div>
+                    <div class="exp-row"><span class="exp-icon">🏨</span><div class="exp-mid"><span class="exp-name">Woody House</span><span class="exp-meta">remy · 09-14</span></div><span class="exp-amt">HK$1,184.13</span></div>
+                    <div class="exp-row"><span class="exp-icon">🚗</span><div class="exp-mid"><span class="exp-name">MTR</span><span class="exp-meta">remy · 09-19</span></div><span class="exp-amt">HK$35.00</span></div>
+                  </div>
+                </div>
+                <div class="waste-empty">窄容器右边 · 空白</div>
+              </div>
+              <div class="actionbar-mobile-demo">底部常驻「记一笔消费」— 满宽贴最底部</div>
+            </div>
+          </div>
+          <div class="desktop-col">
+            <span class="before-after-label after">改后 · 提案</span>
+            <div class="desktop-col-label">居中定宽主栏（约 380px 等效宽度）+ 右侧信息栏（钱包/净额常驻不用滚）</div>
+            <div class="desktop-frame">
+              <div class="browser-chrome"><div class="browser-dots"><span></span><span></span><span></span></div><div class="browser-addr">trip-expense-ledger.remybali.workers.dev/trips/f78a6b5e…</div></div>
+              <div class="desktop-viewport">
+                <div class="topbar-app">
+                  <div><div class="tname">🇭🇰2026香港</div><div class="tsub">本位币 HKD · remy／htoo</div></div>
+                  <div class="links"><a href="#">我的账号</a><span class="toolbar-cta">＋ 记一笔消费</span></div>
+                </div>
+                <div class="desk-shell two-col">
+                  <div class="desk-main-col">
+                    <div class="sort-row"><span class="sort-chip active">排序：手动</span><span class="sort-chip">分类：全部</span><span class="sort-chip">垫付人：全部</span></div>
+                    <div class="exp-row"><span class="exp-icon">🏨</span><div class="exp-mid"><span class="exp-name">Woody House</span><span class="exp-meta">remy · 09-14 · 住宿</span></div><span class="exp-amt">HK$1,184.13</span></div>
+                    <div class="exp-row"><span class="exp-icon">🏨</span><div class="exp-mid"><span class="exp-name">Acesite Knutsford Hotel</span><span class="exp-meta">remy · 09-14 · 住宿</span></div><span class="exp-amt">HK$726.63</span></div>
+                    <div class="exp-row"><span class="exp-icon">🚗</span><div class="exp-mid"><span class="exp-name">MTR</span><span class="exp-meta">remy · 09-19 · 交通</span></div><span class="exp-amt">HK$35.00</span></div>
+                    <div class="exp-row"><span class="exp-icon">🛍️</span><div class="exp-mid"><span class="exp-name">袜子 夜间教习室</span><span class="exp-meta">remy · 09-22 · 购物</span></div><span class="exp-amt">HK$74.30</span></div>
+                  </div>
+                  <div class="desk-side-col">
+                    <div class="side-card">
+                      <h4>我的钱包</h4>
+                      <div class="row"><span>USD 现金</span><span class="amt pos">US$16,131.00</span></div>
+                      <div class="row"><span>HKD 现金</span><span class="amt pos">HK$8,120.00</span></div>
+                      <div class="row"><span>USDT 钱包</span><span class="amt neg">-US$1,105.00</span></div>
+                      <p class="mini">数字来自这趟行程真实 D1 记录（USDT 已按 round72 B2 推导的校正值展示，实际落库前还要等 Remy 确认）</p>
+                    </div>
+                    <div class="side-card">
+                      <h4>净额摘要</h4>
+                      <div class="row"><span>该收 htoo</span><span class="amt pos">HK$1,240.50</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="note-card" style="max-width:820px; margin-top:16px;">
+          <h3>改了什么</h3>
+          <div class="diff">
+            <del>主内容区固定窄宽度贴左上角，右侧/下方是纯空白，钱包余额要往下滚很久才看到</del><br>
+            <b>≥1024px 时整体居中，主内容列宽度不变（组件不用重新设计），右侧新增常驻信息栏，钱包余额+净额摘要一直可见，不用滚动</b>
+          </div>
+          <p>活动流本身（排序/筛选/列表行）视觉和交互完全不变，只是外层容器从"贴左上角"变成"居中"，右边多了一块信息栏——这是刻意的最小改动范围，降低这次改动的风险。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 3：记账表单 ============ -->
+    <section class="screen" id="s3">
+      <div class="screen-head">
+        <h2>③ 记一笔消费表单 — 桌面改前/改后</h2>
+        <span class="tag">方案</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="desktop-col">
+            <span class="before-after-label before">改前 · 复现</span>
+            <div class="desktop-col-label">表单窄条贴左上角，右侧空白（真实截图 04_expense_form_desktop_default.png 的现状）</div>
+            <div class="desktop-frame">
+              <div class="browser-chrome"><div class="browser-dots"><span></span><span></span><span></span></div><div class="browser-addr">…/trips/f78a6b5e…/expenses/new</div></div>
+              <div class="waste-block">
+                <div class="waste-narrow">
+                  <div style="padding:10px;">
+                    <div class="form-block">
+                      <div class="grid2"><div><label class="field-label">金额</label><input class="field-input serif" value="35.00" readonly></div><div><label class="field-label">币种</label><input class="field-input" value="HKD" readonly></div></div>
+                      <div><label class="field-label">商家名称</label><input class="field-input" value="MTR" readonly></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="waste-empty">窄容器右边 · 空白</div>
+              </div>
+            </div>
+          </div>
+          <div class="desktop-col">
+            <span class="before-after-label after">改后 · 提案</span>
+            <div class="desktop-col-label">表单居中定宽（跟手机版同密度），右侧信息栏放"这笔该用哪张卡最划算"结论（原本要填完金额才在表单下方出现，现在填的同时旁边就能看到）</div>
+            <div class="desktop-frame">
+              <div class="browser-chrome"><div class="browser-dots"><span></span><span></span><span></span></div><div class="browser-addr">…/trips/f78a6b5e…/expenses/new</div></div>
+              <div class="desktop-viewport">
+                <div class="topbar-app"><div><div class="tname">记一笔消费</div></div><div class="links"><a href="#">取消</a></div></div>
+                <div class="desk-shell two-col">
+                  <div class="desk-main-col">
+                    <div class="form-block">
+                      <div class="grid2"><div><label class="field-label">金额</label><input class="field-input serif" value="35.00" readonly></div><div><label class="field-label">币种</label><input class="field-input" value="HKD" readonly></div></div>
+                      <div><label class="field-label">商家名称</label><input class="field-input" value="MTR" readonly></div>
+                      <div><label class="field-label">支付方式</label><input class="field-input" value="HSBC 大马 Visa" readonly></div>
+                    </div>
+                    <button class="big-cta">记这笔账</button>
+                  </div>
+                  <div class="desk-side-col">
+                    <div class="side-card">
+                      <h4>💡这笔最划算</h4>
+                      <p class="mini" style="font-size:10px; color:var(--ink);">用 <b>HSBC 大马 Visa</b>，比现金付 HKD 省 HK$0.90（同币种直接扣，没有换汇加点）。</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="note-card" style="max-width:820px; margin-top:16px;">
+          <h3>改了什么</h3>
+          <div class="diff">
+            <del>表单本身跟手机版一样窄，比价结论要等表单渲染完、还要往下滚才看到</del><br>
+            <b>表单主体不变，右侧信息栏承接比价结论，填金额的同时旁边同步刷新，不用滚动去找</b>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 4：结算页 ============ -->
+    <section class="screen" id="s4">
+      <div class="screen-head">
+        <h2>④ 结算页 — 桌面改前/改后</h2>
+        <span class="tag">方案</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="desktop-col">
+            <span class="before-after-label before">改前 · 复现</span>
+            <div class="desktop-col-label">净额卡+转账清单窄条堆叠，右侧空白</div>
+            <div class="desktop-frame">
+              <div class="browser-chrome"><div class="browser-dots"><span></span><span></span><span></span></div><div class="browser-addr">…/trips/f78a6b5e…/settlement</div></div>
+              <div class="waste-block">
+                <div class="waste-narrow">
+                  <div style="padding:10px;">
+                    <div class="net-card"><div class="net-row"><span class="net-name">remy → htoo</span><span class="net-amt">HK$1,240.50</span></div></div>
+                    <div class="transfer-card"><div class="transfer-head">💵 转账清单</div></div>
+                  </div>
+                </div>
+                <div class="waste-empty">窄容器右边 · 空白</div>
+              </div>
+            </div>
+          </div>
+          <div class="desktop-col">
+            <span class="before-after-label after">改后 · 提案</span>
+            <div class="desktop-col-label">结算主体居中，右侧信息栏放"这趟行程消费总览"（总花费/按分类小计），结算时顺手核对总数对不对</div>
+            <div class="desktop-frame">
+              <div class="browser-chrome"><div class="browser-dots"><span></span><span></span><span></span></div><div class="browser-addr">…/trips/f78a6b5e…/settlement</div></div>
+              <div class="desktop-viewport">
+                <div class="topbar-app"><div><div class="tname">结算</div></div></div>
+                <div class="desk-shell two-col">
+                  <div class="desk-main-col">
+                    <div class="net-card"><div class="net-row"><span class="net-name">remy → htoo</span><span class="net-amt">该收 HK$1,240.50</span></div></div>
+                    <div class="transfer-card"><div class="transfer-head">💵 转账清单</div></div>
+                  </div>
+                  <div class="desk-side-col">
+                    <div class="side-card">
+                      <h4>消费总览</h4>
+                      <div class="row"><span>住宿</span><span class="amt">HK$1,910.76</span></div>
+                      <div class="row"><span>交通</span><span class="amt">HK$258.91</span></div>
+                      <div class="row"><span>购物</span><span class="amt">HK$103.68</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 5：底部操作条 ============ -->
+    <section class="screen" id="s5">
+      <div class="screen-head">
+        <h2>⑤ 底部操作条 — 桌面方案</h2>
+        <span class="tag">方案</span>
+      </div>
+      <div class="screen-body" style="display:block;">
+        <div class="compare-row">
+          <div class="desktop-col">
+            <span class="before-after-label before">改前 · 手机才需要的形态</span>
+            <div class="desktop-frame">
+              <div class="desktop-viewport" style="min-height:120px;">
+                <div style="padding:20px; text-align:center; color:var(--muted); font-size:10.5px;">桌面 1280px 窗口下，一条满宽的 <code>.action-bar</code> 依然贴在浏览器窗口最下面</div>
+              </div>
+              <div class="actionbar-mobile-demo">底部满宽操作条（大拇指热区设计，桌面鼠标不需要）</div>
+            </div>
+          </div>
+          <div class="desktop-col">
+            <span class="before-after-label after">改后 · 并入顶部常驻工具条</span>
+            <div class="desktop-frame">
+              <div class="browser-chrome"><div class="browser-dots"><span></span><span></span><span></span></div><div class="browser-addr">…/trips/f78a6b5e…</div></div>
+              <div class="toolbar-desktop-demo">
+                <div class="tname" style="font-size:12px;">🇭🇰2026香港</div>
+                <span class="toolbar-cta">＋ 记一笔消费</span>
+              </div>
+              <div class="desktop-viewport" style="min-height:80px;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="note-card" style="max-width:820px; margin-top:16px;">
+          <h3>为什么不是"贴角落的悬浮按钮"</h3>
+          <p>这个项目历史上有过"贴角落悬浮胶囊跟内容抢坐标，被 Remy 反馈遮挡过三轮"的教训（<code>record-expense-bar.tsx</code> 顶部注释、CLAUDE.md 明确记录），这次桌面方案<b>特意排除掉悬浮胶囊这个形态</b>，改成并入顶部常驻工具条一条横排按钮——跟历史教训里"手机窄屏、内容和悬浮按钮抢同一小块坐标"不是同一个处境：桌面 ≥1024px 顶部工具条本身有整行横向空间，"＋ 记一笔消费"按钮跟行程名各站两端，不会跟下面任何内容区的坐标重叠，不存在"盖住哪一行"的风险。</p>
+          <div class="diff">
+            <del>满宽固定在浏览器窗口最下面一条 <code>.action-bar</code>（<code>fixed inset-x-0 bottom-0 z-20</code>）</del><br>
+            <b>≥1024px 时改成不渲染底部 <code>.action-bar</code>，改在顶部 <code>.topbar-app</code> 那一行右侧常驻放同一个"＋ 记一笔消费"按钮（复用同一个组件的点击逻辑，只是挂载位置换了）</b>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 6：待确认问题 ============ -->
+    <section class="screen" id="s6">
+      <div class="screen-head">
+        <h2>⑥ 需要 Remy 确认的问题</h2>
+        <span class="tag">待拍板</span>
+      </div>
+      <div class="screen-body" style="display:block;">
+        <div class="note-card" style="max-width:820px;">
+          <div class="open-q">
+            <b>问题①：</b>右侧信息栏放"钱包余额 + 净额摘要"这个优先级排序是这次代做的判断，不是你定的——你自己在桌面上打开这个 app（比如出差回房间用笔记本记账）的时候，最想第一眼常驻看到的是什么？如果不是钱包余额，应该换成什么？
+          </div>
+          <div class="open-q" style="margin-top:8px;">
+            <b>问题②：</b>断点定在 1024px（常见笔记本内建屏幕的下限附近）——如果你自己常用的电脑或者外接屏幕分辨率比这个更窄（比如小尺寸笔记本），这个数字要往上调吗？
+          </div>
+          <div class="open-q" style="margin-top:8px;">
+            <b>问题③：</b>方向选的是"居中定宽 + 右侧信息栏"（方案 A），排除了"左侧导航栏"（方案 B）。如果你其实更想要一个常驻的多行程切换侧边栏（类似很多桌面记账软件那种左边一列行程、点哪个显示哪个），要说一声，这次没有默认排除是因为不需要，是因为历史反馈倾向"少建平行的新导航形态"，但如果桌面场景下你觉得值得破例，可以另外讨论。
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="pagefoot">
+  trip-expense-ledger 第72轮桌面布局提案 · 本地文件 <code>DESIGN-BRIEF-round72-desktop.html</code> · 示例数字来自真实「🇭🇰2026香港」行程（只读查询 D1，未做任何写操作）· 只出稿不动代码，Remy 确认方向后才排入实现
+</footer>
+
+<script>
+  document.querySelectorAll('.nav-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+      window.scrollTo({top:0, behavior:'instant'});
+    });
+  });
+</script>
+
+</body>
+</html>
