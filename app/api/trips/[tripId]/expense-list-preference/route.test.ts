@@ -61,6 +61,7 @@ const SAMPLE_PREFERENCE = {
   payerFilter: 'Remy',
   dateFilter: '2026-09-15',
   paymentMethodFilter: '现金HKD',
+  splitFilter: 'included',
 };
 
 describe('GET/PUT /api/trips/[tripId]/expense-list-preference', () => {
@@ -120,6 +121,42 @@ describe('GET/PUT /api/trips/[tripId]/expense-list-preference', () => {
       jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
         ...SAMPLE_PREFERENCE,
         sortMode: 'not-a-real-mode',
+      }),
+      { params: { tripId } }
+    );
+    expect(res.status).toBe(400);
+
+    const rows = await db.query.expenseListPreferences.findMany({ where: (t, { eq }) => eq(t.tripId, tripId) });
+    expect(rows.length).toBe(0);
+  });
+
+  // 第七十二轮任务④：splitFilter 值域固定 3 档（'ALL'|'included'|'excluded'），
+  // 跟其它 4 个动态候选筛选不一样，用精确 enum 校验，非法值要 400 且不落库。
+  it('splitFilter 传合法的三个值都能存住', async () => {
+    for (const value of ['ALL', 'included', 'excluded'] as const) {
+      const { tripId, ownerToken } = await setupTripWithOwner(`🇭🇰测试行程-分摊筛选-${value}`);
+      const putRes = await putHandler(
+        jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
+          ...SAMPLE_PREFERENCE,
+          splitFilter: value,
+        }),
+        { params: { tripId } }
+      );
+      expect(putRes.status).toBe(200);
+      const getRes = await getHandler(
+        jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'GET', ownerToken),
+        { params: { tripId } }
+      );
+      expect(((await getRes.json()) as any).preference.splitFilter).toBe(value);
+    }
+  });
+
+  it('splitFilter 传非法值（不在固定 3 档里）：400，不落库', async () => {
+    const { tripId, ownerToken } = await setupTripWithOwner('🇭🇰测试行程-列表偏好E');
+    const res = await putHandler(
+      jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
+        ...SAMPLE_PREFERENCE,
+        splitFilter: 'not-a-real-value',
       }),
       { params: { tripId } }
     );

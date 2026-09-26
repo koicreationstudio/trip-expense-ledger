@@ -1,0 +1,1 @@
+ALTER TABLE `expense_list_filter_preference` ADD `split_filter` text DEFAULT 'ALL' NOT NULL;

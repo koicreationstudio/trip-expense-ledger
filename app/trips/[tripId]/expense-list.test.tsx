@@ -164,3 +164,57 @@ describe('ExpenseList — 任务⑥：排序/筛选偏好云端同步，零交�
     expect(putSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ExpenseList — 第七十二轮任务④：「计分摊/不计分摊」筛选', () => {
+  it('切到「计分摊」：只剩 excludeFromSplit=false 的记录', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [
+      makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: false }),
+      makeExpense({ id: 'B', merchant: 'B店', excludeFromSplit: true }),
+    ];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
+    fireEvent.click(screen.getByLabelText('按是否计分摊筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '计分摊' }));
+    expect(screen.getByText('A店')).not.toBeNull();
+    expect(screen.queryByText('B店')).toBeNull();
+  });
+
+  it('切到「不计分摊」：只剩 excludeFromSplit=true 的记录', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [
+      makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: false }),
+      makeExpense({ id: 'B', merchant: 'B店', excludeFromSplit: true }),
+    ];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
+    fireEvent.click(screen.getByLabelText('按是否计分摊筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '不计分摊' }));
+    expect(screen.getByText('B店')).not.toBeNull();
+    expect(screen.queryByText('A店')).toBeNull();
+  });
+
+  it('这个筛选也会触发拖拽手柄消失（跟其它 4 个筛选一样被 hasActiveFilter 判定）', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [
+      makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: false }),
+      makeExpense({ id: 'B', merchant: 'B店', excludeFromSplit: true }),
+    ];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
+    fireEvent.click(screen.getByLabelText('按是否计分摊筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '计分摊' }));
+    expect(screen.queryByLabelText('拖拽调整顺序')).toBeNull();
+  });
+
+  it('这个筛选真实交互后也会触发 PUT，body 里带上 splitFilter', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy, null));
+    const expenses = [makeExpense({ id: 'A', merchant: 'A店' })];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
+
+    fireEvent.click(screen.getByLabelText('按是否计分摊筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '不计分摊' }));
+
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(putSpy.mock.calls[0]![1]);
+    expect(body.splitFilter).toBe('excluded');
+  });
+});

@@ -12,6 +12,8 @@ export interface ExpenseListPreferenceSnapshot {
   payerFilter: string;
   dateFilter: string;
   paymentMethodFilter: string;
+  // 第七十二轮任务④新增：「计分摊/不计分摊」筛选，值域固定 'ALL' | 'included' | 'excluded'。
+  splitFilter: string;
 }
 
 /**
@@ -29,6 +31,7 @@ export function isSameExpenseListPreference(
     a.categoryFilter === b.categoryFilter &&
     a.payerFilter === b.payerFilter &&
     a.dateFilter === b.dateFilter &&
-    a.paymentMethodFilter === b.paymentMethodFilter
+    a.paymentMethodFilter === b.paymentMethodFilter &&
+    a.splitFilter === b.splitFilter
   );
 }
