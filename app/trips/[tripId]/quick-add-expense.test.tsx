@@ -270,3 +270,90 @@ describe('QuickAddExpense — 第七十一轮任务⑦：支付方式必填', ()
     expect(callArg(postSpy).paymentMethodId).toBeUndefined();
   });
 });
+
+// fix(2026-09-26 第七十二轮，任务①)：快速记账之前完全没有「当地金额」字段，这次
+// 补上，跟 expense-form.tsx 同一套双向联动 + 精度铁律。切到「仅我自己」分摊模式，
+// 这样 splits[0].shareAmountBaseCurrency 就是提交时算出来的本位币金额全额，直接
+// 断言这个值。
+describe('QuickAddExpense — 第七十二轮任务①：当地金额双向联动 + 精度铁律', () => {
+  async function selectCurrency(code: string) {
+    fireEvent.click(screen.getByLabelText('币种'));
+    fireEvent.mouseDown(await screen.findByRole('option', { name: code }));
+  }
+
+  function fillMinimalFields() {
+    fireEvent.change(screen.getByLabelText('分类'), { target: { value: '🍜 餐饮' } });
+    fireEvent.click(screen.getByRole('button', { name: '仅我自己' }));
+  }
+
+  it('本位币 HKD，原生币种 MYR，「当地金额」框填 35.00 → 存的本位币金额严格等于 3500 分', async () => {
+    const postSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(postSpy));
+    render(
+      <QuickAddExpense
+        tripId={TRIP_ID}
+        baseCurrency="HKD"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '18.67', selectionStart: 5 } });
+    await selectCurrency('MYR');
+    fillMinimalFields();
+    fireEvent.change(screen.getByLabelText(/当地金额/), { target: { value: '35.00' } });
+    await selectPaymentMethod();
+
+    fireEvent.click(screen.getByRole('button', { name: '记' }));
+    await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(1));
+    expect(callArg(postSpy).splits[0].shareAmountBaseCurrency).toBe(3500);
+  });
+
+  it('本位币 USD，原生币种 CNY，「当地金额」填 104.27 → 严格等于 10427 分', async () => {
+    const postSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(postSpy));
+    render(
+      <QuickAddExpense
+        tripId={TRIP_ID}
+        baseCurrency="USD"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '750', selectionStart: 3 } });
+    await selectCurrency('CNY');
+    fillMinimalFields();
+    fireEvent.change(screen.getByLabelText(/当地金额/), { target: { value: '104.27' } });
+    await selectPaymentMethod();
+
+    fireEvent.click(screen.getByRole('button', { name: '记' }));
+    await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(1));
+    expect(callArg(postSpy).splits[0].shareAmountBaseCurrency).toBe(10427);
+  });
+
+  it('改的是「汇率」框而不是「当地金额」框——行为不受影响，amount×rate 原样生效', async () => {
+    const postSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(postSpy));
+    render(
+      <QuickAddExpense
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '100', selectionStart: 3 } });
+    await selectCurrency('THB');
+    fillMinimalFields();
+    fireEvent.change(screen.getByLabelText('汇率'), { target: { value: '0.15' } });
+    await selectPaymentMethod();
+
+    fireEvent.click(screen.getByRole('button', { name: '记' }));
+    await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(1));
+    const body = callArg(postSpy);
+    expect(body.splits[0].shareAmountBaseCurrency).toBe(1500);
+    expect(body.fxRateUsed).toBeCloseTo(0.15, 4);
+  });
+});

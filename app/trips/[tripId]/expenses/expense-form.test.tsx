@@ -259,10 +259,10 @@ describe('ExpenseForm — 第七十一轮任务①：汇率自动带入 + 当地
     const rateInput = screen.getByLabelText(/汇率/) as HTMLInputElement;
     expect(Number(rateInput.value)).toBeCloseTo(1 / 7.5, 4);
 
-    // 当地金额 = 750 × (1/7.5) ≈ 100 MYR。div 不是 labelable element，
-    // getByLabelText 关联不上，直接用 id 查。
-    const localAmount = document.getElementById('local-amount');
-    expect(localAmount?.textContent).toMatch(/100/);
+    // 当地金额 = 750 × (1/7.5) ≈ 100 MYR。fix(第七十二轮任务①)：这个字段现在是
+    // 真正的可编辑 <input>（之前是只读 <div>），用 getByLabelText 读 .value。
+    const localAmountInput = screen.getByLabelText(/当地金额/) as HTMLInputElement;
+    expect(localAmountInput.value).toMatch(/^100(\.0*)?$/);
   });
 
   it('用户手动改过汇率框之后，不会被自动带入的值覆盖回去', async () => {
@@ -376,5 +376,163 @@ describe('ExpenseForm — 第七十一轮任务⑦：代垫人是自己时必须
     fireEvent.mouseDown(screen.getByRole('option', { name: '小明' }));
     const submitButton = screen.getByRole('button', { name: '记这笔账' }) as HTMLButtonElement;
     expect(submitButton.disabled).toBe(false);
+  });
+});
+
+// fix(2026-09-26 第七十二轮，任务①)：「当地金额」框改成可编辑，跟汇率框双向联动。
+// 精度铁律——不管用户从哪个框输入，存进数据库的本位币金额（这里用 onlyMe 模式下
+// splits[0].shareAmountBaseCurrency 断言，这个值就是 amountBaseCurrency 全额给
+// 代垫人自己）必须跟她在「当地金额」框看到/填的数字换算成分严格相等，不能有
+// ±1 分误差。
+describe('ExpenseForm — 第七十二轮任务①：当地金额双向联动 + 精度铁律', () => {
+  function mockSubmitCapture() {
+    const postSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(postSpy));
+    return postSpy;
+  }
+
+  async function selectCurrency(code: string) {
+    fireEvent.click(screen.getByLabelText('币种'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: code }));
+  }
+
+  async function submitAndGetBody(postSpy: ReturnType<typeof vi.fn>) {
+    fireEvent.click(screen.getByRole('button', { name: '记这笔账' }));
+    await waitFor(() => expect(postSpy).toHaveBeenCalled());
+    return callArg(postSpy);
+  }
+
+  it('本位币 HKD，原生币种 MYR，直接在「当地金额」框填 35.00 → 存的本位币金额严格等于 3500 分（Remy 举的原始例子）', async () => {
+    const postSpy = mockSubmitCapture();
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="HKD"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '18.67', selectionStart: 5 } });
+    await selectCurrency('MYR');
+    fireEvent.change(screen.getByLabelText(/当地金额/), { target: { value: '35.00' } });
+    selectPaymentMethod('现金');
+
+    const body = await submitAndGetBody(postSpy);
+    expect(body.splits[0].shareAmountBaseCurrency).toBe(3500);
+  });
+
+  it('本位币 MYR，原生币种 USD，「当地金额」填 33.33（暴露浮点误差的数字）→ 严格等于 3333 分', async () => {
+    const postSpy = mockSubmitCapture();
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '7', selectionStart: 1 } });
+    await selectCurrency('USD');
+    fireEvent.change(screen.getByLabelText(/当地金额/), { target: { value: '33.33' } });
+    selectPaymentMethod('现金');
+
+    const body = await submitAndGetBody(postSpy);
+    expect(body.splits[0].shareAmountBaseCurrency).toBe(3333);
+  });
+
+  it('本位币 USD，原生币种 CNY，「当地金额」填 104.27 → 严格等于 10427 分', async () => {
+    const postSpy = mockSubmitCapture();
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="USD"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '750', selectionStart: 3 } });
+    await selectCurrency('CNY');
+    fireEvent.change(screen.getByLabelText(/当地金额/), { target: { value: '104.27' } });
+    selectPaymentMethod('现金');
+
+    const body = await submitAndGetBody(postSpy);
+    expect(body.splits[0].shareAmountBaseCurrency).toBe(10427);
+  });
+
+  it('改的是「汇率」框而不是「当地金额」框——这条路径行为不受影响，amount×rate 算出来的值原样生效', async () => {
+    const postSpy = mockSubmitCapture();
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '100', selectionStart: 3 } });
+    await selectCurrency('THB');
+    fireEvent.change(screen.getByLabelText(/汇率/), { target: { value: '0.15' } });
+    selectPaymentMethod('现金');
+
+    const body = await submitAndGetBody(postSpy);
+    // 100 THB × 0.15 = 15.00 MYR = 1500 分。
+    expect(body.splits[0].shareAmountBaseCurrency).toBe(1500);
+    expect(body.fxRateUsed).toBeCloseTo(0.15, 4);
+  });
+
+  it('先填汇率、再改当地金额——最后一次编辑的字段才是 canonical，存档跟着最新的当地金额走', async () => {
+    const postSpy = mockSubmitCapture();
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="HKD"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '18.67', selectionStart: 5 } });
+    await selectCurrency('MYR');
+    fireEvent.change(screen.getByLabelText(/汇率/), { target: { value: '1.87' } });
+    // 用户看了一眼自动/手动算出来的当地金额，觉得不对，改成她手头真实收据上的数字。
+    fireEvent.change(screen.getByLabelText(/当地金额/), { target: { value: '35.00' } });
+    selectPaymentMethod('现金');
+
+    const body = await submitAndGetBody(postSpy);
+    expect(body.splits[0].shareAmountBaseCurrency).toBe(3500);
+  });
+
+  it('按钮变灰禁用时（还没选支付方式）主动显示提示文字，不用等点了提交才看到', () => {
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '100', selectionStart: 3 } });
+    // getByText 找不到会直接抛错，不用额外的 jest-dom matcher。
+    expect(screen.getByText('这笔是自己代垫的，要选一个支付方式才能保存。')).toBeTruthy();
+  });
+
+  it('支付方式占位文案是"请选择"，不是"不指定"', () => {
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+      />
+    );
+    fireEvent.click(screen.getByLabelText('支付方式'));
+    expect(screen.getByRole('option', { name: '请选择' })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: '不指定' })).toBeNull();
   });
 });
