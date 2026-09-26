@@ -4,14 +4,20 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Pencil, Trash2, GripVertical } from 'lucide-react';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, centsToYuan } from '@/lib/money';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { SelectDropdown } from '@/components/select-dropdown';
+import { SelectDropdown, useDismissableOpen } from '@/components/select-dropdown';
 import { moveItem, isSameOrder } from '@/lib/domain/reorder';
 import {
   isSameExpenseListPreference,
   type ExpenseListPreferenceSnapshot,
 } from '@/lib/domain/expense-list-preference-diff';
+import {
+  matchesAmountRange,
+  matchesAmountExact,
+  parseAmountYuanInput,
+  type AmountFilterMode,
+} from '@/lib/domain/expense-amount-filter';
 
 export interface ExpenseListItem {
   id: string;
@@ -116,6 +122,28 @@ export function ExpenseList({
   // 'included' = 只看计分摊的（excludeFromSplit === false），'excluded' = 只看
   // 不计分摊的（excludeFromSplit === true）。
   const [splitFilter, setSplitFilter] = useState<typeof ALL | 'included' | 'excluded'>(ALL);
+
+  // 第 6 个筛选 chip「金额」——跟上面 4 个不一样，故意**不**接进下面
+  // expense-list-preference 那套 D1 云端存档（另一条并行任务正在改那套持久化
+  // 机制的落地方式，这次故意不碰 `lib/domain/expense-list-preference-diff.ts`/
+  // `app/api/trips/[tripId]/expense-list-preference/route.ts` 这两个文件，避免
+  // 跟它冲突）。这几个 state 单纯是本地 useState，刷新页面/换设备不保留，跟
+  // 团队看板/PENDING-DECISIONS 里"这轮金额筛选先只做前端"的范围一致。
+  // - `amountFilterMode`：区间/精确 两种模式二选一。
+  // - `amountMinInput`/`amountMaxInput`：区间模式两个输入框的原始文字（"元"，
+  //   不是分）——保留成字符串而不是 number，是因为用户打字过程中会经过
+  //   "1"→"1."→"1.5" 这类还没解析成合法数字的中间状态，不能用 number 存。
+  // - `amountExactInput`：精确模式单一输入框的原始文字。
+  const [amountFilterMode, setAmountFilterMode] = useState<AmountFilterMode>('range');
+  const [amountMinInput, setAmountMinInput] = useState('');
+  const [amountMaxInput, setAmountMaxInput] = useState('');
+  const [amountExactInput, setAmountExactInput] = useState('');
+  const [amountFilterOpen, setAmountFilterOpen] = useState(false);
+  // 点空白/Escape 关闭这个面板——跟 fx-compare-card.tsx「⚙自选比较项」同一个
+  // 共用 hook，面板形状（模式切换+两个输入框）套不进 SelectDropdown 的 value/
+  // onChange 单选模型，不硬套。
+  const amountFilterContainerRef = useDismissableOpen(amountFilterOpen, () => setAmountFilterOpen(false));
+
   // 哪一行的编辑/删除操作区正展开——同一时间只让一行展开，点别的行/再点一次
   // 当前行都会收起，不需要额外的"点击外部关闭"监听（列表本身就在页面主体里，
   // 没有浮层遮挡问题）。
@@ -352,6 +380,17 @@ export function ExpenseList({
     [expenses]
   );
 
+  // 金额筛选要比大小的那个"换算参考值"——跟上面 `showConverted`（约算行要不要
+  // 显示）同一条判断：行程本位币不是 MYR 时用 amountMyr（服务端已经算好的 MYR
+  // 参考值），本位币是 MYR 时这笔消费的 amountBaseCurrency 本身就是 MYR 记账值，
+  // 直接当"这个用户熟悉的那个基准货币数字"用，两种情况统一后不同原币种的消费
+  // 才能放进同一个区间比较。
+  const amountMinCents = useMemo(() => parseAmountYuanInput(amountMinInput), [amountMinInput]);
+  const amountMaxCents = useMemo(() => parseAmountYuanInput(amountMaxInput), [amountMaxInput]);
+  const amountExactCents = useMemo(() => parseAmountYuanInput(amountExactInput), [amountExactInput]);
+  const isAmountFilterActive =
+    amountFilterMode === 'range' ? amountMinCents !== null || amountMaxCents !== null : amountExactCents !== null;
+
   const visibleExpenses = useMemo(() => {
     const filtered = expenses.filter((e) => {
       if (categoryFilter !== ALL && e.category !== categoryFilter) return false;
@@ -360,6 +399,20 @@ export function ExpenseList({
       if (paymentMethodFilter !== ALL && (e.paymentMethodLabel ?? '未指定') !== paymentMethodFilter) return false;
       if (splitFilter === 'included' && e.excludeFromSplit) return false;
       if (splitFilter === 'excluded' && !e.excludeFromSplit) return false;
+      if (isAmountFilterActive) {
+        // 跟上面 `showConverted`（约算行要不要显示）同一条判断：行程本位币不是
+        // MYR 时用 amountMyr（服务端已经算好的 MYR 参考值），本位币是 MYR 时这笔
+        // 消费的 amountBaseCurrency 本身就是 MYR 记账值，直接当"这个用户熟悉的
+        // 那个基准货币数字"用，两种情况统一后不同原币种的消费才能放进同一个
+        // 区间比较。
+        const convertedCents = baseCurrency !== 'MYR' ? e.amountMyr : e.amountBaseCurrency;
+        const filterable = { amountCents: e.amount, convertedCents };
+        if (amountFilterMode === 'range') {
+          if (!matchesAmountRange(filterable, { minCents: amountMinCents, maxCents: amountMaxCents })) return false;
+        } else if (amountExactCents === null || !matchesAmountExact(filterable, amountExactCents)) {
+          return false;
+        }
+      }
       return true;
     });
     if (sortMode === 'date') {
@@ -376,20 +429,51 @@ export function ExpenseList({
     return [...filtered].sort(
       (a, b) => (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER)
     );
-  }, [expenses, sortMode, categoryFilter, payerFilter, dateFilter, paymentMethodFilter, splitFilter, manualOrder]);
+  }, [
+    expenses,
+    sortMode,
+    categoryFilter,
+    payerFilter,
+    dateFilter,
+    paymentMethodFilter,
+    splitFilter,
+    manualOrder,
+    baseCurrency,
+    isAmountFilterActive,
+    amountFilterMode,
+    amountMinCents,
+    amountMaxCents,
+    amountExactCents,
+  ]);
 
   const hasActiveFilter =
     categoryFilter !== ALL ||
     payerFilter !== ALL ||
     dateFilter !== ALL ||
     paymentMethodFilter !== ALL ||
-    splitFilter !== ALL;
+    splitFilter !== ALL ||
+    isAmountFilterActive;
 
   // fix(2026-09-26 第七十一轮，任务⑤)：开着筛选时列表只显示部分消费，此时拖拽
   // 调整的"相对顺序"跟实际存的全量顺序会脱节（用户看到的是收窄过的子集，以为
   // 拖到最上面，实际在全量顺序里未必真的排最前）——禁止拖拽 + 引导"清空筛选才能
   // 调整顺序"比允许一个会让人困惑的局部拖拽更安全，这是任务书原文明确要求的边界。
   const dragDisabled = sortMode !== 'manual' || hasActiveFilter;
+
+  // 「金额」chip 按钮上要显示的文字——没开这个筛选就是纯文字"金额"，开了按当前
+  // 模式显示具体数值（跟其它 chip"分类：xxx"这种带当前值的展示习惯一致），用
+  // 元（不是分）显示，两位小数对齐全站金额展示习惯。
+  const amountChipLabel = (() => {
+    if (amountFilterMode === 'exact') {
+      return amountExactCents !== null ? `金额：=${centsToYuan(amountExactCents).toFixed(2)}` : '金额';
+    }
+    if (amountMinCents !== null && amountMaxCents !== null) {
+      return `金额：${centsToYuan(amountMinCents).toFixed(2)}–${centsToYuan(amountMaxCents).toFixed(2)}`;
+    }
+    if (amountMinCents !== null) return `金额：≥${centsToYuan(amountMinCents).toFixed(2)}`;
+    if (amountMaxCents !== null) return `金额：≤${centsToYuan(amountMaxCents).toFixed(2)}`;
+    return '金额';
+  })();
 
   function resetFilters() {
     markUserInteracted();
@@ -398,6 +482,11 @@ export function ExpenseList({
     setDateFilter(ALL);
     setPaymentMethodFilter(ALL);
     setSplitFilter(ALL);
+    // 金额筛选不接云端存档（见上面 state 声明处的注释），这里只是清一下本地
+    // 输入框内容，不涉及 hasUserInteractedRef/PUT 那条链路。
+    setAmountMinInput('');
+    setAmountMaxInput('');
+    setAmountExactInput('');
   }
 
   async function performDelete(expenseId: string) {
@@ -437,7 +526,7 @@ export function ExpenseList({
           真的可以拖拽调整了（电脑按住拖/手机长按拖），文案改回如实描述这个新状态；
           开着筛选时拖拽会被禁用（见下面 dragDisabled），这句也提一句。 */}
       <p className="text-[9.5px] leading-[1.5] text-muted">
-        💡 排序「手动」时可以拖拽调整顺序（电脑按住拖，手机长按拖，开着筛选时暂不能拖）；「日期」/「金额」重排是真的会动；下面的分类/垫付人/日期/支付方式筛选也是真的会按条件隐藏不符合的记录，不是摆设。
+        💡 排序「手动」时可以拖拽调整顺序（电脑按住拖，手机长按拖，开着筛选时暂不能拖）；「日期」/「金额」重排是真的会动；下面的分类/垫付人/日期/支付方式/金额筛选也是真的会按条件隐藏不符合的记录，不是摆设。
       </p>
 
       {/* 排序下拉 + 4 个筛选 chip：chip 用跟 fx-channel-compare-card.tsx 目标币种
@@ -530,6 +619,103 @@ export function ExpenseList({
             { value: 'excluded', label: '不计分摊' },
           ]}
         />
+        {/* 「金额」筛选 chip——跟上面 4 个不同，不是单选下拉，是"区间/精确"两种
+            模式各自带输入框的面板，套不进 SelectDropdown 的 value/onChange 单选
+            模型，改用跟 fx-compare-card.tsx「⚙自选比较项」同一套手搓面板 +
+            `useDismissableOpen` 共用 hook（点空白/Escape 关闭）。 */}
+        <div ref={amountFilterContainerRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setAmountFilterOpen((v) => !v)}
+            aria-expanded={amountFilterOpen}
+            className="min-h-[26px] max-w-[120px] truncate rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
+          >
+            {amountChipLabel} ▾
+          </button>
+          {amountFilterOpen && (
+            <div className="absolute left-0 top-full z-10 mt-1 w-[220px] rounded-[10px] border border-sand bg-white p-2 shadow-card">
+              {/* 区间/精确 模式切换——跟 expense-form.tsx「怎么分？」那组分摊子模式
+                  同一套胶囊双态切换视觉（选中态 bg-ink 反白，未选中态白底黑字）。 */}
+              <div className="flex gap-[5px]">
+                {(
+                  [
+                    { value: 'range', label: '区间' },
+                    { value: 'exact', label: '精确' },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setAmountFilterMode(opt.value)}
+                    aria-pressed={amountFilterMode === opt.value}
+                    className={
+                      amountFilterMode === opt.value
+                        ? 'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-ink px-[7px] py-[4px] text-[10px] font-medium text-white transition-colors'
+                        : 'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-sand bg-white px-[7px] py-[4px] text-[10px] font-medium text-ink transition-colors hover:opacity-80'
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {amountFilterMode === 'range' ? (
+                <div className="mt-2 flex items-end gap-[6px]">
+                  <label className="flex flex-1 flex-col gap-[3px]">
+                    <span className="field-label">最低</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      placeholder="不限"
+                      value={amountMinInput}
+                      onChange={(e) => setAmountMinInput(e.target.value)}
+                      className="field-input w-full"
+                    />
+                  </label>
+                  <span className="pb-[6px] text-[10px] text-muted">–</span>
+                  <label className="flex flex-1 flex-col gap-[3px]">
+                    <span className="field-label">最高</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      placeholder="不限"
+                      value={amountMaxInput}
+                      onChange={(e) => setAmountMaxInput(e.target.value)}
+                      className="field-input w-full"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <label className="mt-2 flex flex-col gap-[3px]">
+                  <span className="field-label">金额等于</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    placeholder="填原币金额或约算值都可以"
+                    value={amountExactInput}
+                    onChange={(e) => setAmountExactInput(e.target.value)}
+                    className="field-input w-full"
+                  />
+                </label>
+              )}
+              {isAmountFilterActive && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAmountMinInput('');
+                    setAmountMaxInput('');
+                    setAmountExactInput('');
+                  }}
+                  className="tap-link mt-1 text-[9.5px] text-muted"
+                >
+                  清除金额筛选
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         {hasActiveFilter && (
           <button type="button" onClick={resetFilters} className="tap-link text-[10px] text-muted">
             清除筛选
