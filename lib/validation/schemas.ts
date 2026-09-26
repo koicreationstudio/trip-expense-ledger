@@ -250,7 +250,17 @@ export const expenseListPreferenceSchema = z.object({
   paymentMethodFilter: z.string().trim().min(1).max(120),
   // 第七十二轮任务④新增：「计分摊/不计分摊」筛选，跟上面几个不一样——值域固定只有
   // 3 档（不是从当前数据动态取的候选值），用精确 enum 校验，非法值直接 400。
-  splitFilter: z.enum(['ALL', 'included', 'excluded']),
+  //
+  // fix(2026-09-26 第七十二轮，ui-auditor 真机走查在 Remy 真实香港行程上抓到的真
+  // bug)：这里原来写的是字面量 `'ALL'`，但 `expense-list.tsx` 的"不筛选"哨兵常量
+  // 其实是 `const ALL = '__all__'`（跟上面 4 个筛选共用同一个常量），组件默认状态/
+  // 清空筛选时发的 PUT body 里 `splitFilter` 实际值是 `'__all__'`，不是 `'ALL'`——
+  // 这个精确 enum 校验只认 `'ALL'`，导致默认态一旦触发保存就 400，前端 UI 表现正常
+  // （客户端筛选状态没受影响）但云端同步这一步静默失败，偏好存不上、换设备/清缓存
+  // 后会丢。改成 `'__all__'`，跟组件实际发出的值对齐。上面 4 个筛选用的是宽松
+  // `z.string()`，凑巧不管字面量是 `'ALL'` 还是 `'__all__'` 都能通过校验，没暴露
+  // 这个问题，只有这个新增的精确 enum 校验会拿字面量不一致当真。
+  splitFilter: z.enum(['__all__', 'included', 'excluded']),
 });
 
 // fix(2026-09-26 第七十一轮，任务⑤)：活动流拖拽重排，一次提交"新顺序的完整 id

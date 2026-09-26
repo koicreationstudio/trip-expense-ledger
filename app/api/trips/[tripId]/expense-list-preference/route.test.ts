@@ -130,10 +130,16 @@ describe('GET/PUT /api/trips/[tripId]/expense-list-preference', () => {
     expect(rows.length).toBe(0);
   });
 
-  // 第七十二轮任务④：splitFilter 值域固定 3 档（'ALL'|'included'|'excluded'），
+  // 第七十二轮任务④：splitFilter 值域固定 3 档（'__all__'|'included'|'excluded'），
   // 跟其它 4 个动态候选筛选不一样，用精确 enum 校验，非法值要 400 且不落库。
+  //
+  // fix(2026-09-26 第七十二轮，ui-auditor 真机走查抓到真 bug 后补测)：这里原来写的
+  // 是 `'ALL'`，跟 schemas.ts 当时的错误字面量一致，两边"互相印证"却都跟组件实际
+  // 发出的 `expense-list.tsx` 哨兵常量 `'__all__'` 不一致，测试通过掩盖了真实的
+  // 生产 400——这是"测试跟实现共享同一个错误假设，测不出真问题"的教训，改成
+  // `'__all__'`，跟前端真实运行时发出的值对齐，不是随便挑一个能通过的字符串。
   it('splitFilter 传合法的三个值都能存住', async () => {
-    for (const value of ['ALL', 'included', 'excluded'] as const) {
+    for (const value of ['__all__', 'included', 'excluded'] as const) {
       const { tripId, ownerToken } = await setupTripWithOwner(`🇭🇰测试行程-分摊筛选-${value}`);
       const putRes = await putHandler(
         jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
