@@ -1,5 +1,36 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-26，lifeos-pm 直接执行，任务①借还钱真实数据迁移：安全的一对（a4dc5ffd/4c09fc33）已迁移落库；htoo CNY ¥104.27（8e2f75fe）发现结构性阻塞，没有执行，停手回报】
+
+背景：`loan`/`loan_repayment` 表已在 round72 批次②（commit `4558a72`）落地生产，依赖满足，这次执行真实数据迁移。
+
+**核对清楚的关键事实（读代码+查 D1 逐条核实，不是猜测）**：
+1. `loan_repayment.loan_id` 当前是 `NOT NULL`（`lib/db/schema.ts` 第 548 行），且这张表**没有任何参与人字段**（没有 fromParticipantId/toParticipantId，只有 `loanId`/`amount`/`toWalletId`/`date`/`note`）——"谁欠谁"完全靠查 `loan.lenderParticipantId`/`borrowerParticipantId` 反推。这意味着一笔"不挂具体借款"的还款，就算把 `loanId` 改成允许留空，也没有任何字段能记录"这笔钱是在哪两个人之间转的"。
+2. **更关键**：`loan`/`loan_repayment` 两张表完全没有接入 `lib/domain/settlement.ts`（结算净额计算）——全站搜索确认 `computeNetBalances`/`computeSettlement`/`computeSettlementByCurrency` 的调用方（`lib/db/settlement-query.ts`/`lib/db/user-trips-query.ts`/`app/api/trips/[tripId]/settlement/route.ts`）全部只读 `expense`/`expense_split`，从不读 loan 相关表。`loan` 表也没有 `amountBaseCurrency` 字段（只有原始币种 `amount`+`currency`），没法直接喂进结算算法。
+3. 拿真实生产数据验证过这两条推论：
+   - `a4dc5ffd`（借钱 US$7,500，payer=remy，100% split 给 htoo）+ `4c09fc33`（归还钱 US$7,500，payer=htoo，100% split 给 remy）这一对在结算净额里合计贡献 = 0（互相抵消：Remy net +5,880,000 又 -5,880,000）。**这一对无论删不删都不影响结算净额**，安全。
+   - `8e2f75fe`（htoo 归还钱 ¥104.27，payer=htoo，100% split 给 remy）单独贡献 Remy net **-12,200**（HK$122.00，非零）。查证：全部 3 笔都在 expense 表时，Remy 净额 = 8,086,508-8,035,161+5,880,000-5,880,000=+51,347（跟历史记录"合计≈HK$513.47"吻合）；只删掉这一笔（保留 a4dc5ffd/4c09fc33）净额不变仍是 +51,347；**如果连这笔也删掉，净额会变成 +63,547**，多了整整 HK$122.00——因为这笔钱一旦离开 expense 表、又没有对应的 loan/repayment 记录接进结算算法，这笔实际发生过的还款就从"谁欠谁多少"里消失了。这正是任务书要求的"迁移前后结算净额必须一致"这道关卡，这一步没通过。
+
+**结论**：
+- **a4dc5ffd + 4c09fc33 这一对：已安全迁移，执行完毕。**
+- **8e2f75fe（htoo CNY ¥104.27）：这次没有执行，停在这一步，如实回报，不自己往下猜/改。** 要让这笔安全迁移，至少需要以下之一（这次没有替 Remy/lifeos-pm 拍板选哪个）：
+  ①给 `loan_repayment` 加参与人字段（谁还给谁）+ 把 loan/loan_repayment 接入 `settlement.ts`（需要再给 `loan` 表补 `amountBaseCurrency` 字段）——这是改动结算这个核心财务计算逻辑的范围，风险和影响面都比"迁移几条记录"大得多，需要明确授权才能动；②这笔继续留在 `expense` 表里（不迁移），只是这次任务书的字面要求（"转成正式的还款记录"）没有被满足；③其它这次没想到的方案。
+
+**执行细节（严格按流程留档，全部只读回读+备份+bookmark 齐全）**：
+1. 备份：`backups/2026-09-26-loan-repay-migration/{expense_before.json,expense_split_before.json,wallets_before.json}`（gitignored，本地留档）。
+2. D1 Time Travel bookmark（写入前）：`00000223-00000010-000050f2-fe1ef8c96018ee41579e69e1a7437be4`。
+3. dry-run 数字见上面"核对清楚的关键事实"第 3 点，跟迁移后回读完全一致。
+4. 写入：新建 `loan` 记录（id `569a3dae-11a7-4a24-bab8-ecc6eab5f8ff`，lender=remy `5a81e7ae`，borrower=htoo `9411f4a6`，US$7,500，`fromWalletId=82badf0e`〈USD 现金〉，date=a4dc5ffd 原 `expense_date`）+ `loan_repayment` 记录（id `9ac92353-a0c6-40d6-af2c-a61e0ec6dece`，挂到上面这条 loan，US$7,500，`toWalletId=7b9a57d5`〈USDT 钱包〉，date=4c09fc33 原 `expense_date`），删除 `expense_split`+`expense` 里的 `a4dc5ffd`/`4c09fc33` 两条（cascade 前手动先删 split 再删 expense，两步都确认 count=0）。`note` 字段各自写"从真实消费记录迁移而来（原 expense XXX「YY」）"留痕迹。
+5. D1 Time Travel bookmark（写入后）：`00000223-00000016-000050f2-6800471f578f321cfc6c872263612186`。
+6. **迁移前后核对结果（全部一致，逐项列出）**：
+   - `82badf0e`（USD 现金钱包，唯一真正受这次迁移影响的钱包，因为它是锚点模式+`a4dc5ffd` 的支付方式精确匹配它）：迁移前显示余额 = 锚点 `1,613,100` − expenseSum `1,588,500`（含这笔 750,000）= `24,600` 分 = **US$246.00**，跟 Remy 说的预期值完全一致。迁移后 = 锚点 `1,613,100` − expenseSum `838,500`（少了这笔）− loanSum `750,000`（新 loan 记录补上）= `24,600` 分，**分毫不差，US$246.00**。
+   - `872246bc`（HKD 现金钱包）：这三笔都不涉及 HKD/这个支付方式，迁移前后都是锚点 `812,000` − expenseSum `226,090` = `585,910` 分 = **HK$5,859.10**，跟 Remy 说的预期值完全一致，且不受这次迁移影响。
+   - `7b9a57d5`（USDT 钱包）：这个钱包没设置过"当前余额"（`balanceUpdatedAt=null`），显示余额=原始 `currentBalance` 直接读，跟任何 expense/loan/repayment 表都无关——迁移前后都是 `-110,510` 分 = **-US$1,105.10**，跟已校正值完全一致。
+   - `f08bb1de`：同样没锚定，迁移前后都是原样 `-47,777`，没有被这次改动碰到（这次没有迁移 `8e2f75fe`，所以这个钱包连"该不该受影响"的问题都不存在）。
+   - 结算净额（Remy vs htoo）：迁移前 Remy net `+51,347`（HK$513.47），迁移后 Remy net `+51,347`，**完全一致**。
+7. 迁移完的 `a4dc5ffd`/`4c09fc33` 已经从 `expense`/`expense_split` 表删除（不是"保留在列表里但排除计入"，是这次判断这一对因为净额贡献为零、且任务书本意是"转成正式记录"，删除是最贴合任务书字面意思、又不影响任何数字的做法）——**如果 Remy/lifeos-pm 认为这两条历史记录还是应该在 expense 活动流里留个痕迹（比如给同行人看历史时能看到"这里发生过一笔借钱"），需要另外补一个方案，这次没有做**。
+8. 涉及真实财务数据写入，全程用带旧值条件的写入（`WHERE` 精确匹配预期旧值）+ 每一步都回读确认，没有出现任何"改错又改回来"的情况。
+
 ## 【2026-09-26，第七十二轮批次②收尾：33笔标记保留 + round70②7项 全部落地部署 + ui-auditor真机走查（真实香港行程）+ 2个真bug已修复，trip-expense-ledger-pm 汇总，claim `2026-09-26_092238_253ac41b`】
 
 背景：这是跟同一轮"A组"（claim `2026-09-26_091215_a652cabe`）并行派下来的第二批任务，覆盖新增任务①（33笔历史 excludeFromSplit 手动标记保留逻辑）+ round70 对照稿②7项拍板结果的实现。6 个子任务各自在独立 worktree/fork 里实现，最后由这一层统一合并（处理 3 处 schema 冲突 + 迁移文件重新生成）、部署、走查。
