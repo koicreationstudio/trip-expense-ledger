@@ -6,7 +6,7 @@ import { assertSameTrip, withSession } from '@/lib/auth/require-session';
 import { toExpenseDto } from '@/lib/http/dto';
 import { parseJsonBody } from '@/lib/http/validate';
 import { createExpenseSchema } from '@/lib/validation/schemas';
-import { equalSplit } from '@/lib/domain/split';
+import { deriveOriginalCurrencyShares, equalSplit } from '@/lib/domain/split';
 import { validateSplits } from '@/lib/http/expense-validation';
 import { findDirectDebitWallet } from '@/lib/domain/wallet-balance';
 import { loadEnabledPaymentMethodIds } from '@/lib/domain/payment-method-scope';
@@ -119,11 +119,19 @@ export const POST = withSession<Context>(async (request, { params }, identity) =
     sortOrder: nextSortOrder,
     expenseDate: new Date(body.expenseDate),
   });
+  // fix(2026-09-26，"结算按币种拆开显示")：新记录落库那一刻就精确算好
+  // shareAmountOriginal（最大余数法，总和严格等于 body.amount，不会有一分钱
+  // 分不出去悬空）——不管 splits 是自己 equalSplit 等分算的、还是客户端传来的
+  // 自定义分摊，都在这里统一用同一套换算，不需要客户端自己算这个字段（客户端
+  // 目前也确实没传，validation schema 只认 shareAmountBaseCurrency）。
+  const originalShares = deriveOriginalCurrencyShares(splits, amountBaseCurrency, body.amount);
+  const originalShareByParticipant = new Map(originalShares.map((s) => [s.participantId, s.shareAmountOriginal]));
   const insertSplits = db.insert(expenseSplits).values(
     splits.map((s) => ({
       expenseId,
       participantId: s.participantId,
       shareAmountBaseCurrency: s.shareAmountBaseCurrency,
+      shareAmountOriginal: originalShareByParticipant.get(s.participantId) ?? 0,
     }))
   );
 

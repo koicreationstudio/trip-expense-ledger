@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Db } from './client';
 import { expenses, expenseSplits, settlementConfirmations } from './schema';
-import type { SettlementExpenseInput } from '../domain/settlement';
+import type { SettlementExpenseInput, SettlementExpenseInputWithCurrency } from '../domain/settlement';
 
 /**
  * 结算是唯一允许跨参与者读取的查询，这里只查 settlement 算法需要的三个字段
@@ -72,6 +72,63 @@ export async function loadSettlementInputForTrips(
     byTripId.set(row.tripId, list);
   }
   return byTripId;
+}
+
+/**
+ * "结算按币种拆开显示"用（2026-09-26）：跟 loadSettlementInput 同一份查询
+ * 纪律（只查算法需要的字段，不带 note/category/receiptPath），多查
+ * expense.currency/amount + expenseSplits.shareAmountOriginal 这两组"原始币种"
+ * 字段，供 computeSettlementByCurrency 按币种分组精确算净额用。只做单趟行程版本
+ * （不像 loadSettlementInputForTrips 那样批量）——目前只有结算页这一处调用，
+ * 用不到跨行程批量查询。
+ */
+export async function loadSettlementInputWithCurrency(
+  db: Db,
+  tripId: string
+): Promise<SettlementExpenseInputWithCurrency[]> {
+  const expenseRows = await db
+    .select({
+      id: expenses.id,
+      payerParticipantId: expenses.payerParticipantId,
+      amountBaseCurrency: expenses.amountBaseCurrency,
+      currency: expenses.currency,
+      amount: expenses.amount,
+    })
+    .from(expenses)
+    .where(eq(expenses.tripId, tripId));
+
+  const splitRows = await db
+    .select({
+      expenseId: expenseSplits.expenseId,
+      participantId: expenseSplits.participantId,
+      shareAmountBaseCurrency: expenseSplits.shareAmountBaseCurrency,
+      shareAmountOriginal: expenseSplits.shareAmountOriginal,
+    })
+    .from(expenseSplits)
+    .innerJoin(expenses, eq(expenseSplits.expenseId, expenses.id))
+    .where(eq(expenses.tripId, tripId));
+
+  const splitsByExpenseId = new Map<
+    string,
+    { participantId: string; shareAmountBaseCurrency: number; shareAmountOriginal: number }[]
+  >();
+  for (const row of splitRows) {
+    const list = splitsByExpenseId.get(row.expenseId) ?? [];
+    list.push({
+      participantId: row.participantId,
+      shareAmountBaseCurrency: row.shareAmountBaseCurrency,
+      shareAmountOriginal: row.shareAmountOriginal,
+    });
+    splitsByExpenseId.set(row.expenseId, list);
+  }
+
+  return expenseRows.map((row) => ({
+    currency: row.currency,
+    payerParticipantId: row.payerParticipantId,
+    amountBaseCurrency: row.amountBaseCurrency,
+    amountOriginal: row.amount,
+    splits: splitsByExpenseId.get(row.id) ?? [],
+  }));
 }
 
 export interface SettlementDetailEntry {
@@ -165,16 +222,29 @@ export async function loadSettlementDetail(db: Db, tripId: string): Promise<Map<
   return detailByParticipant;
 }
 
-/** 返回这个行程里已经被标记"已收款"的转账对集合，key 是 `${from}:${to}`。 */
+/**
+ * 返回这个行程里已经被标记"已收款"的转账集合，key 是 `${from}:${to}:${currency}`。
+ *
+ * fix(2026-09-26，"结算按币种拆开显示")：key 加上 currency——只精确匹配具体币种，
+ * 这次上线前的历史遗留行（currency IS NULL，见 schema.ts 大注释）不会被当成
+ * "匹配任何币种都算已收款"混进来，也不会被直接丢弃。这意味着：那些历史遗留行
+ * 在没跑 scripts/backfill-settlement-confirmation-currency.ts 之前，不会让任何
+ * 新的按币种分行显示成"已收款"（每个币种分行都要重新勾一次）——这是刻意的保守
+ * 选择（宁可多显示"未收款"提示 Remy 重新核对一遍，也不要让还没收到的某个币种
+ * 被误判成"收了"），具体影响写在交接汇报里，不在这里自己拍板要不要跑那个迁移。
+ */
 export async function loadConfirmedTransferPairs(db: Db, tripId: string): Promise<Set<string>> {
   const rows = await db
     .select({
       fromParticipantId: settlementConfirmations.fromParticipantId,
       toParticipantId: settlementConfirmations.toParticipantId,
+      currency: settlementConfirmations.currency,
     })
     .from(settlementConfirmations)
     .where(eq(settlementConfirmations.tripId, tripId));
-  return new Set(rows.map((r) => `${r.fromParticipantId}:${r.toParticipantId}`));
+  return new Set(
+    rows.filter((r) => r.currency !== null).map((r) => `${r.fromParticipantId}:${r.toParticipantId}:${r.currency}`)
+  );
 }
 
 export interface MyShareGroup {

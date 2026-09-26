@@ -187,9 +187,13 @@ export const previewWalletBalanceSchema = z
     path: ['newBalanceUpdatedAt'],
   });
 
+// fix(2026-09-26，"结算按币种拆开显示")：确认/取消确认现在必须带具体币种——
+// 同一对 from/to 可能同时欠好几个币种，勾选框现在是"这一笔币种收到了没"，不再是
+// "这一对人之间的钱收到了没"。
 export const settlementConfirmationSchema = z.object({
   fromParticipantId: z.string().min(1),
   toParticipantId: z.string().min(1),
+  currency: currencyCode,
 });
 
 export const setWalletBalanceSchema = z.object({
