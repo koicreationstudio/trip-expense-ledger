@@ -154,20 +154,46 @@ export const createWalletSchema = z.object({
   paymentMethodId: z.string().min(1).optional(),
 });
 
-export const updateWalletSchema = z.object({
-  label: z.string().trim().min(1).max(100).optional(),
-  emoji: z.string().trim().min(1).max(8).optional(),
-  paymentMethodId: z.string().min(1).nullable().optional(),
-  // 允许手动订正余额（比如跟实际现金对不上时），不算「记一笔换汇」，直接覆盖。
-  currentBalance: z.number().int().optional(),
-  // 「设置当前余额」这个动作发生的记录时间，可选补录成之前的日期
-  // （2026-09-13 落地第四轮拍板屏⑤），只在同时传了 currentBalance 时才有意义。
-  balanceUpdatedAt: z.string().datetime().optional(),
-});
+export const updateWalletSchema = z
+  .object({
+    label: z.string().trim().min(1).max(100).optional(),
+    emoji: z.string().trim().min(1).max(8).optional(),
+    paymentMethodId: z.string().min(1).nullable().optional(),
+    // 允许手动订正余额（比如跟实际现金对不上时），不算「记一笔换汇」，直接覆盖。
+    currentBalance: z.number().int().optional(),
+    // 「设置当前余额」这个动作发生的记录时间（2026-09-13 落地第四轮拍板屏⑤）。
+    // fix(2026-09-26，防覆盖确认流程)：以前这个字段整个可选，没传就在 route 里
+    // 悄悄默认成"现在"——这正是防覆盖流程要堵的洞（前端表单不该有任何路径能不选
+    // 日期就把余额写进去）。现在改成"两个要么一起有、要么一起没有"：真的在设置
+    // 余额（带了 currentBalance）就必须带上这个日期，不许再由后端兜底默认成今天。
+    balanceUpdatedAt: z.string().datetime().optional(),
+  })
+  .refine((v) => (v.currentBalance === undefined) === (v.balanceUpdatedAt === undefined), {
+    message: '设置当前余额必须同时提供生效日期（balanceUpdatedAt），不能只填金额，也不能只填日期',
+    path: ['balanceUpdatedAt'],
+  });
 
+// 「设置当前余额」防覆盖确认流程的预览端点专用（2026-09-26 新增）：不落库，纯
+// 算"改前/改后现余额分别是多少"给确认页看。两个字段要么一起有（真的想预览改完
+// 之后的数字）要么一起没有（只是想看"改之前"这一半——钱包详情页第一步展示当前
+// 锚点+现余额那一刻用）。
+export const previewWalletBalanceSchema = z
+  .object({
+    newCurrentBalance: z.number().int().optional(),
+    newBalanceUpdatedAt: z.string().datetime().optional(),
+  })
+  .refine((v) => (v.newCurrentBalance === undefined) === (v.newBalanceUpdatedAt === undefined), {
+    message: 'newCurrentBalance 和 newBalanceUpdatedAt 要同时提供或同时不提供',
+    path: ['newBalanceUpdatedAt'],
+  });
+
+// fix(2026-09-26，"结算按币种拆开显示")：确认/取消确认现在必须带具体币种——
+// 同一对 from/to 可能同时欠好几个币种，勾选框现在是"这一笔币种收到了没"，不再是
+// "这一对人之间的钱收到了没"。
 export const settlementConfirmationSchema = z.object({
   fromParticipantId: z.string().min(1),
   toParticipantId: z.string().min(1),
+  currency: currencyCode,
 });
 
 export const setWalletBalanceSchema = z.object({
@@ -192,6 +218,27 @@ export const createExchangeRecordSchema = z
     path: ['fromAmount'],
   });
 
+// round72b 新增：借钱/还钱功能，跟 expense/expense_split 完全独立的一张新表，
+// 见 lib/db/schema.ts loan/loan_repayment 顶部大段注释。fromWalletId 可为空
+// ——开放问题①"不经过任何钱包的现金往来"，这版允许不选。
+export const createLoanSchema = z.object({
+  lenderParticipantId: z.string().min(1),
+  borrowerParticipantId: z.string().min(1),
+  amount: z.number().int().positive(),
+  currency: currencyCode,
+  fromWalletId: z.string().min(1).optional(),
+  date: z.string().datetime(),
+  note: z.string().trim().max(2000).optional(),
+});
+
+/** loan_repayment 没有单独的 currency 字段，见 schema.ts 顶部注释——币种由 toWalletId 隐式决定。 */
+export const createLoanRepaymentSchema = z.object({
+  amount: z.number().int().positive(),
+  toWalletId: z.string().min(1).optional(),
+  date: z.string().datetime(),
+  note: z.string().trim().max(2000).optional(),
+});
+
 // fix(2026-09-26 第七十一轮，任务⑥)：活动流排序模式 + 4 个筛选条件云端同步，跟
 // fxComparePreferenceSchema 同一套模式——'ALL' 是 expense-list.tsx 既有的
 // "不筛选"字面量，原样存字符串。
@@ -201,6 +248,22 @@ export const expenseListPreferenceSchema = z.object({
   payerFilter: z.string().trim().min(1).max(120),
   dateFilter: z.string().trim().min(1).max(120),
   paymentMethodFilter: z.string().trim().min(1).max(120),
+  // 第七十二轮任务④新增：「计分摊/不计分摊」筛选，跟上面几个不一样——值域固定只有
+  // 3 档（不是从当前数据动态取的候选值），用精确 enum 校验，非法值直接 400。
+  //
+  // fix(2026-09-26 第七十二轮，ui-auditor 真机走查在 Remy 真实香港行程上抓到的真
+  // bug)：这里原来写的是字面量 `'ALL'`，但 `expense-list.tsx` 的"不筛选"哨兵常量
+  // 其实是 `const ALL = '__all__'`（跟上面 4 个筛选共用同一个常量），组件默认状态/
+  // 清空筛选时发的 PUT body 里 `splitFilter` 实际值是 `'__all__'`，不是 `'ALL'`——
+  // 这个精确 enum 校验只认 `'ALL'`，导致默认态一旦触发保存就 400，前端 UI 表现正常
+  // （客户端筛选状态没受影响）但云端同步这一步静默失败，偏好存不上、换设备/清缓存
+  // 后会丢。改成 `'__all__'`，跟组件实际发出的值对齐。上面 4 个筛选用的是宽松
+  // `z.string()`，凑巧不管字面量是 `'ALL'` 还是 `'__all__'` 都能通过校验，没暴露
+  // 这个问题，只有这个新增的精确 enum 校验会拿字面量不一致当真。
+  splitFilter: z.enum(['__all__', 'included', 'excluded']),
+  // 2026-09-26 命名纠正任务新增：「业务成本」筛选，值域固定 3 档，跟上面
+  // `splitFilter` 一样用精确 enum 校验（不是从当前数据动态取的候选值）。
+  businessCostFilter: z.enum(['__all__', 'yes', 'no']),
 });
 
 // fix(2026-09-26 第七十一轮，任务⑤)：活动流拖拽重排，一次提交"新顺序的完整 id

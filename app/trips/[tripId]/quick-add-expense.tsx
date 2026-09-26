@@ -101,6 +101,12 @@ export function QuickAddExpense({
   const [currency, setCurrency] = useState(baseCurrency);
   const [merchant, setMerchant] = useState('');
   const [fxRateUsed, setFxRateUsed] = useState('');
+  // fix(2026-09-26 第七十二轮，任务①)：快速记账之前完全没有"当地金额"字段，跟
+  // expense-form.tsx 那边同一次改动一起补上——"汇率"框和"当地金额"框双向联动，
+  // `lastManualFieldRef` 记录用户最后亲手改的是哪一个，逻辑跟 expense-form.tsx
+  // 完全一致（那边有更完整的注释，这里不重复抄一遍）。
+  const lastManualFieldRef = useRef<'rate' | 'local'>('rate');
+  const [localAmountYuan, setLocalAmountYuan] = useState('');
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,6 +136,29 @@ export function QuickAddExpense({
   const currencyOptions = Array.from(new Set([baseCurrency, ...COMMON_CURRENCIES]));
 
   const amountCentsTotal = yuanToCents(Number(amountYuan) || 0);
+
+  // fix(2026-09-26 第七十二轮，任务①，精度铁律)：跟 expense-form.tsx 同一套算法——
+  // 用户直接编辑「当地金额」框时，`localAmountCents` 直接用 `yuanToCents` 精确转换，
+  // 不经过汇率乘法；用户编辑「汇率」框时，`localAmountCents` 才用 amount×rate 现算。
+  // 提交时 `amountBaseCurrency` 永远直接等于 `localAmountCents`，不重新计算。
+  const localAmountCents =
+    needsManualFxRate && lastManualFieldRef.current === 'local'
+      ? localAmountYuan && !Number.isNaN(Number(localAmountYuan))
+        ? yuanToCents(Number(localAmountYuan))
+        : null
+      : needsManualFxRate && fxRateUsed && !Number.isNaN(Number(fxRateUsed))
+        ? Math.round(amountCentsTotal * Number(fxRateUsed))
+        : null;
+  const fxRateDisplay =
+    needsManualFxRate && lastManualFieldRef.current === 'local' && amountCentsTotal > 0 && localAmountCents !== null
+      ? String(localAmountCents / amountCentsTotal)
+      : fxRateUsed;
+  const localAmountDisplay =
+    needsManualFxRate && lastManualFieldRef.current === 'local'
+      ? localAmountYuan
+      : localAmountCents !== null
+        ? String(centsToYuan(localAmountCents))
+        : '';
   const includedParticipants = participants.filter((p) => splitIncluded[p.id] ?? true);
   const splitCentsTotal = includedParticipants.reduce(
     (sum, p) => sum + yuanToCents(Number(splitAmounts[p.id]) || 0),
@@ -173,6 +202,8 @@ export function QuickAddExpense({
     setCurrency(baseCurrency);
     setMerchant('');
     setFxRateUsed('');
+    lastManualFieldRef.current = 'rate';
+    setLocalAmountYuan('');
     setSelectedPaymentMethodId(null);
     setSplitMode('equal');
     setSplitIncluded(Object.fromEntries(participants.map((p) => [p.id, true])));
@@ -192,8 +223,12 @@ export function QuickAddExpense({
       setError('分类不能空着');
       return;
     }
-    if (needsManualFxRate && !fxRateUsed) {
-      setError(`币种不是本位币 ${baseCurrency}，要填汇率（1 ${currency} = 多少 ${baseCurrency}）`);
+    // fix(2026-09-26 第七十二轮，任务①)：汇率框和当地金额框双向联动，随便填一个
+    // 都行，两个都没填才拦。
+    if (needsManualFxRate && localAmountCents === null) {
+      setError(
+        `币种不是本位币 ${baseCurrency}，要填汇率（1 ${currency} = 多少 ${baseCurrency}）或者直接填这笔换成 ${baseCurrency} 大概多少钱`
+      );
       return;
     }
     // fix(第七十一轮，任务⑦)：提交按钮虽然已经在 paymentMethodMissing 时禁用，跟
@@ -204,7 +239,9 @@ export function QuickAddExpense({
     }
 
     const amountCents = yuanToCents(amount);
-    const amountBaseCurrency = needsManualFxRate ? Math.round(amountCents * Number(fxRateUsed)) : amountCents;
+    // fix(2026-09-26 第七十二轮，任务①，精度铁律)：直接用 `localAmountCents`
+    // （精确整数分），不再用 `Math.round(amountCents * rate)` 重新算一遍。
+    const amountBaseCurrency = needsManualFxRate ? (localAmountCents as number) : amountCents;
 
     let splits: SplitShare[] | undefined;
     if (splitMode === 'onlyMe') {
@@ -235,7 +272,7 @@ export function QuickAddExpense({
           payerParticipantId: myParticipantId,
           amount: amountCents,
           currency,
-          fxRateUsed: needsManualFxRate ? Number(fxRateUsed) : undefined,
+          fxRateUsed: needsManualFxRate ? Number(fxRateDisplay) : undefined,
           paymentMethodId: selectedPaymentMethodId ?? undefined,
           category: category.trim(),
           merchant: merchant.trim() || undefined,
@@ -296,7 +333,13 @@ export function QuickAddExpense({
           />
           <SelectDropdown
             value={currency}
-            onChange={setCurrency}
+            onChange={(next) => {
+              // fix(2026-09-26 第七十二轮，任务①)：切换币种时，旧币种下手动改过的
+              // 当地金额对新币种没有意义，重新退回"汇率驱动"这个默认模式。
+              lastManualFieldRef.current = 'rate';
+              setLocalAmountYuan('');
+              setCurrency(next);
+            }}
             options={currencyOptions.map((c) => ({ value: c, label: c }))}
             ariaLabel="币种"
             triggerClassName="field-input-dark shrink-0"
@@ -364,18 +407,42 @@ export function QuickAddExpense({
             配一个，记得勾选「本行程启用」，之后才能在这里记账。
           </p>
         )}
+        {/* fix(2026-09-26 第七十二轮，任务②)：跟 expense-form.tsx 同一次改动——按钮
+            变灰禁用时主动说明原因，不用等点了提交才看到 error 文案。 */}
+        {paymentMethodMissing && <p className="text-[10px] text-negative-dk">要选一个支付方式才能保存。</p>}
 
+        {/* fix(2026-09-26 第七十二轮，任务①)：汇率框 + 当地金额框并排、双向联动，
+            跟 expense-form.tsx 同一套逻辑（那边注释更完整）。 */}
         {needsManualFxRate && (
-          <input
-            type="number"
-            min="0"
-            step="0.0001"
-            value={fxRateUsed}
-            onChange={(e) => setFxRateUsed(e.target.value)}
-            placeholder={`汇率（1 ${currency} = 多少 ${baseCurrency}）`}
-            aria-label="汇率"
-            className="field-input-dark"
-          />
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              min="0"
+              step="0.0001"
+              value={fxRateDisplay}
+              onChange={(e) => {
+                lastManualFieldRef.current = 'rate';
+                setFxRateUsed(e.target.value);
+              }}
+              placeholder={`汇率（1 ${currency} = 多少 ${baseCurrency}）`}
+              aria-label="汇率"
+              className="field-input-dark flex-1"
+            />
+            <input
+              type="text"
+              inputMode="decimal"
+              value={localAmountDisplay}
+              onChange={(e) => {
+                const candidate = e.target.value;
+                if (!/^\d*\.?\d*$/.test(candidate)) return;
+                lastManualFieldRef.current = 'local';
+                setLocalAmountYuan(candidate);
+              }}
+              placeholder={`当地金额（${baseCurrency}）`}
+              aria-label={`当地金额（${baseCurrency}）`}
+              className="field-input-dark flex-1 font-serif tabular-nums"
+            />
+          </div>
         )}
 
         {/* fix(2026-09-16 第十七轮，Remy 截图坐实的真差异)：Artifact `.seg3` 是一条暖米黄色

@@ -1,16 +1,29 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getDb } from '@/lib/db/client';
-import { exchangeRecords, expenses, participants, paymentMethods, trips, wallets } from '@/lib/db/schema';
+import {
+  exchangeRecords,
+  expenses,
+  expenseSplits,
+  loanRepayments,
+  loans,
+  participants,
+  paymentMethods,
+  trips,
+  wallets,
+} from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadMyShareBreakdown, loadSettlementInput } from '@/lib/db/settlement-query';
 import { computeNetBalances } from '@/lib/domain/settlement';
+import { computeLoanProgress } from '@/lib/domain/loan';
+import { isOnlyMeSplit } from '@/lib/domain/expense-split-mode';
 import { formatMoney } from '@/lib/money';
 import { deriveMidRate, ensureMyrRatesFresh, getMyrRateSnapshot } from '@/lib/fx/rate-cache';
 import { ExpenseList } from './expense-list';
 import { WalletCard } from './wallet-card';
 import { ExchangeRecordList } from './exchange-record-list';
+import { LoanList } from './loans/loan-list';
 import { FxCompareCard } from './fx-compare-card';
 import { loadEnabledPaymentMethodIds, paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 import { computeWalletDisplayBalances } from '@/lib/domain/wallet-balance';
@@ -70,6 +83,34 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     .where(eq(expenses.tripId, params.tripId))
     .orderBy(desc(expenses.expenseDate));
 
+  // 「计分摊/不计分摊」判定要用的 splits 参与人清单（这次命名纠正任务新增）：
+  // 一次查询批量拿这趟行程全部消费的 expense_split 行，按 expenseId 分组成
+  // "这笔消费分给了哪些 participantId"，再用 `isOnlyMeSplit` 算出"是不是只分
+  // 给了付款人自己"——不逐笔查询（N+1），一次查完这趟行程全部消费对应的
+  // split 行就够了。某笔消费查不到任何 split 行（异常情况，正常流程 splits
+  // 一定至少有 1 行）时 Map 里没有这个 key，下面兜底给 false，不阻塞渲染。
+  const tripExpenseIds = tripExpenses.map((e) => e.id);
+  const splitParticipantIdsByExpenseId = new Map<string, string[]>();
+  if (tripExpenseIds.length > 0) {
+    const splitRows = await db
+      .select({ expenseId: expenseSplits.expenseId, participantId: expenseSplits.participantId })
+      .from(expenseSplits)
+      .where(inArray(expenseSplits.expenseId, tripExpenseIds));
+    for (const row of splitRows) {
+      const list = splitParticipantIdsByExpenseId.get(row.expenseId);
+      if (list) {
+        list.push(row.participantId);
+      } else {
+        splitParticipantIdsByExpenseId.set(row.expenseId, [row.participantId]);
+      }
+    }
+  }
+  const isOnlyMeSplitByExpenseId = new Map<string, boolean>();
+  for (const e of tripExpenses) {
+    const splitParticipantIds = splitParticipantIdsByExpenseId.get(e.id) ?? [];
+    isOnlyMeSplitByExpenseId.set(e.id, isOnlyMeSplit(splitParticipantIds, e.payerParticipantId));
+  }
+
   // 活动流"约算金额"要用的本位币→MYR中间汇率（2026-09-19 第二十八轮新增）：
   // 只在本位币不是 MYR 时才需要，本位币就是 MYR 的行程约算等于自己换算自己没意义，
   // 也省一次不必要的缓存查询。`ensureMyrRatesFresh`/`getMyrRateSnapshot` 是
@@ -99,6 +140,32 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     .orderBy(desc(exchangeRecords.exchangeDate));
 
   const walletById = new Map(myWallets.map((w) => [w.id, w]));
+
+  // 借款清单（round72b 新增）：跟 expense/exchangeRecord 完全独立的一张新表，
+  // 私密边界是"我是当事人之一（lender 或 borrower）"，不是"我自己名下"（loan
+  // 天然是两个人的事），也不是"整个行程都能看"（跟 activity 流那种共享可见度
+  // 不是同一档），具体口径见 app/api/trips/[tripId]/loans/route.ts 顶部注释。
+  const myLoans = await db
+    .select()
+    .from(loans)
+    .where(
+      and(
+        eq(loans.tripId, params.tripId),
+        or(eq(loans.lenderParticipantId, identity.participantId), eq(loans.borrowerParticipantId, identity.participantId))
+      )
+    )
+    .orderBy(desc(loans.date));
+
+  const loanIds = myLoans.map((l) => l.id);
+  const loanRepaymentSums = new Map<string, number>();
+  if (loanIds.length > 0) {
+    const sumRows = await db
+      .select({ loanId: loanRepayments.loanId, total: sql<number>`coalesce(sum(${loanRepayments.amount}), 0)` })
+      .from(loanRepayments)
+      .where(inArray(loanRepayments.loanId, loanIds))
+      .groupBy(loanRepayments.loanId);
+    for (const row of sumRows) loanRepaymentSums.set(row.loanId, Number(row.total));
+  }
 
   // fix(2026-09-24 第五十轮，"设置当前余额"覆盖式 bug 修复)：行程主页「我的钱包」
   // 这里是直接查 DB 拿 `w.currentBalance` 原始存储值，不经过 wallets/route.ts 那个
@@ -310,6 +377,10 @@ export default async function TripPage({ params }: { params: { tripId: string } 
               ? paymentMethodLabelById.get(e.paymentMethodId) ?? '其他人的支付方式'
               : null,
             excludeFromSplit: e.excludeFromSplit,
+            // 「计分摊/不计分摊」筛选真正依据的推导字段（这次命名纠正任务新增，
+            // 见上面 isOnlyMeSplitByExpenseId 的算法注释）——跟 excludeFromSplit
+            // 是两个独立维度，不要混用。
+            isOnlyMeSplit: isOnlyMeSplitByExpenseId.get(e.id) ?? false,
             sortOrder: e.sortOrder,
           }))}
         />
@@ -335,6 +406,39 @@ export default async function TripPage({ params }: { params: { tripId: string } 
             exchangeDate: r.exchangeDate.toISOString(),
             note: r.note,
           }))}
+        />
+      </section>
+
+      {/* 借款清单（round72b 新增）："仅当事人可见"，不是整个行程共享，见上面查询
+          处的注释。跟 expense/exchangeRecord 是三个平级的独立区块，不参与 Hero
+          卡"我承担"、活动流、结算净额这几处既有计算。
+          fix(round72 批次②，ui-auditor 抓到的真 bug)：底部"＋"菜单里"记一笔还钱"
+          点了跳 `#loans`（见 record-expense-bar.tsx 注释——还钱要先挑是哪一笔
+          欠款，落地位置是这个区块，不整一个只填金额、猜是哪笔的独立表单），但这个
+          section 之前没有 `id="loans"`，浏览器 hash 跳转找不到目标锚点，点了完全
+          没反应（URL 变了，页面纹丝不动），用户会以为点击没生效。这里补上 id，
+          恢复原生锚点跳转；没有借出记录时下面 LoanList 自己有空状态文案会跟着
+          一起被滚进视口，不用再额外写"还没有可还的借款"这类专属提示。 */}
+      <section id="loans" className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">
+            借还款 · <span className="font-mono uppercase tracking-wide">LOANS</span>
+          </h2>
+          <span className="text-[10px] text-muted">仅当事人可见</span>
+        </div>
+        <LoanList
+          tripId={trip.id}
+          loans={myLoans.map((l) => ({
+            id: l.id,
+            lenderName: nameById.get(l.lenderParticipantId) ?? '未知',
+            borrowerName: nameById.get(l.borrowerParticipantId) ?? '未知',
+            amount: l.amount,
+            currency: l.currency,
+            date: l.date.toISOString(),
+            note: l.note,
+            progress: computeLoanProgress(l.amount, [{ amount: loanRepaymentSums.get(l.id) ?? 0 }]),
+          }))}
+          wallets={myWallets.map((w) => ({ id: w.id, label: w.label, currency: w.currency, emoji: w.emoji }))}
         />
       </section>
     </main>

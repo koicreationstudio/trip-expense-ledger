@@ -61,6 +61,8 @@ const SAMPLE_PREFERENCE = {
   payerFilter: 'Remy',
   dateFilter: '2026-09-15',
   paymentMethodFilter: '现金HKD',
+  splitFilter: 'included',
+  businessCostFilter: '__all__',
 };
 
 describe('GET/PUT /api/trips/[tripId]/expense-list-preference', () => {
@@ -120,6 +122,84 @@ describe('GET/PUT /api/trips/[tripId]/expense-list-preference', () => {
       jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
         ...SAMPLE_PREFERENCE,
         sortMode: 'not-a-real-mode',
+      }),
+      { params: { tripId } }
+    );
+    expect(res.status).toBe(400);
+
+    const rows = await db.query.expenseListPreferences.findMany({ where: (t, { eq }) => eq(t.tripId, tripId) });
+    expect(rows.length).toBe(0);
+  });
+
+  // 第七十二轮任务④：splitFilter 值域固定 3 档（'__all__'|'included'|'excluded'），
+  // 跟其它 4 个动态候选筛选不一样，用精确 enum 校验，非法值要 400 且不落库。
+  //
+  // fix(2026-09-26 第七十二轮，ui-auditor 真机走查抓到真 bug 后补测)：这里原来写的
+  // 是 `'ALL'`，跟 schemas.ts 当时的错误字面量一致，两边"互相印证"却都跟组件实际
+  // 发出的 `expense-list.tsx` 哨兵常量 `'__all__'` 不一致，测试通过掩盖了真实的
+  // 生产 400——这是"测试跟实现共享同一个错误假设，测不出真问题"的教训，改成
+  // `'__all__'`，跟前端真实运行时发出的值对齐，不是随便挑一个能通过的字符串。
+  it('splitFilter 传合法的三个值都能存住', async () => {
+    for (const value of ['__all__', 'included', 'excluded'] as const) {
+      const { tripId, ownerToken } = await setupTripWithOwner(`🇭🇰测试行程-分摊筛选-${value}`);
+      const putRes = await putHandler(
+        jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
+          ...SAMPLE_PREFERENCE,
+          splitFilter: value,
+        }),
+        { params: { tripId } }
+      );
+      expect(putRes.status).toBe(200);
+      const getRes = await getHandler(
+        jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'GET', ownerToken),
+        { params: { tripId } }
+      );
+      expect(((await getRes.json()) as any).preference.splitFilter).toBe(value);
+    }
+  });
+
+  it('splitFilter 传非法值（不在固定 3 档里）：400，不落库', async () => {
+    const { tripId, ownerToken } = await setupTripWithOwner('🇭🇰测试行程-列表偏好E');
+    const res = await putHandler(
+      jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
+        ...SAMPLE_PREFERENCE,
+        splitFilter: 'not-a-real-value',
+      }),
+      { params: { tripId } }
+    );
+    expect(res.status).toBe(400);
+
+    const rows = await db.query.expenseListPreferences.findMany({ where: (t, { eq }) => eq(t.tripId, tripId) });
+    expect(rows.length).toBe(0);
+  });
+
+  // 2026-09-26 命名纠正任务新增：businessCostFilter 值域固定 3 档
+  // （'__all__'|'yes'|'no'），跟 splitFilter 同一套精确 enum 校验覆盖范围。
+  it('businessCostFilter 传合法的三个值都能存住', async () => {
+    for (const value of ['__all__', 'yes', 'no'] as const) {
+      const { tripId, ownerToken } = await setupTripWithOwner(`🇭🇰测试行程-业务成本筛选-${value}`);
+      const putRes = await putHandler(
+        jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
+          ...SAMPLE_PREFERENCE,
+          businessCostFilter: value,
+        }),
+        { params: { tripId } }
+      );
+      expect(putRes.status).toBe(200);
+      const getRes = await getHandler(
+        jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'GET', ownerToken),
+        { params: { tripId } }
+      );
+      expect(((await getRes.json()) as any).preference.businessCostFilter).toBe(value);
+    }
+  });
+
+  it('businessCostFilter 传非法值（不在固定 3 档里）：400，不落库', async () => {
+    const { tripId, ownerToken } = await setupTripWithOwner('🇭🇰测试行程-列表偏好F');
+    const res = await putHandler(
+      jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
+        ...SAMPLE_PREFERENCE,
+        businessCostFilter: 'not-a-real-value',
       }),
       { params: { tripId } }
     );

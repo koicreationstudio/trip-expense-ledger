@@ -7,6 +7,7 @@ import { toExpenseDto } from '@/lib/http/dto';
 import { parseJsonBody } from '@/lib/http/validate';
 import { updateExpenseSchema } from '@/lib/validation/schemas';
 import { validateSplits } from '@/lib/http/expense-validation';
+import { deriveOriginalCurrencyShares } from '@/lib/domain/split';
 import { deleteReceipt } from '@/lib/storage/receipts';
 import { findDirectDebitWallet } from '@/lib/domain/wallet-balance';
 import { loadEnabledPaymentMethodIds } from '@/lib/domain/payment-method-scope';
@@ -202,11 +203,22 @@ export const PATCH = withSession<Context>(async (request, { params }, identity) 
       ? [
           db.delete(expenseSplits).where(eq(expenseSplits.expenseId, params.expenseId)),
           db.insert(expenseSplits).values(
-            body.splits.map((s) => ({
-              expenseId: params.expenseId,
-              participantId: s.participantId,
-              shareAmountBaseCurrency: s.shareAmountBaseCurrency,
-            }))
+            (() => {
+              // fix(2026-09-26，"结算按币种拆开显示")：编辑重传 splits 时，
+              // shareAmountOriginal 也要跟着重新精确算一遍（最大余数法，
+              // 总和严格等于 nextAmount），跟 POST 那边同一套换算，不是只更新
+              // shareAmountBaseCurrency 留 original 字段过期。
+              const originalShares = deriveOriginalCurrencyShares(body.splits!, amountBaseCurrency, nextAmount);
+              const originalShareByParticipant = new Map(
+                originalShares.map((s) => [s.participantId, s.shareAmountOriginal])
+              );
+              return body.splits!.map((s) => ({
+                expenseId: params.expenseId,
+                participantId: s.participantId,
+                shareAmountBaseCurrency: s.shareAmountBaseCurrency,
+                shareAmountOriginal: originalShareByParticipant.get(s.participantId) ?? 0,
+              }));
+            })()
           ),
         ]
       : []),

@@ -177,16 +177,17 @@ export function ExpenseForm({
   // 排除，选别的分类就不排除，没有任何手动覆盖的余地。之前的 excludeFromSplitTouched
   // "手动点过就不再跟着分类联动"这层折中逻辑整段删掉。
   //
-  // 边界情况（已用真实数据查证，写清楚留给 Remy 确认）：生产库里有 46 条
-  // exclude_from_split=1 的记录，其中 33 条 category 不是机票/宝石（比如"交通"
-  // "住宿""餐饮"这些），是这次改动之前 Remy 手动勾过的。这些历史记录本身不受影响——
-  // 行程主页 Hero 卡"我承担"合计读的是数据库里存的 excludeFromSplit 字段本身
-  // （page.tsx `loadMyShareBreakdown`），不是这里重新按分类现算，所以这次改动上线
-  // 后这 33 条记录显示不会变。但如果 Remy 之后编辑（哪怕只是改个商家名字这种不相关
-  // 的小修改）这 33 条里的某一条，保存时这里会按新逻辑把 excludeFromSplit 静默改回
-  // false（因为它的分类不是机票/宝石）——那笔历史记录会从"不计入分摊"变回"计入分摊"，
-  // 这是一次真实的行为改变，不是假设，需要 Remy 知道。
-  const excludeFromSplit = AUTO_EXCLUDE_CATEGORIES.has(category);
+  // fix(2026-09-26 第七十二轮批次②，Remy 拍板)：上面那段注释记录的边界情况——生产库
+  // 46 条 exclude_from_split=1 里有 33 条 category 不是机票/宝石，是这次改动之前
+  // Remy 手动勾过的历史标记——已经从"假设风险"变成"确认要修"。规则：编辑一笔已有
+  // 消费时，只要这次没有真的改分类（category 跟 initialExpense.category 一样），
+  // 保留数据库里原来那个 excludeFromSplit 值，不重新按分类派生；只有分类真的变了，
+  // 才用新分类重新派生（选了机票/宝石变 true，选别的变 false）。新建消费（没有
+  // initialExpense）永远纯按分类派生，跟之前行为一致，不受这条影响。
+  const excludeFromSplit =
+    isEdit && initialExpense && category === initialExpense.category
+      ? initialExpense.excludeFromSplit
+      : AUTO_EXCLUDE_CATEGORIES.has(category);
 
   function handleCategoryChange(value: string) {
     setCategory(value);
@@ -252,10 +253,22 @@ export function ExpenseForm({
   const previousCurrencyRef = useRef(currency);
   const [liveMidRates, setLiveMidRates] = useState<Record<string, number> | null>(null);
 
+  // fix(2026-09-26 第七十二轮，任务①)：「当地金额」框从只读展示改成可编辑，跟汇率框
+  // 双向联动——`lastManualFieldRef` 记录用户最后亲手改的是哪一个框，另一个框的显示值
+  // 跟着现算，不需要互相 setState 同步（避免"改 A 触发 effect 改 B 又触发 effect 改
+  // A"的循环）。默认 'rate'，跟这个字段一直以来的历史行为（先有汇率、当地金额是派生
+  // 展示）保持一致，只有用户真的点进「当地金额」框打字之后才会变成 'local'。
+  const lastManualFieldRef = useRef<'rate' | 'local'>('rate');
+  const [localAmountYuan, setLocalAmountYuan] = useState(
+    initialExpense && initialExpense.fxRateUsed !== 1 ? String(centsToYuan(initialExpense.amountBaseCurrency)) : ''
+  );
+
   useEffect(() => {
     if (previousCurrencyRef.current !== currency) {
       previousCurrencyRef.current = currency;
       fxRateTouchedRef.current = false;
+      lastManualFieldRef.current = 'rate';
+      setLocalAmountYuan('');
     }
   }, [currency]);
 
@@ -278,21 +291,52 @@ export function ExpenseForm({
   }, [needsManualFxRate, tripId]);
 
   useEffect(() => {
-    if (!needsManualFxRate || fxRateTouchedRef.current || !liveMidRates) return;
+    if (!needsManualFxRate || fxRateTouchedRef.current || lastManualFieldRef.current === 'local' || !liveMidRates)
+      return;
     const rate = deriveMidRate(liveMidRates, currency, baseCurrency);
     if (rate !== undefined) {
       setFxRateUsed(String(rate));
     }
   }, [needsManualFxRate, liveMidRates, currency, baseCurrency]);
 
-  // 当地金额（约）：amount（原始币种）× fxRateUsed 约算成 baseCurrency，纯只读展示，
-  // 不反向驱动 amount/fxRateUsed（避免来回换算的浮点误差累积）。
-  const localAmountCents =
-    needsManualFxRate && fxRateUsed && !Number.isNaN(Number(fxRateUsed))
-      ? Math.round(yuanToCents(Number(amountYuan) || 0) * Number(fxRateUsed))
-      : null;
-
   const amountCentsTotal = yuanToCents(Number(amountYuan) || 0);
+
+  // fix(2026-09-26 第七十二轮，任务①)：「当地金额」跟「汇率」双向联动，canonical
+  // 来源看 `lastManualFieldRef`：
+  // - 'local'：当地金额框里的数字是唯一真源，直接用 `yuanToCents` 精确转成分，不经过
+  //   汇率乘法——这是这次的精度铁律：提交时存进数据库的 amountBaseCurrency 必须跟
+  //   用户填的当地金额分毫不差（Remy 举的例子：MYR 18.67 填 HK$35.00，必须存
+  //   3500 分，不能 3499/3501）。`Math.round(amount*rate)` 这种反向重算的路径，
+  //   在用户直接给定当地金额时完全不需要、也不该再走一遍——那正是精度偏差的来源。
+  // - 'rate'（默认，历史行为）：当地金额还是 amount×fxRateUsed 现算出来的展示值，
+  //   跟这个字段一直以来的行为一致。
+  const localAmountCents =
+    needsManualFxRate && lastManualFieldRef.current === 'local'
+      ? localAmountYuan && !Number.isNaN(Number(localAmountYuan))
+        ? yuanToCents(Number(localAmountYuan))
+        : null
+      : needsManualFxRate && fxRateUsed && !Number.isNaN(Number(fxRateUsed))
+        ? Math.round(amountCentsTotal * Number(fxRateUsed))
+        : null;
+
+  // 汇率框的展示值：正常就是用户敲的 fxRateUsed 原始字符串；用户是从当地金额框反向
+  // 驱动过来的时候，这里现算一个能自洽解释 localAmountCents/amountCentsTotal 这个
+  // 比例的展示值——这个值只是给她参考 + 存档用的辅助信息，不是精度铁律要保护的对象
+  // （铁律只保护 amountBaseCurrency 这一个最终存进数据库的数字，汇率本身允许正常的
+  // 小数精度）。
+  const fxRateDisplay =
+    needsManualFxRate && lastManualFieldRef.current === 'local' && amountCentsTotal > 0 && localAmountCents !== null
+      ? String(localAmountCents / amountCentsTotal)
+      : fxRateUsed;
+
+  // 当地金额框的展示值：用户直接编辑时原样回显她敲的字符串（避免"35.0"被格式化
+  // 打断成"35"抢打字光标）；由汇率框反向算出来时用格式化的分转元字符串。
+  const localAmountDisplay =
+    needsManualFxRate && lastManualFieldRef.current === 'local'
+      ? localAmountYuan
+      : localAmountCents !== null
+        ? String(centsToYuan(localAmountCents))
+        : '';
   const includedParticipants = participants.filter((p) => splitIncluded[p.id]);
   const splitCentsTotal = includedParticipants.reduce(
     (sum, p) => sum + yuanToCents(Number(splitAmounts[p.id]) || 0),
@@ -354,8 +398,13 @@ export function ExpenseForm({
       setError('金额要大于 0');
       return;
     }
-    if (needsManualFxRate && !fxRateUsed) {
-      setError(`币种不是本位币 ${baseCurrency}，要填汇率（1 ${currency} = 多少 ${baseCurrency}）`);
+    // fix(2026-09-26 第七十二轮，任务①)：汇率框和当地金额框现在双向联动，随便填
+    // 一个都行，只要 `localAmountCents` 算得出来（要么用户填了汇率，要么直接填了
+    // 当地金额）就放行；两个都没填才拦。
+    if (needsManualFxRate && localAmountCents === null) {
+      setError(
+        `币种不是本位币 ${baseCurrency}，要填汇率（1 ${currency} = 多少 ${baseCurrency}）或者直接填这笔换成 ${baseCurrency} 大概多少钱`
+      );
       return;
     }
     if (!category.trim()) {
@@ -371,7 +420,12 @@ export function ExpenseForm({
     }
 
     const amountCents = yuanToCents(amount);
-    const amountBaseCurrency = needsManualFxRate ? Math.round(amountCents * Number(fxRateUsed)) : amountCents;
+    // fix(2026-09-26 第七十二轮，任务①，精度铁律)：`amountBaseCurrency` 直接用
+    // `localAmountCents`（已经是精确整数分），不再用 `Math.round(amountCents * rate)`
+    // 重新算一遍——那一步的四舍五入正是"填 HK$35.00 却存成 3499/3501"这类偏差的
+    // 来源。`localAmountCents` 本身在用户直接编辑当地金额框时就是从她敲的字符串
+    // 精确转换来的，跟她看到的数字分毫不差。
+    const amountBaseCurrency = needsManualFxRate ? (localAmountCents as number) : amountCents;
 
     let splits: SplitShare[] | undefined;
 
@@ -423,7 +477,11 @@ export function ExpenseForm({
           payerParticipantId,
           amount: amountCents,
           currency,
-          fxRateUsed: needsManualFxRate ? Number(fxRateUsed) : undefined,
+          // fix(2026-09-26 第七十二轮，任务①)：这里存的汇率只是辅助记录信息，不是
+          // 精度铁律要保护的对象——用 `fxRateDisplay`（能自洽解释 amountBaseCurrency
+          // 这个比例的那个值）而不是 `fxRateUsed` 原始输入，避免用户从当地金额框
+          // 反向驱动时，存档的汇率跟实际存的金额比例不一致。
+          fxRateUsed: needsManualFxRate ? Number(fxRateDisplay) : undefined,
           paymentMethodId: selectedPaymentMethodId ?? undefined,
           category: category.trim(),
           // 一律显式传（不像 note 那样空值转 undefined）：编辑时要能靠传空字符串
@@ -507,11 +565,13 @@ export function ExpenseForm({
         </div>
       </div>
 
-      {/* fix(2026-09-26 第七十一轮，任务①)：汇率框 + 当地金额框左右并排——汇率现在会
-          自动带入（见上面 useEffect，拉 /api/trips/{tripId}/fx-mid-rates 现算），
-          用户还是可以直接改这个输入框覆盖自动值；旁边"当地金额（约）"是 amount×fxRateUsed
-          换算成本位币的只读展示，方便一眼确认"这笔换算成本位币大概多少钱"对不对，不是
-          独立可编辑字段（不反向改 amount/fxRateUsed，避免来回换算的舍入误差累积）。 */}
+      {/* fix(2026-09-26 第七十二轮，任务①)：汇率框 + 当地金额框左右并排、双向联动——
+          改汇率会算出新的当地金额，改当地金额也会反过来算出新的汇率，两边随便填一个
+          都行，不用两个都填。`lastManualFieldRef` 记录最后亲手改的是哪一个，谁是
+          canonical、谁是派生展示，见上面那段变量定义的注释。存进数据库的
+          amountBaseCurrency 永远直接等于「当地金额」这个字段最终确定的分值，不会
+          再拿汇率乘回去重算一遍（那正是之前"填 HK$35.00 却存成 3499/3501"这类
+          精度偏差的来源）。 */}
       {needsManualFxRate && (
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-[2px]">
@@ -523,9 +583,10 @@ export function ExpenseForm({
               type="number"
               min="0"
               step="0.0001"
-              value={fxRateUsed}
+              value={fxRateDisplay}
               onChange={(e) => {
                 fxRateTouchedRef.current = true;
+                lastManualFieldRef.current = 'rate';
                 setFxRateUsed(e.target.value);
               }}
               placeholder={liveMidRates ? '已自动带入，可以手动改' : '手动输入，比价拉不到当日汇率也不影响记账'}
@@ -534,15 +595,22 @@ export function ExpenseForm({
           </div>
           <div className="flex flex-col gap-[2px]">
             <label className="field-label" htmlFor="local-amount">
-              当地金额（约，{baseCurrency}）
+              当地金额（{baseCurrency}）
             </label>
-            <div
+            <input
               id="local-amount"
-              className="field-input flex items-center font-serif tabular-nums text-muted"
-              aria-live="polite"
-            >
-              {localAmountCents !== null ? formatMoney(localAmountCents, baseCurrency) : '—'}
-            </div>
+              type="text"
+              inputMode="decimal"
+              value={localAmountDisplay}
+              onChange={(e) => {
+                const candidate = e.target.value;
+                if (!/^\d*\.?\d*$/.test(candidate)) return;
+                lastManualFieldRef.current = 'local';
+                setLocalAmountYuan(candidate);
+              }}
+              placeholder="0.00"
+              className="field-input font-serif tabular-nums"
+            />
           </div>
         </div>
       )}
@@ -595,8 +663,9 @@ export function ExpenseForm({
       </div>
 
       {/* fix(2026-09-25 第七十轮)：手动"不计入分摊"勾选框整段删掉——excludeFromSplit
-          现在纯粹由分类派生（见上面 state 定义），选了机票/宝石这两个分类会自动不计入
-          「我承担」合计，用户没有单独的开关可以改。 */}
+          由分类派生（见上面 state 定义），选了机票/宝石这两个分类会自动不计入
+          「我承担」合计，用户没有单独的开关可以改。fix(2026-09-26 第七十二轮批次②)：
+          编辑已有消费且没改分类时会保留原值而不是重新派生，见上面 state 定义的注释。 */}
 
       {/* fix(2026-09-14 第四轮走查，Remy 本人明确要求"都要做")：这里原本是一张带"比价"
           按钮的卡片（点了拉 /api/trips/{tripId}/fx-recommendation 算哪张卡最划算），
@@ -624,7 +693,11 @@ export function ExpenseForm({
             onChange={(next) => setSelectedPaymentMethodId(next || null)}
             triggerClassName="field-input w-full"
             options={[
-              { value: '', label: '不指定' },
+              // fix(2026-09-26 第七十二轮，任务②)："不指定"这个措辞听起来像是"我不需要
+              // 选"的一个合法选项，但代垫人是自己时这一项其实选不了（会被下面
+              // paymentMethodMissing 拦住）——改成"请选择"，跟原生 <select> 的占位符
+              // 习惯一致，不会让人误以为"不指定"是可以提交的正常状态。
+              { value: '', label: '请选择' },
               ...paymentMethods.map((m) => ({ value: m.id, label: m.label })),
             ]}
           />
@@ -641,6 +714,16 @@ export function ExpenseForm({
           <span className="text-[10px] text-muted">
             只列出这个行程「支付方式」页面里勾选启用的那几张卡/钱包，不是全部支付方式。
           </span>
+        )}
+        {/* fix(2026-09-26 第七十二轮，任务②)：之前只有点了提交按钮才会看到
+            "这笔是自己代垫的，要选一个支付方式才能保存"这句提示（见 handleSubmit 里
+            那句 setError），按钮变灰禁用的当下完全没有说明——用户不点一下提交根本
+            不知道为什么按钮点不动。这里照 splitMismatch 那条提示（下面分摊区块）
+            同款样式，只要 paymentMethodMissing 成立就主动展示，不用等提交失败。 */}
+        {paymentMethodMissing && (
+          <p className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-[9px] py-[5px] text-[10px] text-coral">
+            这笔是自己代垫的，要选一个支付方式才能保存。
+          </p>
         )}
       </div>
 

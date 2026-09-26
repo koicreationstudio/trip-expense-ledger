@@ -24,13 +24,24 @@ export interface NetEntry {
   detail: SettlementDetailEntryDto[];
 }
 
-export interface TransferEntry {
+/**
+ * 转账清单按币种拆开显示（2026-09-26）：同一对 from/to 名下不管欠几个币种，
+ * 都合并成一个"转账组"，组内每个币种各自一行（不再细分支付方式），各自有自己
+ * 的"已收款"勾选状态——htoo 还清了 HKD 那笔不代表 MYR/CNY 也还清了。
+ */
+export interface CurrencyLineDto {
+  currency: string;
+  amountOriginal: number; // 原始币种金额，展示用
+  amountBaseCurrency: number; // 本位币金额，精确
+  confirmed: boolean;
+}
+
+export interface TransferGroupEntry {
   fromParticipantId: string;
   toParticipantId: string;
   fromName: string;
   toName: string;
-  amountBaseCurrency: number;
-  confirmed: boolean;
+  lines: CurrencyLineDto[];
 }
 
 /**
@@ -47,7 +58,7 @@ export function SettlementBody({
   tripId,
   baseCurrency,
   netEntries,
-  transfers,
+  transferGroups,
   myParticipantId,
   isOwner,
   alreadySettled,
@@ -55,23 +66,28 @@ export function SettlementBody({
   tripId: string;
   baseCurrency: string;
   netEntries: NetEntry[];
-  transfers: TransferEntry[];
+  transferGroups: TransferGroupEntry[];
   myParticipantId: string;
   isOwner: boolean;
   alreadySettled: boolean;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // key 现在是 `${from}:${to}:${currency}`——每个币种分行各自独立的"已收款"状态。
   const [confirmedKeys, setConfirmedKeys] = useState<Set<string>>(
-    new Set(transfers.filter((t) => t.confirmed).map((t) => `${t.fromParticipantId}:${t.toParticipantId}`))
+    new Set(
+      transferGroups.flatMap((g) =>
+        g.lines.filter((l) => l.confirmed).map((l) => `${g.fromParticipantId}:${g.toParticipantId}:${l.currency}`)
+      )
+    )
   );
   const [pendingKey, setPendingKey] = useState<string | null>(null);
 
-  async function toggleConfirm(t: TransferEntry) {
-    const key = `${t.fromParticipantId}:${t.toParticipantId}`;
+  async function toggleConfirm(group: TransferGroupEntry, line: CurrencyLineDto) {
+    const key = `${group.fromParticipantId}:${group.toParticipantId}:${line.currency}`;
     const isConfirmed = confirmedKeys.has(key);
     // 只有收款方本人能勾——按钮本身在非收款方视角就已经 disabled，这里再兜底一次，
     // 避免万一 disabled 判断被绕过（比如键盘操作）还是打了一次注定 403 的请求。
-    if (t.toParticipantId !== myParticipantId) return;
+    if (group.toParticipantId !== myParticipantId) return;
 
     setPendingKey(key);
     // 乐观更新：先翻转本地状态，请求失败再翻回去，避免每次点击都要等网络往返才有反馈。
@@ -85,7 +101,11 @@ export function SettlementBody({
       const res = await fetch(`/api/trips/${tripId}/settlement/confirmations`, {
         method: isConfirmed ? 'DELETE' : 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ fromParticipantId: t.fromParticipantId, toParticipantId: t.toParticipantId }),
+        body: JSON.stringify({
+          fromParticipantId: group.fromParticipantId,
+          toParticipantId: group.toParticipantId,
+          currency: line.currency,
+        }),
       });
       if (!res.ok) {
         // 回滚
@@ -101,8 +121,13 @@ export function SettlementBody({
     }
   }
 
-  const totalTransfers = transfers.length;
-  const confirmedCount = transfers.filter((t) => confirmedKeys.has(`${t.fromParticipantId}:${t.toParticipantId}`)).length;
+  // 转账进度现在按"币种分行"数，不是按"转账组"数——一对 from/to 名下有 3 个币种
+  // 就是 3 笔要确认，不是 1 笔。
+  const allLines = transferGroups.flatMap((g) =>
+    g.lines.map((l) => ({ group: g, line: l, key: `${g.fromParticipantId}:${g.toParticipantId}:${l.currency}` }))
+  );
+  const totalTransfers = allLines.length;
+  const confirmedCount = allLines.filter((entry) => confirmedKeys.has(entry.key)).length;
   const allConfirmed = totalTransfers === 0 || confirmedCount === totalTransfers;
 
   return (
@@ -204,9 +229,12 @@ export function SettlementBody({
                     >
                       <span className="min-w-0 flex-1 truncate font-medium">
                         {primaryName}
+                        {/* 这次命名纠正任务（2026-09-26）：文案从"不计分摊"改成
+                            "业务成本"，判断依据（d.excludeFromSplit）没变——见
+                            expense-list.tsx 同款标签处的注释，不重复抄一遍原因。 */}
                         {d.excludeFromSplit && (
                           <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.3)] px-[5px] py-[1px] align-middle text-[8px] font-normal text-muted">
-                            不计分摊
+                            业务成本
                           </span>
                         )}
                       </span>
@@ -233,70 +261,90 @@ export function SettlementBody({
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">转账清单</h2>
-        {transfers.length === 0 ? (
+        {transferGroups.length === 0 ? (
           <p className="text-xs text-muted">目前不需要任何转账。</p>
         ) : (
           <>
-            {/* fix(2026-09-17 第二十轮)：转账清单跟净值清单是同一个 `.list` class，
-                走的是同一套 radius 14px / gap 2px / padding 3px 5px，之前这里各写
-                各的（rounded-xl/gap-2/px-6 py-4），跟净值清单不统一，这次对齐同一套
-                值。行内 `.p-row{gap:5px}`（之前 gap-2=8px）、姓名字号 10.5px、
-                "已收款"提示字/金额 9.5px（之前整行统一用 11.5px，没有照 Artifact
-                区分"名字比金额/提示字大一号"这个层级）。
-                fix(2026-09-17 第二十二轮，Remy 明确表态"要"去掉头像)：round21 曾判断
-                "保留头像帮助一眼认人"，这轮 Remy 直接拍板照方案字面来——方案demo这里
-                只有"Alex → Remy"纯文字，没有头像，去掉，不再保留论证。 */}
-            <ul className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card">
-              {transfers.map((t) => {
-                const key = `${t.fromParticipantId}:${t.toParticipantId}`;
-                const isConfirmed = confirmedKeys.has(key);
-                const canToggle = t.toParticipantId === myParticipantId && !alreadySettled;
-                return (
-                  <li key={key} className="flex flex-wrap items-center gap-[5px] py-[2px]">
-                    <span className={`text-[10.5px] ${isConfirmed ? 'text-muted line-through' : ''}`}>
-                      {t.fromName}
-                    </span>
+            {/* fix(2026-09-26，"结算按币种拆开显示")：转账清单从"一对 from/to 一行"
+                改成"一对 from/to 一组，组内每个币种各自一行 + 一个合计"——同一个币种
+                不管当时用哪种支付方式付的，都合并成一行，不再细分支付方式。组与组
+                之间用同样的胶囊卡包一层，组内用 border-top 分隔各币种行，规格延续
+                之前"净值清单"分类明细那套（bg rgba(164,163,160,.14) + border sand +
+                radius 14px），不是另起一套新样式。 */}
+            {transferGroups.map((group) => {
+              const groupKey = `${group.fromParticipantId}:${group.toParticipantId}`;
+              const totalBaseCurrency = group.lines.reduce((sum, l) => sum + l.amountBaseCurrency, 0);
+              return (
+                <ul
+                  key={groupKey}
+                  className="flex flex-col gap-[2px] rounded-[14px] border border-sand bg-[rgba(164,163,160,.14)] px-[5px] py-[3px] shadow-card"
+                >
+                  <li className="flex items-center gap-[5px] py-[2px] text-[10.5px]">
+                    <span>{group.fromName}</span>
                     <span className="text-muted" aria-hidden="true">
                       →
                     </span>
-                    <span className={`text-[10.5px] ${isConfirmed ? 'text-muted line-through' : ''}`}>
-                      {t.toName}
-                    </span>
-                    {/* fix(2026-09-17 第十九轮，独立 ui-auditor 盲测坐实)：Artifact 每一行
-                        checkbox 旁边都有个可见的"已收款"文字标签（`<span class="hint">已收款</span>`），
-                        之前只写了 aria-label，屏幕上看不到任何文字说明这个勾选框是干嘛的。
-                        fix(2026-09-24 第五十轮)：原生方框 checkbox 换成全站统一的深色开关
-                        `components/switch.tsx`（round39 从 expense-form.tsx 抽出来的共用组件，
-                        payment-methods-manager.tsx"本行程启用的支付方式"那批也是调用同一个
-                        组件），不新写样式。DOM 结构照抄那边的写法——Switch 和 <label htmlFor>
-                        同级摆放，不是 label 包 input，保证行为/可访问性一致。勾选逻辑
-                        （toggleConfirm/canToggle/pendingKey）完全没动，只换视觉。 */}
-                    <span className="ml-auto flex items-center gap-[5px]">
-                      <Switch
-                        id={`settle-confirm-${key}`}
-                        checked={isConfirmed}
-                        disabled={!canToggle || pendingKey === key}
-                        onChange={() => toggleConfirm(t)}
-                        ariaLabel={`${t.fromName} 转给 ${t.toName} 已收款`}
-                      />
-                      <label
-                        htmlFor={`settle-confirm-${key}`}
-                        className={`text-[9.5px] text-muted ${canToggle ? 'cursor-pointer' : ''}`}
-                      >
-                        已收款
-                      </label>
-                    </span>
-                    <span className="font-serif text-[9.5px] tabular-nums">
-                      {formatMoney(t.amountBaseCurrency, baseCurrency)}
-                    </span>
+                    <span>{group.toName}</span>
                   </li>
-                );
-              })}
-            </ul>
+                  {group.lines.map((line, i) => {
+                    const key = `${groupKey}:${line.currency}`;
+                    const isConfirmed = confirmedKeys.has(key);
+                    const canToggle = group.toParticipantId === myParticipantId && !alreadySettled;
+                    // 原始币种就是行程本位币时，两个数字完全一样，不重复显示括号里的
+                    // "≈本位币等值"——只有换算过的币种才需要那个参考数字。
+                    const showBaseEquivalent = line.currency !== baseCurrency;
+                    return (
+                      <li
+                        key={key}
+                        className={`flex flex-wrap items-center gap-[5px] py-[2px] ${i > 0 ? 'border-t border-sand' : ''}`}
+                      >
+                        <span className="text-[9px] text-muted">{line.currency}</span>
+                        <span className="ml-auto flex items-center gap-[5px]">
+                          <Switch
+                            id={`settle-confirm-${key}`}
+                            checked={isConfirmed}
+                            disabled={!canToggle || pendingKey === key}
+                            onChange={() => toggleConfirm(group, line)}
+                            ariaLabel={`${group.fromName} 转给 ${group.toName} 的 ${line.currency} 已收款`}
+                          />
+                          <label
+                            htmlFor={`settle-confirm-${key}`}
+                            className={`text-[9.5px] text-muted ${canToggle ? 'cursor-pointer' : ''}`}
+                          >
+                            已收款
+                          </label>
+                        </span>
+                        <span
+                          className={`font-serif text-[9.5px] tabular-nums ${isConfirmed ? 'text-muted line-through' : ''}`}
+                        >
+                          {showBaseEquivalent && '≈'}
+                          {formatMoney(line.amountOriginal, line.currency)}
+                          {showBaseEquivalent && (
+                            <span className="text-muted">
+                              {' '}
+                              (≈{formatMoney(line.amountBaseCurrency, baseCurrency)})
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                  {group.lines.length > 1 && (
+                    <li className="flex items-center gap-[5px] border-t border-sand py-[2px] text-[9.5px]">
+                      <span className="text-muted">合计</span>
+                      <span className="ml-auto font-serif tabular-nums">
+                        ≈{formatMoney(totalBaseCurrency, baseCurrency)}
+                      </span>
+                    </li>
+                  )}
+                </ul>
+              );
+            })}
             {!alreadySettled && (
               <p className="text-[10px] text-muted">
                 转账进度：{confirmedCount}/{totalTransfers} 笔已确认收款
-                {!transfers.some((t) => t.toParticipantId === myParticipantId) && '（只有收款方本人能勾选确认）'}
+                {!transferGroups.some((g) => g.toParticipantId === myParticipantId) &&
+                  '（只有收款方本人能勾选确认）'}
               </p>
             )}
           </>

@@ -30,6 +30,18 @@ export default async function TripLayout({
     `[diag-server] TripLayout tripId=${params.tripId} identity=${identity ? `${identity.tripId}/${identity.participantId}` : 'null'}`
   );
   if (!identity || identity.tripId !== params.tripId) {
+    // fix(2026-09-26 第七十二轮，round72 A组⑥①，根治"直接输网址有时停在上一趟
+    // 行程"的真根因)：之前这里不管三七二十一直接弹回首页——Layer 1 tel_session
+    // 当前指着别的行程时，首页又会把人送回 identity.tripId 那趟"当前激活"的行程，
+    // 完全没检查这个人是不是透过 Layer 2 账号真的拥有这趟目标行程。改成先看有没有
+    // Layer 2 账号，有就先去 /api/account/auto-switch-trip/{tripId} 查一下这个账号
+    // 在目标行程里有没有合法 participant，有就地铸一个新 tel_session 再跳回来，
+    // 没有才真的弹回首页（跟原来行为一致）。纯访客 tel_session（没有 Layer 2 账号）
+    // 维持原来的行为不变，直接弹回首页。详见那个 route 文件顶部注释。
+    const user = await getCurrentUser();
+    if (user) {
+      redirect(`/api/account/auto-switch-trip/${params.tripId}`);
+    }
     redirect('/');
   }
 

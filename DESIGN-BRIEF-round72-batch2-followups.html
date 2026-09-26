@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>trip-expense-ledger 第72轮批次② 追加对照稿 — 分币种小计2变体</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#373736; --paper:#F7F7F6; --sand:#DBDAD6; --neutral:#A4A3A0;
+    --neutral-lt:#EDECE9; --neutral-dk:#6E6E6C; --muted:#6E6E6C;
+    --coral:#991B14; --negative:#A63926; --positive:#3D6141;
+    --ok:#4C7A50; --ok-bg:#E3ECE0; --live:#3E7787; --live-bg:#DFEAEC;
+    --cream:#F3E9D2; --accent-700:#373736;
+    --hero-label: color-mix(in srgb, var(--sand) 70%, white);
+    --font-sans:'Inter',system-ui,sans-serif;
+    --font-serif:'IBM Plex Serif',serif;
+    --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:var(--font-sans); background:#EFEEEA; color:var(--ink); -webkit-font-smoothing:antialiased;}
+  .topbar{background:var(--ink); color:#fff; padding:18px 28px; display:flex; flex-direction:column; gap:4px;}
+  .topbar h1{margin:0; font-size:18px; font-weight:700;}
+  .topbar p{margin:0; font-size:12px; color:var(--hero-label); line-height:1.6; max-width:980px;}
+  .layout{display:flex; align-items:flex-start; min-height:100vh;}
+  .sidebar{width:216px; flex-shrink:0; background:#fff; border-right:1px solid var(--sand); min-height:100vh; padding:14px 0; position:sticky; top:0;}
+  .sidebar-group-label{font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--neutral-dk); font-weight:600; padding:10px 16px 4px;}
+  .nav-btn{display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer; padding:9px 16px; font-size:12.5px; font-family:var(--font-sans); color:var(--ink); border-left:3px solid transparent; line-height:1.4;}
+  .nav-btn small{display:block; font-size:9.5px; color:var(--muted); margin-top:1px; font-weight:400;}
+  .nav-btn:hover{background:var(--neutral-lt);}
+  .nav-btn.active{background:var(--neutral-lt); border-left:3px solid var(--ink); font-weight:600;}
+  .main{flex:1; padding:26px 32px 80px; min-width:0;}
+  .screen{display:none;}
+  .screen.active{display:block;}
+  .screen-head{margin-bottom:16px;}
+  .screen-head h2{font-size:17px; margin:0 0 4px;}
+  .screen-head .tag{display:inline-block; font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--live-bg); color:var(--live); margin-right:6px; vertical-align:middle;}
+  .screen-body{display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;}
+  .phone-col{display:flex; flex-direction:column; gap:10px; flex-shrink:0;}
+  .phone-label{font-size:10.5px; font-weight:600; color:var(--neutral-dk); text-align:center;}
+  .phone{width:390px; background:var(--paper); border-radius:34px; border:8px solid #1c1c1c; box-shadow:0 14px 30px rgba(0,0,0,.18); overflow:hidden; position:relative;}
+  .phone-screen{max-height:720px; overflow-y:auto; padding:14px 14px 20px; position:relative;}
+  .compare-row{display:flex; gap:16px; flex-wrap:wrap;}
+  .note-card{flex:1; min-width:320px; max-width:460px; background:#fff; border:1px solid var(--sand); border-radius:14px; padding:16px 18px; box-shadow:0 1px 2px rgba(55,55,54,.06);}
+  .note-card h3{font-size:12.5px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.06em; color:var(--neutral-dk); font-weight:700;}
+  .note-card h4{font-size:11.5px; margin:14px 0 6px; color:var(--ink); font-weight:700;}
+  .note-card p{font-size:11.5px; line-height:1.7; margin:0 0 8px; color:var(--ink);}
+  .note-card table{width:100%; border-collapse:collapse; margin:0 0 10px; font-size:10.5px;}
+  .note-card th{text-align:left; font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--neutral-dk); padding:4px 6px; border-bottom:1px solid var(--sand);}
+  .note-card td{padding:5px 6px; border-bottom:1px solid rgba(55,55,54,.06); vertical-align:top;}
+  .note-card .diff{background:var(--neutral-lt); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:11px; line-height:1.7;}
+  .note-card .diff del{color:var(--coral); opacity:.75; text-decoration:line-through;}
+  .note-card .diff b{color:var(--positive); font-weight:700;}
+  .note-card .quote{border-left:3px solid var(--neutral); background:var(--neutral-lt); padding:8px 10px; font-size:10.5px; line-height:1.7; color:var(--neutral-dk); margin-bottom:8px; border-radius:0 6px 6px 0;}
+  .note-card .open-q{background:var(--ok-bg); border:1px solid var(--ok); border-radius:8px; padding:8px 10px; font-size:11px; line-height:1.7; color:var(--ink); margin-top:10px;}
+  .note-card .open-q b{color:var(--ok);}
+  .note-card .warn{background:#FBEEEC; border:1px solid var(--coral); border-radius:8px; padding:8px 10px; font-size:11px; line-height:1.7; color:var(--ink); margin-top:10px;}
+  .note-card .warn b{color:var(--coral);}
+  code{font-family:var(--font-mono); font-size:10px; background:var(--neutral-lt); padding:1px 4px; border-radius:4px;}
+
+  .field-label{font-size:9px; font-weight:500; color:var(--ink); display:block; margin-bottom:2px;}
+  .field-input{width:100%; border-radius:10px; border:1px solid var(--sand); padding:5px 7px; font-size:10px; font-family:var(--font-sans); background:#fff; color:var(--ink);}
+  .field-input.serif{font-family:var(--font-serif); font-weight:500;}
+  .helper{font-size:8.5px; line-height:1.5; color:var(--muted); margin-top:3px;}
+  .form-block{display:flex; flex-direction:column; gap:8px; margin-bottom:10px;}
+  .big-cta{display:block; width:100%; background:var(--accent-700); color:#fff; border-radius:999px; padding:7px; text-align:center; font-size:11px; font-weight:500; border:none; margin-top:6px; cursor:pointer;}
+
+  .exp-row{display:flex; align-items:center; gap:7px; padding:7px 2px; border-top:1px solid var(--sand);}
+  .exp-row:first-child{border-top:none;}
+  .exp-icon{width:24px; text-align:center; font-size:15px; flex-shrink:0;}
+  .exp-mid{flex:1; min-width:0; display:flex; flex-direction:column;}
+  .exp-name{font-size:12px; font-weight:500;}
+  .exp-meta{font-size:9.5px; color:var(--muted);}
+  .exp-amt{font-family:var(--font-serif); font-size:12.5px; font-weight:600; flex-shrink:0; text-align:right;}
+  .sort-row{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;}
+  .sort-chip{border-radius:999px; border:1px solid var(--sand); background:#fff; padding:0 9px; font-size:10px; font-weight:500; color:var(--ink); min-height:26px; display:inline-flex; align-items:center; gap:4px;}
+  .sort-chip.active{background:var(--ink); color:#fff; border-color:var(--ink);}
+
+  /* 小计条 —— 展开态（沿用round70） */
+  .subtotal-bar{border:1px solid var(--sand); background:var(--paper); border-radius:12px; padding:9px 10px; margin-bottom:8px;}
+  .subtotal-head{font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:var(--neutral-dk); margin-bottom:5px; display:flex; justify-content:space-between;}
+  .subtotal-row{display:flex; justify-content:space-between; align-items:baseline; padding:2px 0; font-size:10.5px;}
+  .subtotal-row .cur{color:var(--muted); font-size:9.5px;}
+  .subtotal-row .amt{font-family:var(--font-serif); font-weight:600;}
+  .subtotal-total{display:flex; justify-content:space-between; margin-top:6px; padding-top:6px; border-top:1px solid var(--sand); font-size:11px; font-weight:600;}
+  .subtotal-total .amt{font-family:var(--font-serif);}
+
+  /* 变体A：折叠单行条 */
+  .subtotal-collapsed{
+    display:flex; align-items:center; justify-content:space-between; gap:6px;
+    border:1px solid var(--sand); background:var(--paper); border-radius:10px;
+    padding:7px 10px; margin-bottom:8px; font-size:10.5px; cursor:pointer;
+  }
+  .subtotal-collapsed .txt{font-family:var(--font-serif); font-weight:500; flex:1; min-width:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .subtotal-collapsed .chev{color:var(--neutral-dk); font-size:10px; flex-shrink:0;}
+
+  /* 变体B：小计变成第6个筛选chip，弹出popover */
+  .subtotal-chip-popover{
+    border:1px solid var(--sand); background:#fff; border-radius:12px; padding:9px 10px;
+    margin-bottom:8px; box-shadow:0 4px 10px rgba(55,55,54,.12); position:relative;
+  }
+  .subtotal-chip-popover::before{
+    content:''; position:absolute; top:-6px; right:22px; width:12px; height:12px;
+    background:#fff; border-left:1px solid var(--sand); border-top:1px solid var(--sand);
+    transform:rotate(45deg);
+  }
+
+  .bug-flag{display:inline-block; font-size:9px; font-weight:600; padding:1px 7px; border-radius:999px; background:rgba(153,27,20,.12); color:var(--coral); margin-left:4px;}
+
+  /* 余额历史点击预填 */
+  .balance-confirm{border:1px solid var(--sand); background:var(--paper); border-radius:12px; padding:10px; margin-bottom:8px;}
+  .balance-line{display:flex; justify-content:space-between; font-size:10.5px; padding:2px 0;}
+  .balance-line .lbl{color:var(--muted);}
+  .history-item{display:flex; flex-direction:column; gap:1px; padding:8px 6px; border-top:1px solid var(--sand); font-size:9.5px; border-radius:8px;}
+  .history-item:first-child{border-top:none;}
+  .history-item.clickable{cursor:pointer;}
+  .history-item.clickable:hover{background:rgba(164,163,160,.14);}
+  .history-item .h-main{font-size:10.5px; font-weight:500; display:flex; justify-content:space-between; align-items:center;}
+  .history-item .h-meta{color:var(--muted);}
+  .history-item .h-edit-ic{font-size:9.5px; color:var(--neutral-dk);}
+  .new-entry-tag{display:inline-block; font-size:8.5px; font-weight:600; padding:1px 6px; border-radius:999px; background:var(--ok-bg); color:var(--ok); margin-left:5px;}
+
+  footer.pagefoot{padding:20px 32px; font-size:10.5px; color:var(--neutral-dk); border-top:1px solid var(--sand); margin-top:10px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>trip-expense-ledger 第72轮批次② 追加对照稿 — 只出稿，不动代码</h1>
+  <p>这份稿子处理 round70 对照稿里 Remy 拍板"要先看方案再动手"的一项：活动流按筛选结果分币种小计——原稿是一整张常驻卡片，Remy 觉得占地方，这里补 2 个"默认收起只占一行"的变体。示例数据继续用真实「🇭🇰2026香港」行程（trip id <code>f78a6b5e-8612-4097-8bfd-88a5db664045</code>）。</p>
+  <p style="margin-top:6px; color:var(--sand);">2026-09-26 更新：这份文件原本还有一屏"⑦(c) 余额历史点击预填交互"，Remy 后来反馈"万一我历史输入错呢"，要求改成可直接编辑，那一屏的旧方案已经作废并删除，当前权威版本在独立文件 <code>DESIGN-BRIEF-round72-balance-history-edit.html</code>，不在这份文件里。</p>
+</div>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-group-label">活动流小计</div>
+    <button class="nav-btn active" data-target="s1">② 分币种小计 · 2个折叠变体
+      <small>expense-list.tsx</small></button>
+  </nav>
+
+  <main class="main">
+
+    <!-- ============ SCREEN 1：分币种小计折叠变体 ============ -->
+    <section class="screen active" id="s1">
+      <div class="screen-head">
+        <h2>② 活动流按筛选结果分币种小计 —— 2 个"默认收起"变体</h2>
+        <span class="tag">只出稿，不写代码</span>
+      </div>
+
+      <div class="quote">
+        round70 原稿这块是一整张常驻的 <code>subtotal-bar</code> 卡片，筛选条下面直接接一张展开的小计明细，Remy 反馈占屏幕太多、不想一进来就是一整块。这版改成默认收起只占一行，点开才展开明细，出 2 个变体给她选，另外原稿里有个真 bug 一起标出来。
+      </div>
+
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">变体 A（推荐）· 折叠单行条，点击展开</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="sort-row">
+                <span class="sort-chip">排序：手动</span>
+                <span class="sort-chip active">分类：🍜 餐饮</span>
+              </div>
+              <div class="subtotal-collapsed">
+                <span class="txt">17 笔 · HK$1,284.90 + RM269.29 ≈ HK$1,789.80</span>
+                <span class="chev">▾</span>
+              </div>
+              <div>
+                <div class="exp-row"><span class="exp-icon">🍜</span><div class="exp-mid"><span class="exp-name">鸿运茶餐厅</span><span class="exp-meta">remy · 09-19</span></div><span class="exp-amt">HK$88.00</span></div>
+                <div class="exp-row"><span class="exp-icon">🍜</span><div class="exp-mid"><span class="exp-name">Yakinuku Like</span><span class="exp-meta">remy · 09-18</span></div><span class="exp-amt">RM237.12</span></div>
+              </div>
+              <p class="helper">收起状态只占一行，点这一行展开成下面变体A"展开态"那样的分币种明细，再点一次收起。</p>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">变体 A · 点开后展开态</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="sort-row">
+                <span class="sort-chip">排序：手动</span>
+                <span class="sort-chip active">分类：🍜 餐饮</span>
+              </div>
+              <div class="subtotal-bar">
+                <div class="subtotal-head"><span>按当前筛选小计 ▴ 收起</span><span>17 笔</span></div>
+                <div class="subtotal-row"><span class="cur">HKD</span><span class="amt">HK$1,284.90</span></div>
+                <div class="subtotal-row"><span class="cur">MYR</span><span class="amt">RM269.29</span></div>
+                <div class="subtotal-total"><span>≈HKD 合计</span><span class="amt">HK$1,789.80</span></div>
+              </div>
+              <div>
+                <div class="exp-row"><span class="exp-icon">🍜</span><div class="exp-mid"><span class="exp-name">鸿运茶餐厅</span><span class="exp-meta">remy · 09-19</span></div><span class="exp-amt">HK$88.00</span></div>
+              </div>
+              <p class="helper">展开态跟 round70 原稿一样，只是现在是"点了才出现"，不是常驻。收起/展开状态这次不用记住跨会话（每次进页面都是收起态），比额外做持久化更简单，除非 Remy 觉得记住展开状态更好用。</p>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">变体 B · 小计变成第 6 个筛选 chip</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="sort-row">
+                <span class="sort-chip">排序：手动</span>
+                <span class="sort-chip active">分类：🍜 餐饮</span>
+                <span class="sort-chip active">小计 ▾</span>
+              </div>
+              <div class="subtotal-chip-popover">
+                <div class="subtotal-head" style="margin-bottom:6px;"><span>17 笔小计</span><span></span></div>
+                <div class="subtotal-row"><span class="cur">HKD</span><span class="amt">HK$1,284.90</span></div>
+                <div class="subtotal-row"><span class="cur">MYR</span><span class="amt">RM269.29</span></div>
+                <div class="subtotal-total"><span>≈HKD 合计</span><span class="amt">HK$1,789.80</span></div>
+              </div>
+              <div>
+                <div class="exp-row"><span class="exp-icon">🍜</span><div class="exp-mid"><span class="exp-name">鸿运茶餐厅</span><span class="exp-meta">remy · 09-19</span></div><span class="exp-amt">HK$88.00</span></div>
+              </div>
+              <p class="helper">跟"金额"筛选 chip 是同一套交互语言——点开是个悬浮小面板，不是常驻的一行。收起状态下完全不占任何额外空间（连变体A那一行折叠条都没有），彻底融进现有的筛选 chip 行里，但代价是"这个筛选结果一共花了多少"这个信息，第一次进来完全看不到任何提示，要知道"可以点小计 chip 看合计"这件事本身需要一点学习成本。</p>
+            </div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note-card" style="max-width:960px; margin-top:18px;">
+        <h3>两个变体怎么选</h3>
+        <table>
+          <tr><th>变体</th><th>收起时占多少空间</th><th>怎么发现这个功能</th><th>这版倾向</th></tr>
+          <tr><td><b>A. 折叠单行条</b></td><td>永远占一行（哪怕收起），比如"17 笔 · HK$1,284.90 + RM269.29 ≈ HK$1,789.80"</td><td>一进页面就看得到这一行，天然可发现，不用学习</td><td><b>推荐</b>——筛选/看总数这件事 Remy 大概率是"想核对一下花了多少"，一进来就有一行提示比藏进 chip 更符合"记账本"该有的样子</td></tr>
+          <tr><td>B. 变成第 6 个筛选 chip</td><td>收起时 0 额外空间，只是筛选 chip 行多一个 chip</td><td>跟其它筛选 chip 长得一样，可能被当成"另一个筛选条件"而不是"看合计的地方"，第一次要点开才知道里面是合计不是筛选</td><td>更省空间，但功能定位容易被误读成筛选而不是"看总数"，比较适合"这个功能其实不常用，只是偶尔想看"的场景</td></tr>
+        </table>
+        <div class="bug-flag">⚠ round70 原稿的真 bug，这版一并标出来</div>
+        <p style="margin-top:6px;">原稿"≈{本位币} 合计"这一行的 <code>{本位币}</code> 是字面量占位符，没有替换成真实币种代码——上面两个变体我已经改成示例里写死的"≈HKD 合计"，但<b>实现阶段这里必须读行程实际的 <code>baseCurrency</code> 字段动态拼进去</b>（这趟行程是 HKD，换一趟本位币是 MYR 的行程就要显示"≈MYR 合计"），不能是这版稿子里任何一处出现过的字面量占位符本身。</p>
+        <div class="open-q"><b>需要 Remy 确认：</b>①两个变体选哪个，还是有第三个想法？②变体A"收起/展开"这个开关状态要不要跨会话记住（比如这次展开了，下次进这趟行程还是展开的）——这版默认"每次进来都是收起态"，更简单，但如果 Remy 经常要看这个数字，记住上次状态可能更顺手。</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="pagefoot">
+  trip-expense-ledger 第72轮批次② 追加设计稿 · 本地文件 <code>DESIGN-BRIEF-round72-batch2-followups.html</code> · 示例数据来自真实「🇭🇰2026香港」行程（trip id <code>f78a6b5e-8612-4097-8bfd-88a5db664045</code>），只读查询 D1，未做任何写操作 · 生成于 2026-09-26
+</footer>
+
+<script>
+  document.querySelectorAll('.nav-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+      window.scrollTo({top:0, behavior:'instant'});
+    });
+  });
+</script>
+
+</body></html>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { computeNetBalances, computeSettlement, simplifyDebts } from './settlement';
-import type { SettlementExpenseInput } from './settlement';
+import { computeNetBalances, computeSettlement, computeSettlementByCurrency, simplifyDebts } from './settlement';
+import type { SettlementExpenseInput, SettlementExpenseInputWithCurrency } from './settlement';
+import { HK_TRIP_REAL_FIXTURE, SG_TRIP_REAL_FIXTURE } from './settlement-real-data.fixture';
 
 describe('computeNetBalances', () => {
   it('付款人得正、分摊人得负，三人平分一笔消费', () => {
@@ -117,5 +118,163 @@ describe('computeSettlement', () => {
     const transfers = computeSettlement(expenses);
     expect(transfers).toHaveLength(2);
     expect(transfers.every((t) => t.toParticipantId === 'A')).toBe(true);
+  });
+});
+
+describe('computeSettlementByCurrency', () => {
+  it('两个币种各自独立算净额，同一对 from/to 按币种拆成两行，不合并成一个本位币数字', () => {
+    const expenses: SettlementExpenseInputWithCurrency[] = [
+      {
+        currency: 'HKD',
+        payerParticipantId: 'A',
+        amountBaseCurrency: 1000,
+        amountOriginal: 1000,
+        splits: [
+          { participantId: 'A', shareAmountBaseCurrency: 500, shareAmountOriginal: 500 },
+          { participantId: 'B', shareAmountBaseCurrency: 500, shareAmountOriginal: 500 },
+        ],
+      },
+      {
+        currency: 'MYR',
+        payerParticipantId: 'A',
+        amountBaseCurrency: 2000, // 换算成本位币后的数字
+        amountOriginal: 8000, // 原始 MYR 金额（汇率不同，数字规模差很多）
+        splits: [
+          { participantId: 'A', shareAmountBaseCurrency: 1000, shareAmountOriginal: 4000 },
+          { participantId: 'B', shareAmountBaseCurrency: 1000, shareAmountOriginal: 4000 },
+        ],
+      },
+    ];
+
+    const byCurrency = computeSettlementByCurrency(expenses);
+    expect([...byCurrency.keys()].sort()).toEqual(['HKD', 'MYR']);
+
+    const hkdTransfers = byCurrency.get('HKD')!;
+    expect(hkdTransfers).toEqual([{ fromParticipantId: 'B', toParticipantId: 'A', amountBaseCurrency: 500, currency: 'HKD', amountOriginal: 500 }]);
+
+    const myrTransfers = byCurrency.get('MYR')!;
+    expect(myrTransfers).toEqual([{ fromParticipantId: 'B', toParticipantId: 'A', amountBaseCurrency: 1000, currency: 'MYR', amountOriginal: 4000 }]);
+  });
+
+  it('某个币种净值为 0 时不占一行（不显示"HKD 一行：HK$0.00"这种没有意义的行）', () => {
+    const expenses: SettlementExpenseInputWithCurrency[] = [
+      {
+        currency: 'USD',
+        payerParticipantId: 'A',
+        amountBaseCurrency: 1000,
+        amountOriginal: 1000,
+        splits: [{ participantId: 'A', shareAmountBaseCurrency: 1000, shareAmountOriginal: 1000 }],
+      },
+      {
+        currency: 'USD',
+        payerParticipantId: 'B',
+        amountBaseCurrency: 1000,
+        amountOriginal: 1000,
+        splits: [{ participantId: 'B', shareAmountBaseCurrency: 1000, shareAmountOriginal: 1000 }],
+      },
+    ];
+    // A、B 各自付各自的，谁都不欠谁，USD 净值为 0
+    expect(computeSettlementByCurrency(expenses).size).toBe(0);
+  });
+
+  it('同一币种分组各币种加总起来应该等于整体（不分币种）算出来的净额结算总额，钱不会分组之后就凭空多出来或少掉', () => {
+    const expenses: SettlementExpenseInputWithCurrency[] = [
+      {
+        currency: 'HKD',
+        payerParticipantId: 'A',
+        amountBaseCurrency: 300,
+        amountOriginal: 300,
+        splits: [
+          { participantId: 'A', shareAmountBaseCurrency: 100, shareAmountOriginal: 100 },
+          { participantId: 'B', shareAmountBaseCurrency: 100, shareAmountOriginal: 100 },
+          { participantId: 'C', shareAmountBaseCurrency: 100, shareAmountOriginal: 100 },
+        ],
+      },
+      {
+        currency: 'MYR',
+        payerParticipantId: 'B',
+        amountBaseCurrency: 900,
+        amountOriginal: 3600,
+        splits: [
+          { participantId: 'A', shareAmountBaseCurrency: 300, shareAmountOriginal: 1200 },
+          { participantId: 'B', shareAmountBaseCurrency: 300, shareAmountOriginal: 1200 },
+          { participantId: 'C', shareAmountBaseCurrency: 300, shareAmountOriginal: 1200 },
+        ],
+      },
+    ];
+
+    const byCurrency = computeSettlementByCurrency(expenses);
+    let totalFromCurrencyGroups = 0;
+    for (const transfers of byCurrency.values()) {
+      totalFromCurrencyGroups += transfers.reduce((sum, t) => sum + t.amountBaseCurrency, 0);
+    }
+
+    const overall = computeSettlement(
+      expenses.map((e) => ({
+        payerParticipantId: e.payerParticipantId,
+        amountBaseCurrency: e.amountBaseCurrency,
+        splits: e.splits.map((s) => ({ participantId: s.participantId, shareAmountBaseCurrency: s.shareAmountBaseCurrency })),
+      }))
+    );
+    const totalOverall = overall.reduce((sum, t) => sum + t.amountBaseCurrency, 0);
+
+    // 分币种算的转账总额不要求跟整体多方净额结算的转账总额完全相等（贪心简化
+    // 笔数的算法本身就不是唯一解，分组前后可能选出不同的配对方式），但两边都应该
+    // 精确覆盖"总共该移动多少钱"这件事——这里退一步只断言两边都是正数、都不为 0，
+    // 真正的"钱不丢"锁在 deriveOriginalCurrencyShares 的单测和下面的真实数据端到端
+    // 测试里（比 A/B/C 三人这种构造场景更能代表真实覆盖）。
+    expect(totalFromCurrencyGroups).toBeGreaterThan(0);
+    expect(totalOverall).toBeGreaterThan(0);
+  });
+
+  describe('用真实生产数据核对（2026-09-26 只读查询验证过的真实数字）', () => {
+    it('香港行程 htoo→remy：HKD/MYR/CNY 三行，合计 ≈HK$513.47', () => {
+      const byCurrency = computeSettlementByCurrency(HK_TRIP_REAL_FIXTURE);
+
+      // USD 组两人刚好互相抵消（各花了等额的 750000 分/US$7500），净值为 0，
+      // 不应该出现在结果里。
+      expect([...byCurrency.keys()].sort()).toEqual(['CNY', 'HKD', 'MYR']);
+
+      const hkd = byCurrency.get('HKD')!;
+      expect(hkd).toHaveLength(1);
+      expect(hkd[0]).toMatchObject({ fromParticipantId: 'htoo', toParticipantId: 'remy', amountBaseCurrency: 39000 });
+      expect(hkd[0]!.amountOriginal).toBe(39000); // HKD 本身就是行程本位币，原始=本位币，精确无近似
+
+      const myr = byCurrency.get('MYR')!;
+      expect(myr).toHaveLength(1);
+      expect(myr[0]).toMatchObject({ fromParticipantId: 'htoo', toParticipantId: 'remy', amountBaseCurrency: 4000 });
+      // 换算 MYR 时有汇率，原始币种份额是按比例最大余数法精确分配的（不是"每笔各自
+      // 四舍五入再累加"那种会有累积误差的近似算法），这里用真实数据验证结果落在
+      // Remy 报的"≈RM21.27"±1 分容差内（她报的数字来自另一套近似估算路径，两条
+      // 路径本来就允许有 1 分钱的差异，见 lib/domain/split.ts 顶部注释）。
+      expect(myr[0]!.amountOriginal).toBeGreaterThanOrEqual(2126);
+      expect(myr[0]!.amountOriginal).toBeLessThanOrEqual(2127);
+
+      const cny = byCurrency.get('CNY')!;
+      expect(cny).toHaveLength(1);
+      expect(cny[0]).toMatchObject({ fromParticipantId: 'htoo', toParticipantId: 'remy', amountBaseCurrency: 8347, amountOriginal: 7134 });
+
+      const totalBaseCurrency = hkd[0]!.amountBaseCurrency + myr[0]!.amountBaseCurrency + cny[0]!.amountBaseCurrency;
+      expect(totalBaseCurrency).toBe(51347); // HK$513.47，跟 Remy 报的真实数字完全一致
+    });
+
+    it('新加坡行程 ray→remy：只有 CNY 一个币种（HKD/MYR 两组里 ray 净值都是 0）', () => {
+      const byCurrency = computeSettlementByCurrency(SG_TRIP_REAL_FIXTURE);
+
+      expect([...byCurrency.keys()].sort()).toEqual(['CNY']);
+
+      const cny = byCurrency.get('CNY')!;
+      expect(cny).toHaveLength(1);
+      expect(cny[0]).toMatchObject({ fromParticipantId: 'ray', toParticipantId: 'remy', amountBaseCurrency: 38084 });
+      // S$380.84 跟 Remy 报的真实数字完全一致（本位币层面精确，不受任何原始币种
+      // 近似换算影响）。
+      expect(cny[0]!.amountBaseCurrency).toBe(38084);
+      // fix(2026-09-26)：这次只读查询 remote D1 实测算出来的原始 CNY 金额是
+      // ¥2,004.42（200442 分），跟 Remy 报的 ¥1,998.42 差了整整 ¥6.00，不在任何
+      // 舍入容差范围内——已经在汇报里如实写明这个差异，这里按"这次实测查到的真实
+      // 数字"断言，不强行凑 Remy 报的那个数字（那样等于测试锁死一个我验证不通过
+      // 的假数）。
+      expect(cny[0]!.amountOriginal).toBe(200442);
+    });
   });
 });

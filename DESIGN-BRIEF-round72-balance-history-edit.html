@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>trip-expense-ledger 余额历史「可直接编辑」新规格 — 第72轮第三批对照稿</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#373736; --paper:#F7F7F6; --sand:#DBDAD6; --neutral:#A4A3A0;
+    --neutral-lt:#EDECE9; --neutral-dk:#6E6E6C; --muted:#6E6E6C;
+    --coral:#991B14; --negative:#A63926; --positive:#3D6141;
+    --ok:#4C7A50; --ok-bg:#E3ECE0; --live:#3E7787; --live-bg:#DFEAEC;
+    --cream:#F3E9D2; --accent-700:#373736; --accent-800:#252524;
+    --hero-label: color-mix(in srgb, var(--sand) 70%, white);
+    --font-sans:'Inter',system-ui,sans-serif;
+    --font-serif:'IBM Plex Serif',serif;
+    --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:var(--font-sans); background:#EFEEEA; color:var(--ink); -webkit-font-smoothing:antialiased;}
+  .topbar{background:var(--ink); color:#fff; padding:18px 28px; display:flex; flex-direction:column; gap:4px;}
+  .topbar h1{margin:0; font-size:18px; font-weight:700;}
+  .topbar p{margin:0; font-size:12px; color:var(--hero-label); line-height:1.6; max-width:980px;}
+  .layout{display:flex; align-items:flex-start; min-height:100vh;}
+  .sidebar{width:236px; flex-shrink:0; background:#fff; border-right:1px solid var(--sand); min-height:100vh; padding:14px 0; position:sticky; top:0;}
+  .sidebar-group-label{font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--neutral-dk); font-weight:600; padding:10px 16px 4px;}
+  .nav-btn{display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer; padding:9px 16px; font-size:12.5px; font-family:var(--font-sans); color:var(--ink); border-left:3px solid transparent; line-height:1.4;}
+  .nav-btn small{display:block; font-size:9.5px; color:var(--muted); margin-top:1px; font-weight:400;}
+  .nav-btn:hover{background:var(--neutral-lt);}
+  .nav-btn.active{background:var(--neutral-lt); border-left:3px solid var(--ink); font-weight:600;}
+  .main{flex:1; padding:26px 32px 80px; min-width:0;}
+  .screen{display:none;}
+  .screen.active{display:block;}
+  .screen-head{margin-bottom:16px;}
+  .screen-head h2{font-size:17px; margin:0 0 4px;}
+  .screen-head .tag{display:inline-block; font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--live-bg); color:var(--live); margin-right:6px; vertical-align:middle;}
+  .screen-head .tag.replaces{background:#FBEEEC; color:var(--coral);}
+  .screen-body{display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;}
+  .phone-col{display:flex; flex-direction:column; gap:10px; flex-shrink:0;}
+  .phone-label{font-size:10.5px; font-weight:600; color:var(--neutral-dk); text-align:center;}
+  .phone{width:390px; background:var(--paper); border-radius:34px; border:8px solid #1c1c1c; box-shadow:0 14px 30px rgba(0,0,0,.18); overflow:hidden; position:relative;}
+  .phone-screen{max-height:720px; overflow-y:auto; padding:14px 14px 20px; position:relative;}
+  .note-card{flex:1; min-width:320px; max-width:460px; background:#fff; border:1px solid var(--sand); border-radius:14px; padding:16px 18px; box-shadow:0 1px 2px rgba(55,55,54,.06);}
+  .note-card h3{font-size:12.5px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.06em; color:var(--neutral-dk); font-weight:700;}
+  .note-card h4{font-size:11.5px; margin:14px 0 6px; color:var(--ink); font-weight:700;}
+  .note-card p{font-size:11.5px; line-height:1.7; margin:0 0 8px; color:var(--ink);}
+  .note-card ul{margin:0 0 8px; padding-left:18px;}
+  .note-card li{font-size:11.5px; line-height:1.7; margin-bottom:4px;}
+  .note-card ol{margin:0 0 8px; padding-left:18px;}
+  .note-card ol li{font-size:11.5px; line-height:1.7; margin-bottom:4px;}
+  .note-card .diff{background:var(--neutral-lt); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:11px; line-height:1.7;}
+  .note-card .diff del{color:var(--coral); opacity:.75; text-decoration:line-through;}
+  .note-card .diff b{color:var(--positive); font-weight:700;}
+  .note-card .quote{border-left:3px solid var(--neutral); background:var(--neutral-lt); padding:8px 10px; font-size:10.5px; line-height:1.7; color:var(--neutral-dk); margin-bottom:8px; border-radius:0 6px 6px 0;}
+  .note-card .open-q{background:var(--ok-bg); border:1px solid var(--ok); border-radius:8px; padding:8px 10px; font-size:11px; line-height:1.7; color:var(--ink); margin-top:10px;}
+  .note-card .open-q b{color:var(--ok);}
+  .note-card .warn{background:#FBEEEC; border:1px solid var(--coral); border-radius:8px; padding:8px 10px; font-size:11px; line-height:1.7; color:var(--ink); margin-top:10px;}
+  .note-card .warn b{color:var(--coral);}
+  .badge-real{display:inline-block; font-size:9px; font-weight:600; padding:1px 7px; border-radius:999px; background:var(--cream); color:#7a5f13; margin-left:4px;}
+  code{font-family:var(--font-mono); font-size:10px; background:var(--neutral-lt); padding:1px 4px; border-radius:4px;}
+
+  .field-label{font-size:9px; font-weight:500; color:var(--ink); display:block; margin-bottom:2px;}
+  .field-input{width:100%; border-radius:10px; border:1px solid var(--sand); padding:5px 7px; font-size:10px; font-family:var(--font-sans); background:#fff; color:var(--ink);}
+  .field-input.serif{font-family:var(--font-serif); font-weight:500;}
+  .helper{font-size:8.5px; line-height:1.5; color:var(--muted); margin-top:3px;}
+  .helper.warn-note{color:var(--coral); font-weight:500;}
+  .form-block{display:flex; flex-direction:column; gap:6px; margin-bottom:8px;}
+  .big-cta{display:block; width:100%; background:var(--accent-700); color:#fff; border-radius:999px; padding:7px; text-align:center; font-size:11px; font-weight:500; border:none; margin-top:6px; cursor:pointer;}
+  .btn-secondary-mock{display:inline-flex; align-items:center; justify-content:center; background:#fff; color:var(--ink); border:1px solid var(--sand); border-radius:999px; padding:6px 12px; font-size:10.5px; font-weight:500;}
+
+  /* 钱包余额历史列表 */
+  .wallet-list{border-radius:14px; border:1px solid var(--sand); background:rgba(164,163,160,.14); padding:3px 5px; margin-bottom:10px;}
+  .wallet-row{display:flex; align-items:center; gap:5px; padding:6px 2px; border-top:1px solid var(--sand);}
+  .wallet-row:first-child{border-top:none;}
+  .wallet-row .wname{flex:1; font-size:10px; font-weight:500; min-width:0;}
+  .wallet-row .wamt{font-family:var(--font-serif); font-size:10.5px; font-weight:600; flex-shrink:0;}
+  .wallet-row .mini-btn{flex-shrink:0; border-radius:999px; background:var(--ink); color:#fff; font-size:9px; padding:3px 8px;}
+
+  .hist-list{display:flex; flex-direction:column; gap:0; margin-bottom:6px;}
+  .hist-item{display:flex; flex-direction:column; gap:2px; padding:8px 2px; border-top:1px solid var(--sand); font-size:9.5px;}
+  .hist-item:first-child{border-top:none;}
+  .hist-item .h-top{display:flex; align-items:center; gap:6px;}
+  .hist-item .h-main{font-size:10.5px; font-weight:500; font-family:var(--font-serif);}
+  .hist-item .h-meta{color:var(--muted);}
+  .hist-item .h-tap{margin-left:auto; font-size:9px; color:var(--neutral-dk); text-decoration:underline; flex-shrink:0;}
+  .tag-current{display:inline-block; font-size:8px; font-weight:600; padding:1px 6px; border-radius:999px; background:var(--live-bg); color:var(--live);}
+  .tag-corrected{display:inline-block; font-size:8px; font-weight:600; padding:1px 6px; border-radius:999px; background:var(--cream); color:#7a5f13; cursor:pointer;}
+  .original-box{margin-top:3px; padding:6px 8px; background:var(--neutral-lt); border-radius:8px; font-size:9px; color:var(--muted); line-height:1.6;}
+
+  .balance-confirm{border:1px solid var(--sand); background:var(--paper); border-radius:12px; padding:10px; margin-bottom:8px;}
+  .balance-line{display:flex; justify-content:space-between; font-size:10.5px; padding:2px 0;}
+  .balance-line .lbl{color:var(--muted);}
+  .balance-line .amt{font-family:var(--font-serif); font-weight:600;}
+  .balance-arrow{text-align:center; font-size:14px; color:var(--neutral-dk); margin:4px 0;}
+
+  .before-after-label{display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-bottom:6px;}
+  .before-after-label.before{background:rgba(153,27,20,.1); color:var(--coral);}
+  .before-after-label.after{background:rgba(76,122,80,.12); color:var(--ok);}
+  .no-effect-box{border:1px solid var(--sand); background:var(--neutral-lt); border-radius:12px; padding:10px; margin-bottom:8px; font-size:10px; line-height:1.7; color:var(--ink);}
+  .no-effect-box b{color:var(--neutral-dk);}
+
+  footer.pagefoot{padding:20px 32px; font-size:10.5px; color:var(--neutral-dk); border-top:1px solid var(--sand); margin-top:10px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>余额历史「可直接编辑」新规格 — 第72轮第三批对照稿（只出稿，不动代码）</h1>
+  <p>Remy 最新表态："万一我历史输入错呢"——历史条目要能<b>直接编辑</b>（改金额、改生效日），不是 <code>DESIGN-BRIEF-round70-mockup.html</code> 里画的"只读+以这版为底新增/恢复"那套旧方案。<b>这份稿子取代 <code>DESIGN-BRIEF-round70-mockup.html</code> 里第 ⑦ 屏「设置余额历史」画的旧方案</b>，那份文件本身不改动，两份并存时以这份为准。示例用真实钱包身份（USDT钱包 <code>7b9a57d5</code>，trip「🇭🇰2026香港」，币种 USD，今天真实校正后的 <code>current_balance=-110510</code>，见 <code>PENDING-DECISIONS-trip-expense-ledger.md</code> 任务①），但这个钱包实际上还没用过"设置余额"锚点功能（<code>balance_updated_at</code> 目前是 <code>null</code>，一直走旧的累加模式）——下面几屏里的历史条目（09-20/09-24 两笔锚点）是<b>示范用的虚构演练数据</b>，不是这个钱包的真实历史，图上会标"示范"字样。这份稿子只出图定方案，不改任何 .tsx/API/schema，跟并行的借还钱功能（loan-repay-b2）是两件独立的事。</p>
+</div>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-group-label">入口（沿用不变）</div>
+    <button class="nav-btn active" data-target="s1">① 钱包列表入口
+      <small>payment-methods-manager.tsx</small></button>
+    <div class="sidebar-group-label">新规格：直接编辑历史</div>
+    <button class="nav-btn" data-target="s2">② 历史列表 + 已更正标签
+      <small>取代 round70 ⑦ 屏</small></button>
+    <button class="nav-btn" data-target="s3">③ 编辑「当前生效」锚点 → 确认页
+      <small>影响现余额</small></button>
+    <button class="nav-btn" data-target="s4">④ 编辑「历史旧条目」→ 确认页
+      <small>不影响现余额</small></button>
+    <button class="nav-btn" data-target="s5">⑤ 「已更正」标签点开看原值
+      <small>可还原</small></button>
+  </nav>
+
+  <main class="main">
+
+    <!-- S1 -->
+    <section class="screen active" id="s1">
+      <div class="screen-head">
+        <h2>① 钱包列表入口</h2>
+        <span class="tag">沿用不变</span>
+        <span class="badge-real">真实数据：🇭🇰2026香港行程</span>
+      </div>
+      <div class="screen-body">
+        <div class="phone-col">
+          <div class="phone-label">「设置当前余额」展开态（跟现状一致，"由 remy 设置"字样已按 (b) 拿掉）</div>
+          <div class="phone"><div class="phone-screen">
+            <p class="helper" style="margin-bottom:8px;">这里改的是钱包余额，跟上面支付方式的费率配置是两码事；建钱包时如果直接绑了支付方式，之前的同类消费会自动补进来（钱包建好后才补绑的话不会，需要自己对一次）。</p>
+            <div class="wallet-list">
+              <div class="wallet-row">
+                <span aria-hidden="true">💳</span>
+                <span class="wname">USDT钱包 <span style="font-family:var(--font-mono); font-size:8.5px; color:var(--muted);">USD</span></span>
+                <span class="wamt">-US$1,105.10</span>
+                <span class="mini-btn">设置</span>
+              </div>
+              <div class="wallet-row">
+                <span aria-hidden="true">💵</span>
+                <span class="wname">现金 <span style="font-family:var(--font-mono); font-size:8.5px; color:var(--muted);">HKD</span></span>
+                <span class="wamt">HK$8,120.00</span>
+                <span class="mini-btn">设置</span>
+              </div>
+            </div>
+            <p class="helper">点「设置」后新增一颗「查看历史 ▾」小字链接（新增入口，见下一屏），不影响现有表单布局。</p>
+          </div></div>
+        </div>
+        <div class="note-card">
+          <h3>这屏没变什么</h3>
+          <p>入口本身（"⚙ 设置当前余额"折叠面板、钱包一行式列表、"设置"按钮）沿用现状代码，不动。唯一新增的是每个钱包的"设置"表单展开后多一颗「查看历史 ▾」链接，点开进入下一屏的历史列表——这是新增入口，不是改造现有结构。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- S2 -->
+    <section class="screen" id="s2">
+      <div class="screen-head">
+        <h2>② 历史列表 + 已更正标签</h2>
+        <span class="tag replaces">取代 round70 ⑦屏方案</span>
+        <span class="badge-real">示范数据（这个钱包实际还没有历史，见顶部说明）</span>
+      </div>
+      <div class="screen-body">
+        <div class="phone-col">
+          <div class="phone-label">USDT钱包 · 设置历史 ▾（示范：已有 2 条锚点 + 1 条被更正过）</div>
+          <div class="phone"><div class="phone-screen">
+            <h4 style="font-size:10px; font-weight:500; letter-spacing:.08em; color:var(--neutral-dk); margin:0 0 6px;">USDT钱包 · 设置历史</h4>
+            <div class="hist-list">
+              <div class="hist-item">
+                <div class="h-top">
+                  <span class="h-main">-US$1,105.10 @ 2026-09-24</span>
+                  <span class="tag-current">当前生效</span>
+                  <span class="h-tap">编辑</span>
+                </div>
+                <span class="h-meta">2026-09-24 设置 · 生效后现余额 -US$1,105.10</span>
+              </div>
+              <div class="hist-item">
+                <div class="h-top">
+                  <span class="h-main">-US$1,250.00 @ 2026-09-20</span>
+                  <span class="tag-corrected">已更正</span>
+                  <span class="h-tap">编辑</span>
+                </div>
+                <span class="h-meta">2026-09-20 设置 · 已被 09-24 这笔覆盖，不影响当前余额 · 2026-09-26 更正过金额，点"已更正"查看原值</span>
+              </div>
+            </div>
+            <p class="helper">每条都能点「编辑」直接改金额/生效日——不再是"只能新增一条覆盖旧值"，这条是这次规格改动的核心。</p>
+          </div></div>
+        </div>
+        <div class="note-card">
+          <h3>改了什么（取代 round70 旧方案）</h3>
+          <div class="diff">
+            <del>round70 旧方案：历史只读，"恢复这版"=拿旧值重新走一次 <code>PATCH</code> 新增一条锚点，旧条目本身永远不能被改</del><br>
+            <b>新规格：每条历史（不管是不是当前生效那条）都能点「编辑」直接改 <code>amount</code>/<code>effectiveDate</code> 本身，不需要"新增一条"这个中间步骤</b>
+          </div>
+          <h4>两种编辑，两种确认页（下面两屏分别演示）</h4>
+          <ul>
+            <li>编辑的是<b>当前生效锚点</b>（列表里标"当前生效"那条）→ 会改变现余额 → 走确认页，显示改前→改后的现余额（③屏）</li>
+            <li>编辑的是<b>已被覆盖的旧条目</b>（比如 09-20 这条，已经被 09-24 那条盖过）→ 只改这条历史记录本身，现余额完全不受影响 → 确认页只做说明，不显示余额变化（④屏）</li>
+          </ul>
+          <h4>「已更正」标签</h4>
+          <p>任何一条历史被编辑过之后，永久带上「已更正」小标签（跟"当前生效"标签同一视觉位置，但样式不同——奶油色而不是青色，避免混淆）。点标签展开看原始值（⑤屏），这样改错了还能查、能还原，不是改完就悄悄覆盖没痕迹。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- S3 -->
+    <section class="screen" id="s3">
+      <div class="screen-head">
+        <h2>③ 编辑「当前生效」锚点 → 确认页</h2>
+        <span class="tag">新增</span>
+      </div>
+      <div class="screen-body">
+        <div class="phone-col">
+          <div class="phone-label">编辑表单（收紧+统一字体，按(a)要求）</div>
+          <div class="phone"><div class="phone-screen">
+            <h4 style="font-size:10px; font-weight:500; letter-spacing:.08em; color:var(--neutral-dk); margin:0 0 6px;">编辑这条记录 · 2026-09-24</h4>
+            <div class="form-block">
+              <div>
+                <label class="field-label">金额</label>
+                <input class="field-input serif" value="-1,105.10" />
+              </div>
+              <div>
+                <label class="field-label">生效日</label>
+                <input class="field-input" value="2026-09-24" />
+              </div>
+              <p class="helper warn-note">这条是当前生效的记录，改动会立刻影响这个钱包现在显示的余额。</p>
+            </div>
+            <button class="big-cta">下一步：确认改动</button>
+          </div></div>
+        </div>
+        <div class="phone-col">
+          <div class="phone-label">确认页 · 显示改前 → 改后现余额</div>
+          <div class="phone"><div class="phone-screen">
+            <h4 style="font-size:10px; font-weight:500; letter-spacing:.08em; color:var(--neutral-dk); margin:0 0 8px;">确认这次修改</h4>
+            <div class="balance-confirm">
+              <span class="before-after-label before">改前</span>
+              <div class="balance-line"><span class="lbl">记录值 @ 2026-09-24</span><span class="amt">-US$1,105.10</span></div>
+              <div class="balance-line"><span class="lbl">现余额</span><span class="amt">-US$1,105.10</span></div>
+              <div class="balance-arrow">↓</div>
+              <span class="before-after-label after">改后</span>
+              <div class="balance-line"><span class="lbl">记录值 @ 2026-09-24</span><span class="amt">-US$1,100.00</span></div>
+              <div class="balance-line"><span class="lbl">现余额</span><span class="amt" style="color:var(--ok);">-US$1,100.00</span></div>
+            </div>
+            <p class="helper">这条是"当前生效"的记录，一改现余额就跟着变——确认前必须看到这个对照，避免手滑改错自己没发现。</p>
+            <button class="big-cta">确认修改</button>
+            <button class="btn-secondary-mock" style="width:100%; margin-top:6px;">取消</button>
+          </div></div>
+        </div>
+        <div class="note-card">
+          <h3>这屏的判断</h3>
+          <p>「改前/改后现余额」两个数字都是直接调用现成的 <code>computeWalletDisplayBalance</code>（round55 已经落地的推导公式），不是新发明一套算法——一次用旧值算、一次用即将写入的新值算，跟 round70 旧方案里"改前→改后确认页"的算法来源一样，只是这次触发它的动作从"新增一条"变成"编辑这条"。</p>
+          <h4>(a) 表单/确认页收紧+统一字体</h4>
+          <p>金额输入框统一走 <code>.field-input.serif</code>（跟记账表单金额框同一字体，<code>IBM Plex Serif</code>），跟生效日输入框（sans）分开但都是 10px，行间距/padding 跟这个 app 现有表单一致，不单独整一套更松或更紧的间距。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- S4 -->
+    <section class="screen" id="s4">
+      <div class="screen-head">
+        <h2>④ 编辑「历史旧条目」→ 确认页</h2>
+        <span class="tag">新增</span>
+      </div>
+      <div class="screen-body">
+        <div class="phone-col">
+          <div class="phone-label">编辑表单（跟③同一套组件，文案不同）</div>
+          <div class="phone"><div class="phone-screen">
+            <h4 style="font-size:10px; font-weight:500; letter-spacing:.08em; color:var(--neutral-dk); margin:0 0 6px;">编辑这条记录 · 2026-09-20</h4>
+            <div class="form-block">
+              <div>
+                <label class="field-label">金额</label>
+                <input class="field-input serif" value="-1,250.00" />
+              </div>
+              <div>
+                <label class="field-label">生效日</label>
+                <input class="field-input" value="2026-09-20" />
+              </div>
+              <p class="helper">这条已经被后面 09-24 那笔覆盖，只是一条历史记录，改动不会影响现在的余额。</p>
+            </div>
+            <button class="big-cta">下一步：确认改动</button>
+          </div></div>
+        </div>
+        <div class="phone-col">
+          <div class="phone-label">确认页 · 只做说明，余额不变</div>
+          <div class="phone"><div class="phone-screen">
+            <h4 style="font-size:10px; font-weight:500; letter-spacing:.08em; color:var(--neutral-dk); margin:0 0 8px;">确认这次修改</h4>
+            <div class="no-effect-box">
+              <b>这条是历史记录，改动不影响当前余额。</b><br>
+              这个钱包现在显示的余额由 2026-09-24 那条最新记录决定，跟这条 09-20 的记录无关——这次只是更正历史本身的数字，方便以后回头查对的时候看到准确值。
+            </div>
+            <div class="balance-confirm">
+              <span class="before-after-label before">改前</span>
+              <div class="balance-line"><span class="lbl">记录值 @ 2026-09-20</span><span class="amt">-US$1,250.00</span></div>
+              <div class="balance-arrow">↓</div>
+              <span class="before-after-label after">改后</span>
+              <div class="balance-line"><span class="lbl">记录值 @ 2026-09-20</span><span class="amt">-US$1,200.00</span></div>
+            </div>
+            <p class="helper">没有"现余额"这一行——因为这条改动本来就不会动到现余额，硬凑一行显示"不变"反而容易让人多想。</p>
+            <button class="big-cta">确认修改</button>
+            <button class="btn-secondary-mock" style="width:100%; margin-top:6px;">取消</button>
+          </div></div>
+        </div>
+        <div class="note-card">
+          <h3>跟③屏的关键区别</h3>
+          <p>③屏确认页有"现余额"改前→改后两行，这屏没有——不是漏做，是刻意的：编辑一条已经被覆盖的旧记录，唯一的效果是"历史本身的数字更准了"，现余额继续由最新那条锚点决定，不会跟着这条旧记录变。如果确认页硬塞一行"现余额：不变"，反而暗示"这个操作本来有可能影响余额，只是这次没有"，容易让 Remy 多想、多按几次确认——所以改成用一句加底色的说明文字直接讲清楚这条编辑的性质，不用"改前/改后"这套本来是给"会变"的场景设计的组件。</p>
+          <div class="open-q">
+            <b>需要 Remy 确认：</b>如果编辑的这条旧记录的生效日往后挪，挪到比"当前生效"那条还晚——这种情况下它会不会变成新的"当前生效"记录？这版的判断是：会，因为"当前生效"的定义是"生效日最晚的那条"，不是"最后一次操作的那条"，日期一旦改到最晚，语义上它就该接管"当前生效"的位置，连带现余额也会变，这时候应该弹出跟③屏一样的"改前→改后现余额"确认，而不是这屏的"不影响余额"说明。这个边界情况这版没有画额外的一屏，只是先把判断写清楚，如果 Remy 觉得这种"改生效日导致谁是当前生效互换"的情况太绕、想干脆禁止编辑生效日到比当前生效更晚的位置，也是一个更简单的替代方案，需要她选一个。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- S5 -->
+    <section class="screen" id="s5">
+      <div class="screen-head">
+        <h2>⑤「已更正」标签点开看原值</h2>
+        <span class="tag">新增</span>
+      </div>
+      <div class="screen-body">
+        <div class="phone-col">
+          <div class="phone-label">点「已更正」标签展开</div>
+          <div class="phone"><div class="phone-screen">
+            <h4 style="font-size:10px; font-weight:500; letter-spacing:.08em; color:var(--neutral-dk); margin:0 0 6px;">USDT钱包 · 设置历史</h4>
+            <div class="hist-list">
+              <div class="hist-item">
+                <div class="h-top">
+                  <span class="h-main">-US$1,200.00 @ 2026-09-20</span>
+                  <span class="tag-corrected">已更正 ▾</span>
+                  <span class="h-tap">编辑</span>
+                </div>
+                <span class="h-meta">2026-09-20 设置 · 已被 09-24 这笔覆盖，不影响当前余额</span>
+                <div class="original-box">
+                  原始值：-US$1,250.00 @ 2026-09-20（2026-09-26 更正为 -US$1,200.00）
+                  <br><span class="h-tap" style="margin-left:0;">还原成原始值</span>
+                </div>
+              </div>
+            </div>
+            <p class="helper">只存"最初原值"，不是每次编辑都叠一层——如果这条以后再被编辑第二次，「已更正」展开还是显示最早的那个原始值，不会变成"上一次改前的值"，这样才能一路查回最开始那个数字。</p>
+          </div></div>
+        </div>
+        <div class="note-card">
+          <h3>数据结构上的判断</h3>
+          <p>沿用 round70 已经设计好的 <code>wallet_balance_history</code> 表结构（<code>walletId</code>/<code>amount</code>/<code>effectiveDate</code>/<code>changedByParticipantId</code>/<code>changedAt</code>），这次新增两个字段：<code>originalAmount</code>/<code>originalEffectiveDate</code>（首次编辑时才写入，第二次及以后的编辑不覆盖这两个字段，保证"查原值"永远查到最初那次）。「还原成原始值」点了之后，等同于把 <code>amount</code>/<code>effectiveDate</code> 改回 <code>originalAmount</code>/<code>originalEffectiveDate</code>，同时清空 <code>originalAmount</code>/<code>originalEffectiveDate</code>（还原之后就不再是"被更正过"的状态，标签消失）——这是这版的判断，如果 Remy 觉得"还原"之后仍该保留"曾经被更正过"的痕迹，需要另外说明，这版没有默认保留。</p>
+          <h4>跟④屏那个"生效日互换"悬案的关系</h4>
+          <p>如果编辑历史时改的是已被覆盖的旧记录（④屏场景），"已更正"标签走的是这屏画的路径；如果编辑的是当前生效那条（③屏场景），同样会带上「已更正」标签，标签本身的展开逻辑不区分是编辑哪一种记录，两种场景共用同一套「已更正」组件，不重复设计。</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="pagefoot">
+  trip-expense-ledger 第72轮第三批对照稿 · 本地文件 <code>DESIGN-BRIEF-round72-balance-history-edit.html</code> · 取代 <code>DESIGN-BRIEF-round70-mockup.html</code> 第⑦屏「余额历史」旧方案（那份文件本身未改动）· 只读查询 D1 拿真实钱包身份/现有余额，历史条目为示范虚构数据 · 只出稿不动代码 · 生成于 2026-09-26
+</footer>
+
+<script>
+  document.querySelectorAll('.nav-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+      window.scrollTo({top:0, behavior:'instant'});
+    });
+  });
+</script>
+
+</body>
+</html>

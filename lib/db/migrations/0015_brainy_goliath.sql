@@ -1,0 +1,1 @@
+ALTER TABLE `expense_list_filter_preference` ADD `business_cost_filter` text DEFAULT 'ALL' NOT NULL;

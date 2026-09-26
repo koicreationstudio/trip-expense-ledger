@@ -78,19 +78,24 @@ export function useDismissableOpen(open: boolean, onClose: () => void) {
  *   那么完整，只做了"打开关闭+鼠标点选"这个最基本的可用性，够这个项目当前的表单
  *   规模用；以后真的需要更完整键盘导航再加）。
  *
- * fix(2026-09-26，方案 C 手机底部弹层)：窄屏（<640px，Tailwind `sm` 断点以下）弹层
- * 之前也是贴着触发按钮 `absolute top-full` 悬浮展开，跟桌面同一套定位——问题是全站
- * 底部常驻一条 `.action-bar`（`fixed inset-x-0 bottom-0 z-20`，不透明），比弹层
- * `z-10` 更高，触发按钮滚到视口下半部分时，悬浮面板落进操作条底下的选项会被永久盖住
- * 且滚不动（固定定位元素的天然特性，不是"没滚到"，选项多的下拉——比如支付方式筛选
- * 7 选——最容易撞上）。
- *
- * 改法：窄屏改成从屏幕底部滑上来的抽屉（`fixed inset-x-0`，浮在 `.action-bar` 上方
- * 而不是贴着它，避免最后一个选项紧贴操作条上边缘看不清分界），宽屏维持原来"贴着
- * 触发按钮悬浮"的桌面交互不变。两个断点共用同一套 `z-30`（盖过 `.action-bar` 的
- * `z-20`）和 `max-height`（窄屏 `60vh`、宽屏原有的 `220px` 继续生效），断点切换纯
- * 用 CSS media query（Tailwind `sm:` 前缀），不用 JS 判断 `window.innerWidth`——
- * 这个组件原本也没有既有的 JS 宽窄屏判断模式，media query 更简单也不用处理 resize。
+ * fix(2026-09-26 第七十二轮第四批，合并方案 A + 方案 C)：这个组件先后叠了两轮独立的
+ * "被 `.action-bar` 盖住"修复——方案 A（打开瞬间测量触发按钮到视口底部的剩余空间，
+ * 不够用就 `bottom-full` 向上开）先落地，随后又出了一份没合并的方案 C（窄屏索性改成
+ * 从屏幕底部滑上来的抽屉，不再跟触发按钮的位置有关系）。Remy 拍板选方案 C（原话
+ * "固定住不要超过界面的多少，如果选项太多可以用 scroll 的方式"），这次正式合并，
+ * 两套逻辑不再互相打架：
+ * - 窄屏（<640px，Tailwind `sm` 断点以下）：整体改用方案 C——从屏幕底部滑上来的
+ *   固定抽屉（`fixed inset-x-0`，浮在 `.action-bar` 上方而不是贴着它），跟触发按钮
+ *   在页面里的位置完全无关，`max-height` 固定 `60vh`（Remy 原话"不要超过界面的
+ *   多少"），选项多时 `overflow-y-auto` 内部滚动。方案 A 那套"打开瞬间测量空间决定
+ *   向上/向下开"的逻辑，窄屏不再套用——固定贴底抽屉不需要判断方向。
+ * - 宽屏（≥640px）：保留方案 A 的智能开合方向（下面 `openUpward` 那段测量逻辑），
+ *   维持"贴着触发按钮悬浮，空间不够就向上开"的桌面交互，同样有 `max-height` 上限
+ *   （`260px`，round72 批次②从 220px 提高过，见下方渲染处注释）防止面板本身比
+ *   视口还高。
+ * - 两个断点共用同一套 `z-30`（盖过 `.action-bar` 的 `z-20`）；断点切换纯用 CSS
+ *   media query（Tailwind `sm:` 前缀），不用 JS 判断 `window.innerWidth`——这个
+ *   组件原本也没有既有的 JS 宽窄屏判断模式，media query 更简单也不用处理 resize。
  *
  * `panelClassName` 收窄成只管弹层外观（边框/背景/阴影/宽高下限），定位/z-index/
  * 圆角/max-height 这几项两个断点分别有各自固定值，统一由组件本体算好套在外面，
@@ -115,6 +120,11 @@ export function SelectDropdown({
   /** 没有关联 <label htmlFor> 时用这个（expense-list.tsx 筛选器场景）。 */
   ariaLabel?: string;
   triggerClassName: string;
+  /** fix(2026-09-26 第七十二轮第四批，合并方案A+C)：这个 prop 现在只管弹层的
+   * "外观"（边框/背景/圆角/内边距/阴影/宽高），不要再传 `absolute`/`fixed`/
+   * `top-full`/`bottom-full`/`z-30`/`mt-1`/`mb-1` 这类定位 class——窄屏固定走
+   * 方案C底部抽屉，宽屏走方案A智能开合方向，两套定位逻辑都由组件本体自动算好
+   * 套在外面，调用方传的这串 class 只会拼接在定位 class 后面。 */
   panelClassName?: string;
   /** 当前值在 options 里找不到匹配项时的兜底显示文字。 */
   placeholder?: string;
@@ -141,6 +151,39 @@ export function SelectDropdown({
   // 不再自己单独维护一份——这个组件本体也是这个 hook 的调用方之一，不是特殊代码路径。
   const containerRef = useDismissableOpen(open, close);
 
+  // fix(2026-09-26 第七十二轮，round70 对照稿第⑤项方案 A)：这段"智能开合方向"
+  // 测量逻辑第七十二轮第四批合并方案 C 之后只在宽屏（`sm:` 起）生效——窄屏方案 C
+  // 固定走底部抽屉，不看这个方向判断（见下面渲染处 `directionClass` 只拼在
+  // `sm:` 前缀上）。测量本身照样每次打开都会跑（不用另外判断当前是不是窄屏，
+  // 算出来的值窄屏下单纯不会被用到，没有副作用，比额外加一层 `window.innerWidth`
+  // 判断更简单）。全站底部常驻一条 `.action-bar`（`app/globals.css`，`fixed
+  // inset-x-0 bottom-0 z-20`，高度 `--action-bar-h`=60px），宽屏面板之前永远
+  // `top-full` 向下开——触发按钮滚到视口下半部分时，面板向下展开的这一截会落在
+  // 操作条覆盖的区域里，永远看不到、滚不动（固定定位元素的天然特性，不是"没滚
+  // 到"）。这里在面板打开的那一刻算一次触发按钮到视口底部的可用空间，不够用
+  // （要扣掉操作条占的 60px）就改成向上开（`bottom-full`），够用维持原来向下
+  // 开——只在打开瞬间判断一次，不监听 scroll/resize 做实时反悬浮（面板开着时
+  // 用户很少还在滚页面，一次性判断够用，不需要过度设计）。
+  const [openUpward, setOpenUpward] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    // ACTION_BAR_RESERVE_PX 跟 app/globals.css 的 --action-bar-h（60px）同步，
+    // 写死不读 CSS 变量——这个值本身极少变、写死更简单可靠，改的话两边一起改。
+    const ACTION_BAR_RESERVE_PX = 60;
+    // 面板 sm:max-h-[260px]（第七十二轮批次②从 220px 提高，见下面渲染处注释），
+    // 留一点余量（可能有 min-w 换行/更多选项），阈值给够。
+    const PANEL_SAFE_HEIGHT_PX = 280;
+    const spaceBelow = window.innerHeight - rect.bottom - ACTION_BAR_RESERVE_PX;
+    setOpenUpward(spaceBelow < PANEL_SAFE_HEIGHT_PX);
+  }, [open]);
+  // fix(2026-09-26 第七十二轮第四批)：方向 class 全部改成 `sm:` 前缀——只在宽屏
+  // 生效，窄屏走方案 C 固定底部抽屉（见渲染处 sheet 的 base class），不受这个
+  // 方向判断影响。
+  const directionClass = openUpward ? 'sm:bottom-full sm:mb-1' : 'sm:top-full sm:mt-1';
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -163,16 +206,16 @@ export function SelectDropdown({
         </span>
       </button>
       {open && (
-        // fix(2026-09-26)：窄屏这层是"遮罩 + 抽屉"的外壳，不是又一个贴底/贴角瞎悬浮的
-        // fixed 控件——`record-expense-bar.test.ts` 那份结构守护明确只放行 `fixed
-        // inset-0` 全屏遮罩，这里就是照这个形状搭的：外层 `fixed inset-0` 占满整个
-        // 视口当遮罩底色，`flex flex-col justify-end` 让真正的白色抽屉自己贴着底边
-        // 露出来（不用再另算一个 bottom 偏移值），点遮罩露出来的那圈空白（抽屉本身
-        // `onClick` 里 `stopPropagation` 挡掉了）就会关闭。宽屏（`sm:` 起）用
-        // `sm:contents` 让这层外壳整个不生成自己的盒子（背景/flex 布局都随之失效），
-        // 里面的抽屉退回原来"绝对定位贴着触发按钮悬浮"的独立元素，定位基准是往上找到
-        // 的第一个 `position` 非 static 祖先——也就是最外层这个 `relative` 容器，跟
-        // 改动前完全一致。
+        // fix(2026-09-26 第七十二轮第四批)：窄屏这层是"遮罩 + 抽屉"的外壳，不是又
+        // 一个贴底/贴角瞎悬浮的 fixed 控件——`record-expense-bar.test.ts` 那份结构
+        // 守护明确只放行 `fixed inset-0` 全屏遮罩，这里就是照这个形状搭的：外层
+        // `fixed inset-0` 占满整个视口当遮罩底色，`flex flex-col justify-end` 让
+        // 真正的白色抽屉自己贴着底边露出来（不用再另算一个 bottom 偏移值），点遮罩
+        // 露出来的那圈空白（抽屉本身 `onClick` 里 `stopPropagation` 挡掉了）就会
+        // 关闭。宽屏（`sm:` 起）用 `sm:contents` 让这层外壳整个不生成自己的盒子
+        // （背景/flex 布局都随之失效），里面的抽屉退回方案 A 那套"绝对定位贴着触发
+        // 按钮悬浮 + 智能开合方向"的独立元素，定位基准是往上找到的第一个
+        // `position` 非 static 祖先——也就是最外层这个 `relative` 容器。
         // fix(2026-09-26)：这层不能加 `aria-hidden`——它现在是真正的内容容器（弹层
         // listbox 挂在它下面），标了 aria-hidden 会把整个下拉从可访问性树里连根拔掉
         // （辅助技术/role query 都找不到 listbox 了，之前手滑加过一次，被这份测试
@@ -186,14 +229,20 @@ export function SelectDropdown({
           <div
             data-testid="select-dropdown-sheet"
             onClick={(e) => e.stopPropagation()}
-            // fix(2026-09-26)：`mb-[calc(...)]` 算的是"窄屏抽屉离视口底边要留多少空
-            // 白"——`--action-bar-h`（`app/globals.css` 定义的底部操作条高度，60px，
-            // `:root` 全局变量，不管当前页面有没有渲染 `.action-bar` 这个元素都能取
-            // 到）+ 安全区 + 12px 呼吸间距，让抽屉浮在操作条上方而不是贴着它，最后一个
-            // 选项才不会紧贴操作条上边缘看不清分界。没有底部操作条的页面（比如邀请加入
-            // 页）也一样吃这段留白，纯粹当成"离屏幕底边的安全间距"，效果只是多一点呼吸
-            // 空间，不会显得空。宽屏用 `sm:mb-0 sm:mt-1` 换回原来贴着触发按钮的间距。
-            className={`flex max-h-[60vh] flex-col rounded-t-2xl border border-sand bg-white p-1 pt-2 shadow-card mb-[calc(var(--action-bar-h)+env(safe-area-inset-bottom)+12px)] sm:absolute sm:left-0 sm:top-full sm:z-30 sm:mb-0 sm:mt-1 sm:max-h-[220px] sm:rounded-[10px] sm:pt-1 ${
+            // fix(2026-09-26 第七十二轮第四批，合并方案A+C)：`mb-[calc(...)]` 算的是
+            // "窄屏抽屉离视口底边要留多少空白"——`--action-bar-h`（`app/globals.css`
+            // 定义的底部操作条高度，60px，`:root` 全局变量，不管当前页面有没有渲染
+            // `.action-bar` 这个元素都能取到）+ 安全区 + 12px 呼吸间距，让抽屉浮在
+            // 操作条上方而不是贴着它，最后一个选项才不会紧贴操作条上边缘看不清分界。
+            // 没有底部操作条的页面（比如邀请加入页）也一样吃这段留白，纯粹当成"离
+            // 屏幕底边的安全间距"，效果只是多一点呼吸空间，不会显得空。
+            //
+            // 宽屏（`sm:` 起）不再固定 `sm:top-full`——改拼上面算好的 `directionClass`
+            // （`sm:top-full sm:mt-1` 或 `sm:bottom-full sm:mb-1`），保留方案 A 的
+            // 智能开合方向；`sm:max-h-[260px]`（round72 批次②从 220px 提高，修 8
+            // 选项时第 8 项被裁掉又没有可见滚动提示这个真 bug，理由不变，这次合并
+            // 沿用这个已经验证过的数值，不回退成方案 C 分支当时还是 220px 的旧值）。
+            className={`flex max-h-[60vh] flex-col rounded-t-2xl border border-sand bg-white p-1 pt-2 shadow-card mb-[calc(var(--action-bar-h)+env(safe-area-inset-bottom)+12px)] sm:absolute sm:left-0 sm:z-30 sm:mb-0 sm:max-h-[260px] sm:rounded-[10px] sm:pt-1 ${directionClass} ${
               panelClassName ??
               // fix(2026-09-17 第二十一轮，逐 token 核对)：Artifact `.fdrop-menu`/
               // `.cat-dropdown-list` 这类下拉弹层统一是 border-radius:10px（这个圆角
@@ -205,7 +254,16 @@ export function SelectDropdown({
             {/* 拖拽把手条——纯装饰，不接手势关闭（点遮罩/选项/Escape 已经够用）。
                 只在窄屏抽屉形态显示，宽屏悬浮面板不需要。 */}
             <div aria-hidden="true" className="mx-auto mb-1 h-1 w-10 shrink-0 rounded-full bg-sand sm:hidden" />
-            <ul id={listboxId} role="listbox" className="min-h-0 flex-1 overflow-y-auto">
+            {/* fix(2026-09-26 第七十二轮批次②，ui-auditor 用真实香港行程抓到的真
+                bug，这次合并沿用同一个修法)：滚动条本身默认在 macOS/触屏上是"滚动时
+                才出现"的覆盖式滚动条，没有任何持续可见的提示——选项多到要滚动时，
+                用户容易以为列表就显示的这几项。显式给 `::-webkit-scrollbar` 上色，
+                至少桌面 Chrome/Safari/Edge 上有个持续可见的细条提示"这里能滚"。 */}
+            <ul
+              id={listboxId}
+              role="listbox"
+              className="min-h-0 flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sand"
+            >
               {options.map((opt) => (
                 <li
                   key={opt.value}

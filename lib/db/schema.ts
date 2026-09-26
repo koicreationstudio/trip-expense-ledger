@@ -273,6 +273,16 @@ export const expenseSplits = sqliteTable(
       .notNull()
       .references(() => participants.id),
     shareAmountBaseCurrency: integer('share_amount_base_currency').notNull(),
+    // 这一份分摊换算成消费原始币种（expense.currency/expense.amount）的金额
+    // （2026-09-26，"结算按币种拆开显示"新增）。新记录落库那一刻就用
+    // lib/domain/split.ts 的 deriveOriginalCurrencyShares 精确算好（最大余数法，
+    // 总和严格等于 expense.amount，一分钱不会分不出去悬空）。这次上线前的历史
+    // 记录先给个占位默认值 0（SQLite 给已有数据表加 NOT NULL 列必须带默认值），
+    // 靠 scripts/backfill-expense-split-original-currency.ts 一次性回填成"用
+    // shareAmountBaseCurrency/expense.amountBaseCurrency 的比例反推"的近似值
+    // （±0.01 误差是已知接受的近似，只影响这个展示用的原始币种数字，不影响
+    // shareAmountBaseCurrency 本身，也就不影响"谁最终欠谁多少钱"这个真相）。
+    shareAmountOriginal: integer('share_amount_original').notNull().default(0),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.expenseId, table.participantId] }),
@@ -388,6 +398,55 @@ export const wallets = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// wallet_balance_history：「设置当前余额」每次落地的审计轨迹（2026-09-26 新增）。
+// 只追加、不改写、不删除——每次 PATCH /wallets/[walletId] 真的带了
+// `currentBalance`（=一次"设置当前余额"动作，不是单纯改名字/绑支付方式那种
+// PATCH）就在写入新锚点的同一次请求里追加一条。
+//
+// `amount`/`effectiveDate` 记的是这次写入的新锚点（跟 `wallet.currentBalance`/
+// `wallet.balanceUpdatedAt` 这次写完之后的值完全一致）。`prevAmount`/
+// `prevEffectiveDate` 记改之前的锚点——如果这个钱包之前从没设置过当前余额
+// （旧的"未锚定/累加"模式，`wallet.balanceUpdatedAt` 是 null），这两个字段
+// 允许是 null，代表"改前从未设置过锚点"，不是"改前锚点是 0"，这条历史第一条
+// 该写照写，不能因为"改前没有锚点"就整条跳过不记。
+// `displayBalanceBefore`/`displayBalanceAfter` 各自是改之前/改之后，喂给
+// `computeWalletDisplayBalance`（lib/domain/wallet-balance.ts）算出来的现余额，
+// 不是另外发明一套算法算的——"未锚定模式"下这个函数本来就会把
+// `wallet.currentBalance`（累加值）原样当现余额返回，所以即使改前从未锚定，
+// `displayBalanceBefore` 也一样能算出一个有意义的数字。
+// `changedByParticipantId` 存但列表渲染不显示（Remy 明确要求这轮历史列表别
+// 出现"由谁设置"这种操作者文字），字段本身留着不删，以后有需要随时能读。
+// ---------------------------------------------------------------------------
+export const walletBalanceHistory = sqliteTable(
+  'wallet_balance_history',
+  {
+    id: id(),
+    walletId: text('wallet_id')
+      .notNull()
+      .references(() => wallets.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(), // 这次设置的新锚点金额，最小货币单位
+    effectiveDate: integer('effective_date', { mode: 'timestamp_ms' }).notNull(), // 这次设置的新生效日
+    changedByParticipantId: text('changed_by_participant_id')
+      .notNull()
+      .references(() => participants.id),
+    // 字段名跟别的表统一叫 createdAt() 的那套 helper 生成的列名都是 `created_at`——
+    // 这张表故意手写这一列（不用那个 helper），列名跟 TS 字段名一样叫 `changed_at`，
+    // 免得以后直接查 D1 原始表时，看到一列 `created_at` 却装的是"这次设置发生的
+    // 时间"，跟别的表里 `created_at` 表示"这一行本身何时被创建"的语义混在一起。
+    changedAt: integer('changed_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch('subsec') * 1000)`),
+    prevAmount: integer('prev_amount'), // 改前锚点金额；改前从未设置过锚点时为 null
+    prevEffectiveDate: integer('prev_effective_date', { mode: 'timestamp_ms' }), // 改前生效日；同上可为 null
+    displayBalanceBefore: integer('display_balance_before').notNull(),
+    displayBalanceAfter: integer('display_balance_after').notNull(),
+  },
+  (table) => ({
+    walletIdx: index('wallet_balance_history_wallet_idx').on(table.walletId),
+  })
+);
+
+// ---------------------------------------------------------------------------
 // exchange_record：一笔换汇/充值记录，私有规矩同 wallet。fromWalletId 为空
 // 代表「纯充值，没有可追踪的来源钱包」（比如带的实体现金第一次登记）。
 // 隐含汇率 = toAmount / fromAmount，故意不额外存 rate 字段——展示时现算，
@@ -420,6 +479,88 @@ export const exchangeRecords = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// loan：一笔「借出」记录——跟 expense/expense_split 完全独立的一张新表（2026-09-26
+// round72b 新增），不参与 Hero 卡"我承担"、活动流、结算净额这几处既有计算，那几处
+// 完全不认这张表。之前 Remy 的真实做法是把借钱/还钱都记成一笔「100% 分给对方」的
+// 普通消费（`a4dc5ffd`「借钱」US$7,500 / `4c09fc33`「归还钱」US$7,500 就是这么记的），
+// 这轮加独立的表是为了以后不用再这样模拟——但这次改动完全不动那几笔旧的 expense
+// 记录，它们照样留在 expense 表里，不做任何迁移。
+//
+// lenderParticipantId/borrowerParticipantId 都是 participant，不限定必须是当前
+// session 自己——跟 expense.payerParticipantId 一样，Remy 经常代全部同行人录数据。
+//
+// fromWalletId 可为空：代表"这笔借出不经过任何追踪中的钱包"（比如借出去的是没有
+// 建过钱包的同行人手上的现金，或者 Remy 就是不想追踪这一笔具体从哪个钱包出）——
+// 这是开放问题①，Remy/PM 还没拍板"要不要强制选钱包"，这版先做成"允许不选"这个
+// 开放选项，不强制。
+// ---------------------------------------------------------------------------
+export const loans = sqliteTable(
+  'loan',
+  {
+    id: id(),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    lenderParticipantId: text('lender_participant_id')
+      .notNull()
+      .references(() => participants.id),
+    borrowerParticipantId: text('borrower_participant_id')
+      .notNull()
+      .references(() => participants.id),
+    amount: integer('amount').notNull(), // 原始币种最小货币单位
+    currency: text('currency').notNull(),
+    // 为空＝不经过任何钱包的现金往来，见上方大段注释；非空时钱包余额联动走
+    // lib/domain/wallet-balance.ts（未锚定钱包在 API 路由里直接扣、已锚定钱包
+    // 走推导公式，两条路径跟 expense/exchange_record 完全同一套架构）。
+    fromWalletId: text('from_wallet_id').references(() => wallets.id, { onDelete: 'set null' }),
+    date: integer('date', { mode: 'timestamp_ms' }).notNull(),
+    note: text('note'),
+    createdAt: createdAt(),
+  },
+  (table) => ({
+    tripIdx: index('loan_trip_idx').on(table.tripId),
+    lenderIdx: index('loan_lender_idx').on(table.lenderParticipantId),
+    borrowerIdx: index('loan_borrower_idx').on(table.borrowerParticipantId),
+    fromWalletIdx: index('loan_from_wallet_idx').on(table.fromWalletId),
+  })
+);
+
+// ---------------------------------------------------------------------------
+// loan_repayment：一笔 loan 的还款记录，一笔 loan 可以对应多条 repayment（支持
+// 部分还款，累加到还清）。故意不存 currency 字段——跟 exchange_record 的
+// fromAmount/toAmount 是同一套省字段哲学：这笔金额的币种由 toWalletId 那个钱包的
+// currency 隐式决定（选了钱包，钱包币种就是这笔的币种）；toWalletId 留空（同上
+// 开放问题①，"不经过任何钱包的现金往来"）时这笔的币种就没有任何字段能确定，
+// 这轮的简化假设是"跟对应 loan 的 currency 一致"，只用在 UI 展示格式化，不影响
+// 下面这条重要警告——
+//
+// ⚠️ 开放问题（没有自己拍板，需要 Remy/PM 确认）：还款进度条"已还/借出总额"这个
+// 百分比，是把这笔 loan 名下所有 repayment.amount 直接相加再除以 loan.amount，
+// 完全没做汇率换算。如果借出是 USD、还款存进的是 USDT 钱包（题目描述的正常场景），
+// repayment.amount 实际单位是 USDT 最小单位，跟 loan.amount 的 USD 最小单位直接
+// 相除在数学上不严谨。这版先照字面数字算（多数真实场景应该是同币种还款），需要
+// Remy/PM 确认要不要加汇率换算，或者限制"跨币种还款只显示金额、不计入百分比"。
+// ---------------------------------------------------------------------------
+export const loanRepayments = sqliteTable(
+  'loan_repayment',
+  {
+    id: id(),
+    loanId: text('loan_id')
+      .notNull()
+      .references(() => loans.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(), // 最小货币单位，币种见上方注释
+    toWalletId: text('to_wallet_id').references(() => wallets.id, { onDelete: 'set null' }),
+    date: integer('date', { mode: 'timestamp_ms' }).notNull(),
+    note: text('note'),
+    createdAt: createdAt(),
+  },
+  (table) => ({
+    loanIdx: index('loan_repayment_loan_idx').on(table.loanId),
+    toWalletIdx: index('loan_repayment_to_wallet_idx').on(table.toWalletId),
+  })
+);
+
+// ---------------------------------------------------------------------------
 // settlement_snapshot：行程被显式标记「已结算」时才写入的冻结快照。
 // 平时净额结算走实时计算（见 lib/domain/settlement.ts），不落这张表，
 // 只有这里的记录代表「过去某一刻算出来、之后不再变」的结果。
@@ -445,14 +586,29 @@ export const settlementSnapshots = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
-// settlement_confirmation：结算页"转账清单"里某一笔（from→to）是否已被标记
-// "已收款"，2026-09-13 落地第四轮拍板（屏④按笔勾选收款）。行存在=已确认，不存在=
-// 未确认，不用一个 boolean 列表示——这样"取消勾选"就是删这一行，逻辑更直接。
-// 只锚定 (tripId, from, to) 这一对参与者，不锚定金额：如果这期间又有新消费改变了
-// 这笔转账的实际金额，已确认状态不会自动失效——这是刻意简化，已在
-// PENDING-DECISIONS 里写明，之后如果 Remy 觉得需要按金额也锚定再加。
-// 只有 toParticipantId 本人（收钱的人）能确认/取消确认自己收到的这笔钱，
-// API 层校验，不能由付钱方替对方标记。
+// settlement_confirmation：结算页"转账清单"里某一笔（from→to，现在细分到
+// from→to→currency）是否已被标记"已收款"，2026-09-13 落地第四轮拍板（屏④按笔
+// 勾选收款）。行存在=已确认，不存在=未确认，不用一个 boolean 列表示——这样
+// "取消勾选"就是删这一行，逻辑更直接。只锚定 (tripId, from, to, currency) 这一组，
+// 不锚定金额：如果这期间又有新消费改变了这笔转账的实际金额，已确认状态不会自动
+// 失效——这是刻意简化，已在 PENDING-DECISIONS 里写明，之后如果 Remy 觉得需要按
+// 金额也锚定再加。只有 toParticipantId 本人（收钱的人）能确认/取消确认自己收到的
+// 这笔钱，API 层校验，不能由付钱方替对方标记。
+//
+// fix(2026-09-26，"结算按币种拆开显示")：加 currency 这一列，锚定范围从
+// (tripId,from,to) 扩到 (tripId,from,to,currency)——不然 htoo 只还清了 HKD 那笔，
+// MYR/CNY 两笔还没还，却会被同一个勾选框显示成"全部已收款"（同一对 from/to
+// 现在可能同时欠好几个币种，各自要各自的勾选状态）。
+//
+// 历史数据兼容：这次上线前已经存在的确认行，是按旧规则"整个 (tripId,from,to) 只有
+// 一个确认状态"记的，压根没有"这笔到底是哪个币种"这个概念。这列先允许为空
+// （currency IS NULL）表示"这是上线前的整体确认，不对应任何具体币种"——查询这个
+// 表时只精确匹配 currency，NULL 行不会被当成"匹配任何币种都算已确认"，也不会被
+// 当成"什么都没确认过"直接抹掉，是保留成第三种"历史遗留、待处理"状态。
+// scripts/backfill-settlement-confirmation-currency.ts 提供了一次性把这些 NULL
+// 行展开成"迁移那一刻这对 from/to 实际涉及的每个币种各一行"的迁移路径（已本地
+// 验证，没有对生产库执行，需不需要现在跑、跑完对 Remy 现在看到的已收款状态有什么
+// 具体影响，见交接汇报，不在这里自己拍板）。
 // ---------------------------------------------------------------------------
 export const settlementConfirmations = sqliteTable(
   'settlement_confirmation',
@@ -467,6 +623,9 @@ export const settlementConfirmations = sqliteTable(
     toParticipantId: text('to_participant_id')
       .notNull()
       .references(() => participants.id, { onDelete: 'cascade' }),
+    // 可空：NULL = 这次上线前的历史遗留整体确认行（见上方大注释），新写入的
+    // 确认（POST /settlement/confirmations）从这次上线起一律必须带具体币种。
+    currency: text('currency'),
     confirmedAt: integer('confirmed_at', { mode: 'timestamp_ms' })
       .notNull()
       .default(sql`(unixepoch('subsec') * 1000)`),
@@ -476,7 +635,8 @@ export const settlementConfirmations = sqliteTable(
     pairIdx: uniqueIndex('settlement_confirmation_pair_idx').on(
       table.tripId,
       table.fromParticipantId,
-      table.toParticipantId
+      table.toParticipantId,
+      table.currency
     ),
   })
 );
@@ -573,6 +733,17 @@ export const expenseListPreferences = sqliteTable(
     payerFilter: text('payer_filter').notNull().default('ALL'),
     dateFilter: text('date_filter').notNull().default('ALL'),
     paymentMethodFilter: text('payment_method_filter').notNull().default('ALL'),
+    // 第七十二轮任务④新增：「计分摊/不计分摊」筛选，值域固定 'ALL' | 'included' | 'excluded'
+    // （不像上面几个是"当前数据里取 distinct 值"的动态候选，这个是写死的 3 档）。
+    // 2026-09-26 命名纠正任务：这一列存的值域没变，但它现在的判断依据是
+    // expense-list.tsx 里新的推导字段 `isOnlyMeSplit`（这笔消费的 expense_split
+    // 是不是只分给了付款人自己），不再是 excludeFromSplit——这一列只存"用户当前
+    // 选的是哪一档筛选"，不存判断依据本身，所以列定义/迁移不需要跟着改。
+    splitFilter: text('split_filter').notNull().default('ALL'),
+    // 2026-09-26 命名纠正任务新增：「业务成本」筛选（判断依据是既有的
+    // `expenses.excludeFromSplit` 字段），值域固定 'ALL' | 'yes' | 'no'，跟上面
+    // `splitFilter` 是两个完全独立的筛选条件，同时存在，不合并成一列。
+    businessCostFilter: text('business_cost_filter').notNull().default('ALL'),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
       .notNull()
       .default(sql`(unixepoch('subsec') * 1000)`),
@@ -598,6 +769,7 @@ export const tripsRelations = relations(trips, ({ many }) => ({
   wallets: many(wallets),
   exchangeRecords: many(exchangeRecords),
   settlementConfirmations: many(settlementConfirmations),
+  loans: many(loans),
 }));
 
 export const settlementConfirmationsRelations = relations(settlementConfirmations, ({ one }) => ({
@@ -623,6 +795,8 @@ export const participantsRelations = relations(participants, ({ one, many }) => 
   paidExpenses: many(expenses, { relationName: 'payer' }),
   wallets: many(wallets),
   exchangeRecords: many(exchangeRecords),
+  loansLent: many(loans, { relationName: 'lender' }),
+  loansBorrowed: many(loans, { relationName: 'borrower' }),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -688,6 +862,43 @@ export const walletsRelations = relations(wallets, ({ one, many }) => ({
   paymentMethod: one(paymentMethods, { fields: [wallets.paymentMethodId], references: [paymentMethods.id] }),
   exchangeRecordsFrom: many(exchangeRecords, { relationName: 'fromWallet' }),
   exchangeRecordsTo: many(exchangeRecords, { relationName: 'toWallet' }),
+  balanceHistory: many(walletBalanceHistory),
+  loansFrom: many(loans, { relationName: 'fromWallet' }),
+  loanRepaymentsTo: many(loanRepayments, { relationName: 'toWallet' }),
+}));
+
+export const walletBalanceHistoryRelations = relations(walletBalanceHistory, ({ one }) => ({
+  wallet: one(wallets, { fields: [walletBalanceHistory.walletId], references: [wallets.id] }),
+  changedBy: one(participants, { fields: [walletBalanceHistory.changedByParticipantId], references: [participants.id] }),
+}));
+
+export const loansRelations = relations(loans, ({ one, many }) => ({
+  trip: one(trips, { fields: [loans.tripId], references: [trips.id] }),
+  lender: one(participants, {
+    fields: [loans.lenderParticipantId],
+    references: [participants.id],
+    relationName: 'lender',
+  }),
+  borrower: one(participants, {
+    fields: [loans.borrowerParticipantId],
+    references: [participants.id],
+    relationName: 'borrower',
+  }),
+  fromWallet: one(wallets, {
+    fields: [loans.fromWalletId],
+    references: [wallets.id],
+    relationName: 'fromWallet',
+  }),
+  repayments: many(loanRepayments),
+}));
+
+export const loanRepaymentsRelations = relations(loanRepayments, ({ one }) => ({
+  loan: one(loans, { fields: [loanRepayments.loanId], references: [loans.id] }),
+  toWallet: one(wallets, {
+    fields: [loanRepayments.toWalletId],
+    references: [wallets.id],
+    relationName: 'toWallet',
+  }),
 }));
 
 export const exchangeRecordsRelations = relations(exchangeRecords, ({ one }) => ({

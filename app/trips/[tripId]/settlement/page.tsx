@@ -7,9 +7,11 @@ import {
   loadConfirmedTransferPairs,
   loadSettlementDetail,
   loadSettlementInput,
+  loadSettlementInputWithCurrency,
 } from '@/lib/db/settlement-query';
-import { computeNetBalances, computeSettlement } from '@/lib/domain/settlement';
+import { computeNetBalances, computeSettlement, computeSettlementByCurrency } from '@/lib/domain/settlement';
 import { SettlementBody } from './settlement-body';
+import type { TransferGroupEntry } from './settlement-body';
 
 export default async function SettlementPage({ params }: { params: { tripId: string } }) {
   const identity = await getCurrentIdentity();
@@ -26,13 +28,19 @@ export default async function SettlementPage({ params }: { params: { tripId: str
   const tripParticipants = await db.select().from(participants).where(eq(participants.tripId, params.tripId));
   const nameById = new Map(tripParticipants.map((p) => [p.id, p.displayName]));
 
+  // "每人净值"不变，一直是全部币种合在一起算的一个本位币数字。
   const settlementInput = await loadSettlementInput(db, params.tripId);
   const netBalances = computeNetBalances(settlementInput);
-  const transfers = computeSettlement(settlementInput);
-  const [detailByParticipant, confirmedPairs] = await Promise.all([
+
+  // "转账清单"改成按币种拆开显示（2026-09-26）：每个币种各自独立跑一次净额结算，
+  // 再按 (from,to) 分组合并成一行一行的币种明细，同一对 from/to 名下有几个币种
+  // 就有几行，不再细分支付方式。
+  const [settlementInputWithCurrency, detailByParticipant, confirmedTransferKeys] = await Promise.all([
+    loadSettlementInputWithCurrency(db, params.tripId),
     loadSettlementDetail(db, params.tripId),
     loadConfirmedTransferPairs(db, params.tripId),
   ]);
+  const transfersByCurrency = computeSettlementByCurrency(settlementInputWithCurrency);
 
   const netEntries = [...netBalances.entries()].map(([participantId, amount]) => ({
     participantId,
@@ -41,14 +49,33 @@ export default async function SettlementPage({ params }: { params: { tripId: str
     detail: detailByParticipant.get(participantId) ?? [],
   }));
 
-  const transferEntries = transfers.map((t) => ({
-    fromParticipantId: t.fromParticipantId,
-    toParticipantId: t.toParticipantId,
-    fromName: nameById.get(t.fromParticipantId) ?? t.fromParticipantId,
-    toName: nameById.get(t.toParticipantId) ?? t.toParticipantId,
-    amountBaseCurrency: t.amountBaseCurrency,
-    confirmed: confirmedPairs.has(`${t.fromParticipantId}:${t.toParticipantId}`),
-  }));
+  // 按 (from,to) 分组：同一对参与者名下，不管有几个币种，都合并成一个"转账组"，
+  // 组内每个币种各自一行 + 一个合计。
+  const groupsByPairKey = new Map<string, TransferGroupEntry>();
+  for (const [currency, currencyTransfers] of transfersByCurrency) {
+    for (const t of currencyTransfers) {
+      const pairKey = `${t.fromParticipantId}:${t.toParticipantId}`;
+      const existing = groupsByPairKey.get(pairKey);
+      const line = {
+        currency,
+        amountOriginal: t.amountOriginal,
+        amountBaseCurrency: t.amountBaseCurrency,
+        confirmed: confirmedTransferKeys.has(`${pairKey}:${currency}`),
+      };
+      if (existing) {
+        existing.lines.push(line);
+      } else {
+        groupsByPairKey.set(pairKey, {
+          fromParticipantId: t.fromParticipantId,
+          toParticipantId: t.toParticipantId,
+          fromName: nameById.get(t.fromParticipantId) ?? t.fromParticipantId,
+          toName: nameById.get(t.toParticipantId) ?? t.toParticipantId,
+          lines: [line],
+        });
+      }
+    }
+  }
+  const transferGroups = [...groupsByPairKey.values()];
 
   return (
     // fix(2026-09-16 第十七轮)：gap-8(32px) 收到 gap-3.5(14px)，对齐 Artifact
@@ -76,7 +103,7 @@ export default async function SettlementPage({ params }: { params: { tripId: str
         tripId={trip.id}
         baseCurrency={trip.baseCurrency}
         netEntries={netEntries}
-        transfers={transferEntries}
+        transferGroups={transferGroups}
         myParticipantId={identity.participantId}
         isOwner={identity.isOwner}
         alreadySettled={trip.status === 'settled'}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useLayoutEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { PAYMENT_METHOD_SETTLEMENT_CURRENCIES } from '@/lib/currencies';
 import { yuanToCents, centsToYuan, formatMoney } from '@/lib/money';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -41,6 +42,21 @@ interface Wallet {
   paymentMethodId: string | null;
 }
 
+/** 「设置当前余额」只读历史轨迹的一条（2026-09-26 新增），字段对应 lib/http/dto.ts
+ * 的 `toWalletBalanceHistoryDto`。`changedByParticipantId` 接口带了但列表渲染
+ * 不显示——Remy 明确要求这轮别出现"由谁设置"这种操作者文字。 */
+interface WalletBalanceHistoryEntry {
+  id: string;
+  amount: number;
+  effectiveDate: string;
+  changedByParticipantId: string;
+  changedAt: string;
+  prevAmount: number | null;
+  prevEffectiveDate: string | null;
+  displayBalanceBefore: number;
+  displayBalanceAfter: number;
+}
+
 const emptyForm = {
   label: '',
   kind: 'card' as 'card' | 'cash',
@@ -60,8 +76,18 @@ export function PaymentMethodsManager({
   // 面板，不用让人自己找到底部那颗折叠按钮点开。
   defaultOpenBalancePanel?: boolean;
 }) {
+  const router = useRouter();
   const [methods, setMethods] = useState<PaymentMethod[] | null>(null);
   const [form, setForm] = useState(emptyForm);
+  // 「点名字进入编辑态」改名（round72b）：只在"已配置的支付方式"这一份账号级清单上
+  // 加编辑入口——下面"本行程启用的支付方式"那份清单的 `m.label` 是 `<label htmlFor>`
+  // 指向勾选开关的可点击目标，改名按钮跟"点文字=切开关"这个语义冲突，两份清单显示的
+  // 是同一个 `PaymentMethod.label`，改一处、`loadMethods()` 刷新后另一处自然同步，
+  // 不需要重复做一份编辑入口。
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [labelDraft, setLabelDraft] = useState('');
+  const [labelSaving, setLabelSaving] = useState(false);
+  const [labelError, setLabelError] = useState<string | null>(null);
   // fix(第六十八轮，任务 J)："固定费（结算币种，元）"——`form` 是个多字段对象，
   // 这个 ref/pending 只服务 `form.fixedFeeYuan` 这一个字段，跟 `form` 里其它
   // 字段（百分比/币种/名称）无关。
@@ -114,6 +140,34 @@ export function PaymentMethodsManager({
   // fix(2026-09-14 Artifact Version 10 走查补做)：Artifact 里"设置当前余额"是页面
   // 底部一颗按钮，点开才展开钱包余额清单——不是像这里之前那样常驻在页面最上面的一整块。
   const [balancePanelOpen, setBalancePanelOpen] = useState(defaultOpenBalancePanel);
+
+  // 防覆盖确认流程（2026-09-26 新增，三步：①看当前锚点+现余额 ②填新值 ③确认改前→
+  // 改后再真正提交）——`balanceStep` 只在 `editingWalletId` 非空时有意义，`form` 是
+  // 步骤①②合并的同一屏（先看锚点信息、同一屏往下填新值），`confirm` 是步骤③。
+  const [balanceStep, setBalanceStep] = useState<'form' | 'confirm'>('form');
+  // 步骤①要看的"当前锚点+系统算出的现余额"——GET /wallets 那份列表已经把
+  // currentBalance 换成推导出来的显示值（withDisplayBalance），原始锚点数字早被
+  // 盖掉了，只有专门查一次 balance-preview（不带新值）才能拿到 prevAmount/
+  // prevEffectiveDate 这两个原始值，所以这里要单独一份 state + 单独一次请求。
+  const [anchorInfo, setAnchorInfo] = useState<{
+    prevAmount: number | null;
+    prevEffectiveDate: string | null;
+    displayBalanceBefore: number;
+  } | null>(null);
+  const [anchorInfoLoading, setAnchorInfoLoading] = useState(false);
+  // 步骤③要看的"改后系统算出的现余额"——点"下一步"那一刻带着用户填的新值再查一次
+  // 同一个 balance-preview 端点算出来，跟真正 PATCH 落库时用的是同一个
+  // `computeWalletDisplayBalance`，不是另外拼一套算法猜的数字。
+  const [confirmPreview, setConfirmPreview] = useState<{ displayBalanceAfter: number } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
+  // 历史记录只读展示（2026-09-26 新增）——按钱包 id 各自缓存一份列表，展开哪个钱包
+  // 的历史就用哪个 id 当 key，`undefined` = 还没查过，`null` 会不出现（查过就是数组，
+  // 哪怕是空数组）。点击历史条目本身不做任何事（不预填表单、没有"恢复"按钮），
+  // 这轮 Remy 明确要求只做只读展示，交互留给下一份设计稿。
+  const [historyOpenWalletId, setHistoryOpenWalletId] = useState<string | null>(null);
+  const [historyLoadingId, setHistoryLoadingId] = useState<string | null>(null);
+  const [historyByWallet, setHistoryByWallet] = useState<Record<string, WalletBalanceHistoryEntry[]>>({});
 
   // fix(2026-09-24 第三十九轮，第四版，真正的根因——前三版都在"时机"上找，找错了
   // 维度）：用 Playwright 在生产环境实机插桩 `Element.prototype.scrollIntoView`
@@ -193,13 +247,97 @@ export function PaymentMethodsManager({
 
   function startEditBalance(w: Wallet) {
     setEditingWalletId(w.id);
+    setBalanceStep('form');
     setBalanceYuan(String(centsToYuan(w.currentBalance)));
-    setBalanceDate(new Date().toISOString().slice(0, 10));
+    // fix(2026-09-26，防覆盖确认流程)：故意不预填今天——之前默认填今天，人容易顺手
+    // 直接点保存，选错日期（该扣的消费没扣到）没有任何提醒。这里留空，逼着用户
+    // 自己主动点一天，配合下面的说明文字"这天之前的消费不会再扣，选错会影响历史
+    // 计算"，「下一步」也会在没选日期时直接挡下来（见 handleGoToConfirm）。
+    setBalanceDate('');
     setBalanceError(null);
+    setAnchorInfo(null);
+    setConfirmPreview(null);
+    void loadAnchorInfo(w.id);
+  }
+
+  /**
+   * 步骤①要看的"当前锚点+系统算出的现余额"——不带任何新值地查一次 balance-preview，
+   * 纯读、不写库。见该端点顶部注释：GET /wallets 那份列表里的 `currentBalance` 早被
+   * 换成推导出来的显示值，原始锚点数字只有这里才拿得到。
+   */
+  async function loadAnchorInfo(walletId: string) {
+    setAnchorInfoLoading(true);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/wallets/${walletId}/balance-preview`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        setAnchorInfo({
+          prevAmount: data.prevAmount,
+          prevEffectiveDate: data.prevEffectiveDate,
+          displayBalanceBefore: data.displayBalanceBefore,
+        });
+      }
+    } finally {
+      setAnchorInfoLoading(false);
+    }
+  }
+
+  /**
+   * 「下一步」——校验完新值之后，带着新锚点/新生效日再查一次同一个 balance-preview
+   * 端点算出"改后系统算出的现余额"，查完才进入步骤③确认页。这一步本身不写库，
+   * 真正落库要等确认页点"确认保存"（handleSetBalance）。
+   */
+  async function handleGoToConfirm(walletId: string) {
+    setBalanceError(null);
+    if (!balanceDate) {
+      setBalanceError('请选择生效日期——这天之前的消费不会再扣，选错会影响历史计算。');
+      return;
+    }
+    const amount = Number(balanceYuan);
+    if (Number.isNaN(amount)) {
+      setBalanceError('金额格式不对');
+      return;
+    }
+    setConfirmLoading(true);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/wallets/${walletId}/balance-preview`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          newCurrentBalance: yuanToCents(amount),
+          newBalanceUpdatedAt: new Date(balanceDate).toISOString(),
+        }),
+      });
+      if (!res.ok) {
+        setBalanceError('算不出改后余额，检查一下金额和日期');
+        return;
+      }
+      const data = (await res.json()) as any;
+      // 顺手把"改前"这份也用这次查到的刷新一遍——跟步骤①查到的理应一致（这中间
+      // 没有别的写操作发生），但用同一次响应保证两个数字来自同一次查询，不会因为
+      // 两次请求之间数据变了而错位。
+      setAnchorInfo({
+        prevAmount: data.prevAmount,
+        prevEffectiveDate: data.prevEffectiveDate,
+        displayBalanceBefore: data.displayBalanceBefore,
+      });
+      setConfirmPreview({ displayBalanceAfter: data.displayBalanceAfter });
+      setBalanceStep('confirm');
+    } finally {
+      setConfirmLoading(false);
+    }
   }
 
   async function handleSetBalance(walletId: string) {
     setBalanceError(null);
+    if (!balanceDate) {
+      setBalanceError('请选择生效日期');
+      return;
+    }
     const amount = Number(balanceYuan);
     if (Number.isNaN(amount)) {
       setBalanceError('金额格式不对');
@@ -212,7 +350,7 @@ export function PaymentMethodsManager({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           currentBalance: yuanToCents(amount),
-          balanceUpdatedAt: balanceDate ? new Date(balanceDate).toISOString() : undefined,
+          balanceUpdatedAt: new Date(balanceDate).toISOString(),
         }),
       });
       if (!res.ok) {
@@ -220,9 +358,46 @@ export function PaymentMethodsManager({
         return;
       }
       setEditingWalletId(null);
+      setBalanceStep('form');
+      setAnchorInfo(null);
+      setConfirmPreview(null);
       await loadWallets();
+      // 这条钱包的历史面板如果之前打开过，缓存已经过期（多了一条新记录）——清掉
+      // 强制下次展开重新查；如果面板现在正开着，立刻重新查一次让它马上看到新记录。
+      setHistoryByWallet((prev) => {
+        if (!(walletId in prev)) return prev;
+        const next = { ...prev };
+        delete next[walletId];
+        return next;
+      });
+      if (historyOpenWalletId === walletId) await loadHistory(walletId);
     } finally {
       setBalanceSubmitting(false);
+    }
+  }
+
+  async function loadHistory(walletId: string) {
+    setHistoryLoadingId(walletId);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/wallets/${walletId}/balance-history`);
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        setHistoryByWallet((prev) => ({ ...prev, [walletId]: data.history }));
+      }
+    } finally {
+      setHistoryLoadingId(null);
+    }
+  }
+
+  /** 只读历史面板的展开/收起（2026-09-26 新增）——点击本身不影响表单，不预填任何值。 */
+  async function toggleHistory(walletId: string) {
+    if (historyOpenWalletId === walletId) {
+      setHistoryOpenWalletId(null);
+      return;
+    }
+    setHistoryOpenWalletId(walletId);
+    if (!historyByWallet[walletId]) {
+      await loadHistory(walletId);
     }
   }
 
@@ -278,6 +453,58 @@ export function PaymentMethodsManager({
     setConfirmingId(null);
     await fetch(`/api/payment-methods/${id}`, { method: 'DELETE' });
     await loadMethods();
+  }
+
+  /** 点名字进入改名编辑态（round72b）。 */
+  function startEditLabel(m: PaymentMethod) {
+    setEditingLabelId(m.id);
+    setLabelDraft(m.label);
+    setLabelError(null);
+  }
+
+  function cancelEditLabel() {
+    setEditingLabelId(null);
+    setLabelError(null);
+  }
+
+  /**
+   * 保存改名——后端 `PATCH /api/payment-methods/{id}` 早就支持 `label` 单字段更新
+   * （`body.label ?? existing.label`），这里不用新开端点。空字符串在前端就拦（trim
+   * 后长度要 >0），失败（网络错误/非 2xx）都要显示清楚的错误，不静默、不让编辑态
+   * 卡死、也不让人以为"看起来已经改了"其实没成功——`labelDraft` 只有真的保存成功
+   * 才清掉编辑态，失败时原样留在编辑态让人重试。
+   *
+   * 注：钱包卡片显示的名字是建钱包那一刻复制过去的独立字段（`wallet.label`），
+   * 跟这里改的 `paymentMethod.label` 之后互不联动——这是已知的产品设计缺口，这次
+   * 明确不处理（钱包名字要不要跟着改、还是钱包该转成读关联支付方式的名字，留给
+   * Remy 下一轮拍板方向）。
+   */
+  async function handleSaveLabel(id: string) {
+    const next = labelDraft.trim();
+    if (!next) {
+      setLabelError('名称不能空着');
+      return;
+    }
+    setLabelError(null);
+    setLabelSaving(true);
+    try {
+      const res = await fetch(`/api/payment-methods/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ label: next }),
+      });
+      if (!res.ok) {
+        setLabelError('改名失败，检查一下网络再试一次');
+        return;
+      }
+      setEditingLabelId(null);
+      await loadMethods();
+      router.refresh();
+    } catch {
+      setLabelError('改名失败，检查一下网络再试一次');
+    } finally {
+      setLabelSaving(false);
+    }
   }
 
   /**
@@ -362,10 +589,58 @@ export function PaymentMethodsManager({
                   {m.kind === 'card' ? '💳' : '💵'}
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col">
-                  {/* Artifact `#scr-payment .nm{font-size:10px}` */}
-                  <span className="text-[10px] font-medium">
-                    {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
-                  </span>
+                  {/* fix(round72b)："点名字进入编辑态"改名交互——原来 `m.label` 是纯文字，
+                      没有任何点击/编辑入口。改名跟点上面 my-trips.tsx `TripCard` 那处
+                      改行程名字同一套模式（field-input + 保存/取消），差别是这里不用
+                      绝对定位覆盖卡片（这一行本身不是可点开的大按钮，不会跟别的点击区
+                      抢事件），编辑态直接原地展开在这两行文字的位置。 */}
+                  {editingLabelId === m.id ? (
+                    <div className="flex flex-col gap-1.5 py-0.5">
+                      <input
+                        autoFocus
+                        value={labelDraft}
+                        onChange={(e) => setLabelDraft(e.target.value)}
+                        disabled={labelSaving}
+                        placeholder="支付方式名称"
+                        aria-label="支付方式名称"
+                        className="field-input"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={labelSaving}
+                          onClick={() => handleSaveLabel(m.id)}
+                          className="btn-secondary"
+                        >
+                          {labelSaving ? '保存中…' : '保存'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={labelSaving}
+                          onClick={cancelEditLabel}
+                          className="tap-link text-[11px] text-muted"
+                        >
+                          取消
+                        </button>
+                      </div>
+                      {labelError && <p className="text-[10px] text-coral">{labelError}</p>}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => startEditLabel(m)}
+                      aria-label={`编辑支付方式名称「${m.label}」`}
+                      className="flex items-center gap-1 self-start text-left text-[10px] font-medium hover:text-ink"
+                    >
+                      {/* Artifact `#scr-payment .nm{font-size:10px}` */}
+                      <span>
+                        {m.label}（{m.kind === 'card' ? '卡' : '现金'} · {m.settlementCurrency}）
+                      </span>
+                      <span aria-hidden="true" className="text-muted">
+                        ✎
+                      </span>
+                    </button>
+                  )}
                   {/* Artifact `#scr-payment .tag-note{font-size:8.5px}`——之前是10px。 */}
                   <span className="mt-0.5 border-t border-dashed border-sand pt-1 text-[8.5px] text-muted">
                     汇率加点 {m.fxMarkupPercent}% · 境外手续费 {m.foreignTxnFeePercent}% · 返现 {m.cashbackPercent}%
@@ -663,6 +938,17 @@ export function PaymentMethodsManager({
                           {new Date(w.balanceUpdatedAt).toLocaleDateString()}
                         </span>
                       )}
+                      {/* fix(2026-09-26，历史记录只读展示)：跟"设置"同一排的小号文字按钮，
+                          点击只展开/收起下面的只读历史面板，不影响上面的"设置当前余额"表单——
+                          两者是完全独立的两件事，可以同时开着。 */}
+                      <button
+                        type="button"
+                        onClick={() => toggleHistory(w.id)}
+                        aria-expanded={historyOpenWalletId === w.id}
+                        className="shrink-0 text-[9px] text-muted underline underline-offset-2"
+                      >
+                        历史{historyOpenWalletId === w.id ? ' ▲' : ' ▾'}
+                      </button>
                       {editingWalletId !== w.id && (
                         <button
                           type="button"
@@ -673,58 +959,192 @@ export function PaymentMethodsManager({
                         </button>
                       )}
                     </div>
-                    {editingWalletId === w.id && (
-                      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-sand bg-white p-2">
-                        <div className="flex flex-col gap-1">
-                          <label className="field-label" htmlFor={`wallet-balance-${w.id}`}>
-                            当前余额（{w.currency}）
-                          </label>
-                          <input
-                            id={`wallet-balance-${w.id}`}
-                            ref={balanceInputRef}
-                            type="text"
-                            inputMode="decimal"
-                            value={formatThousands(balanceYuan)}
-                            onChange={(e) => {
-                              const rawInput = e.target.value;
-                              const selectionStart = e.target.selectionStart ?? rawInput.length;
-                              const meaningfulBefore = countMeaningfulCharsBefore(rawInput, selectionStart);
-                              const candidate = stripThousands(rawInput);
-                              if (!/^\d*\.?\d*$/.test(candidate)) return;
-                              pendingBalanceCursorRef.current = meaningfulBefore;
-                              setBalanceYuan(candidate);
-                            }}
-                            className="field-input w-28 font-serif tabular-nums"
-                          />
+
+                    {/* 防覆盖确认流程步骤①②合并同一屏（2026-09-26 新增）：先看当前锚点+
+                        系统算出的现余额，再往下填新值——字号/间距套用这个 app 已有的
+                        field-label(9px)/field-input(10px) 阶梯，金额展示统一 font-serif
+                        text-[10.5px]（跟这一屏其它金额同一档，不再冒出一个独立的大号衬线
+                        字体跟旁边小字说明反差过大）。 */}
+                    {editingWalletId === w.id && balanceStep === 'form' && (
+                      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-white p-2">
+                        {anchorInfoLoading || !anchorInfo ? (
+                          <p className="text-[9px] text-muted">载入当前锚点中…</p>
+                        ) : (
+                          <div className="flex flex-col gap-1 rounded-lg bg-[rgba(164,163,160,.14)] px-2 py-1.5">
+                            <p className="text-[9px] text-muted">
+                              当前锚点：
+                              {anchorInfo.prevAmount !== null && anchorInfo.prevEffectiveDate ? (
+                                <span className="font-serif text-[10.5px] tabular-nums text-ink">
+                                  {' '}
+                                  {formatMoney(anchorInfo.prevAmount, w.currency)} ·{' '}
+                                  {new Date(anchorInfo.prevEffectiveDate).toLocaleDateString()}
+                                </span>
+                              ) : (
+                                <span className="text-ink"> 还没设置过</span>
+                              )}
+                            </p>
+                            <p className="text-[9px] text-muted">
+                              系统算出的现余额：
+                              <span className="font-serif text-[10.5px] tabular-nums text-ink">
+                                {' '}
+                                {formatMoney(anchorInfo.displayBalanceBefore, w.currency)}
+                              </span>
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-end gap-2">
+                          <div className="flex flex-col gap-1">
+                            <label className="field-label" htmlFor={`wallet-balance-${w.id}`}>
+                              新余额（{w.currency}）
+                            </label>
+                            <input
+                              id={`wallet-balance-${w.id}`}
+                              ref={balanceInputRef}
+                              type="text"
+                              inputMode="decimal"
+                              value={formatThousands(balanceYuan)}
+                              onChange={(e) => {
+                                const rawInput = e.target.value;
+                                const selectionStart = e.target.selectionStart ?? rawInput.length;
+                                const meaningfulBefore = countMeaningfulCharsBefore(rawInput, selectionStart);
+                                const candidate = stripThousands(rawInput);
+                                if (!/^\d*\.?\d*$/.test(candidate)) return;
+                                pendingBalanceCursorRef.current = meaningfulBefore;
+                                setBalanceYuan(candidate);
+                              }}
+                              className="field-input w-28 font-serif tabular-nums"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <label className="field-label" htmlFor={`wallet-balance-date-${w.id}`}>
+                              生效日期
+                            </label>
+                            {/* fix(2026-09-26，防覆盖确认流程)：故意不给 value 塞今天当默认值
+                                （下面 startEditBalance 已经把 balanceDate 初始成空字符串）——
+                                逼着用户自己主动选一天，不能什么都不选就直接点"下一步"。 */}
+                            <input
+                              id={`wallet-balance-date-${w.id}`}
+                              type="date"
+                              value={balanceDate}
+                              onChange={(e) => setBalanceDate(e.target.value)}
+                              className="field-input"
+                            />
+                          </div>
                         </div>
-                        <div className="flex flex-col gap-1">
-                          <label className="field-label" htmlFor={`wallet-balance-date-${w.id}`}>
-                            记录日期
-                          </label>
-                          <input
-                            id={`wallet-balance-date-${w.id}`}
-                            type="date"
-                            value={balanceDate}
-                            onChange={(e) => setBalanceDate(e.target.value)}
-                            className="field-input"
-                          />
+                        <p className="text-[8.5px] text-muted">这天之前的消费不会再扣，选错会影响历史计算。</p>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={confirmLoading}
+                            onClick={() => handleGoToConfirm(w.id)}
+                            className="btn-secondary"
+                          >
+                            {confirmLoading ? '算中…' : '下一步'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingWalletId(null)}
+                            className="tap-link text-[11px] text-muted"
+                          >
+                            取消
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          disabled={balanceSubmitting}
-                          onClick={() => handleSetBalance(w.id)}
-                          className="btn-secondary"
-                        >
-                          {balanceSubmitting ? '保存中…' : '保存'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingWalletId(null)}
-                          className="tap-link text-[11px] text-muted"
-                        >
-                          取消
-                        </button>
-                        {balanceError && <p className="w-full text-[10px] text-coral">{balanceError}</p>}
+                        {balanceError && <p className="text-[10px] text-coral">{balanceError}</p>}
+                      </div>
+                    )}
+
+                    {/* 步骤③保存前确认页：改前锚点/现余额用删除线，改后正常显示——真正提交
+                        PATCH 要等这一步点"确认保存"，前面两步都只是查预览、没有写库。 */}
+                    {editingWalletId === w.id && balanceStep === 'confirm' && anchorInfo && confirmPreview && (
+                      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-white p-2">
+                        <p className="text-[9px] text-muted">保存后会追加一条历史记录，确认没错再保存。</p>
+                        <div className="flex flex-col gap-1 rounded-lg bg-[rgba(164,163,160,.14)] px-2 py-1.5">
+                          <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[9px] text-muted">
+                            <span>锚点：</span>
+                            {anchorInfo.prevAmount !== null && anchorInfo.prevEffectiveDate ? (
+                              <span className="font-serif text-[10.5px] tabular-nums text-muted line-through">
+                                {formatMoney(anchorInfo.prevAmount, w.currency)} ·{' '}
+                                {new Date(anchorInfo.prevEffectiveDate).toLocaleDateString()}
+                              </span>
+                            ) : (
+                              <span className="text-muted line-through">从未设置</span>
+                            )}
+                            <span>→</span>
+                            <span className="font-serif text-[10.5px] tabular-nums text-ink">
+                              {formatMoney(yuanToCents(Number(balanceYuan) || 0), w.currency)} ·{' '}
+                              {balanceDate ? new Date(balanceDate).toLocaleDateString() : ''}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[9px] text-muted">
+                            <span>现余额：</span>
+                            <span className="font-serif text-[10.5px] tabular-nums text-muted line-through">
+                              {formatMoney(anchorInfo.displayBalanceBefore, w.currency)}
+                            </span>
+                            <span>→</span>
+                            <span className="font-serif text-[10.5px] tabular-nums text-ink">
+                              {formatMoney(confirmPreview.displayBalanceAfter, w.currency)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={balanceSubmitting}
+                            onClick={() => handleSetBalance(w.id)}
+                            className="btn-secondary"
+                          >
+                            {balanceSubmitting ? '保存中…' : '确认保存'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBalanceStep('form')}
+                            className="tap-link text-[11px] text-muted"
+                          >
+                            上一步
+                          </button>
+                        </div>
+                        {balanceError && <p className="text-[10px] text-coral">{balanceError}</p>}
+                      </div>
+                    )}
+
+                    {/* 历史记录只读展示（2026-09-26 新增）——每条只显示三块信息：这次设置
+                        的锚点值@生效日／改动日期＋现余额改前→改后，不显示"由谁设置"这种
+                        操作者文字（Remy 明确要求去掉），点击条目本身不做任何事，没有"恢复
+                        这版"/"带回表单预填"这两个交互，设计稿还没定，这轮只做只读展示。 */}
+                    {historyOpenWalletId === w.id && (
+                      <div className="flex flex-col gap-1.5 rounded-xl border border-sand bg-white p-2">
+                        {historyLoadingId === w.id ? (
+                          <p className="text-[9px] text-muted">载入历史中…</p>
+                        ) : !historyByWallet[w.id] ? (
+                          <p className="text-[9px] text-muted">还没有历史记录。</p>
+                        ) : historyByWallet[w.id]!.length === 0 ? (
+                          <p className="text-[9px] text-muted">还没设置过当前余额，没有历史记录。</p>
+                        ) : (
+                          <ul className="flex flex-col gap-1.5">
+                            {historyByWallet[w.id]!.map((h) => (
+                              <li
+                                key={h.id}
+                                className="flex flex-col gap-0.5 border-b border-dashed border-sand pb-1.5 last:border-b-0 last:pb-0"
+                              >
+                                <span className="font-serif text-[10.5px] tabular-nums text-ink">
+                                  {formatMoney(h.amount, w.currency)} · {new Date(h.effectiveDate).toLocaleDateString()}
+                                </span>
+                                <span className="text-[9px] text-muted">
+                                  {new Date(h.changedAt).toLocaleDateString()} ·{' '}
+                                  <span className="font-serif tabular-nums">
+                                    {formatMoney(h.displayBalanceBefore, w.currency)}
+                                  </span>
+                                  {' → '}
+                                  <span className="font-serif tabular-nums">
+                                    {formatMoney(h.displayBalanceAfter, w.currency)}
+                                  </span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     )}
                   </li>

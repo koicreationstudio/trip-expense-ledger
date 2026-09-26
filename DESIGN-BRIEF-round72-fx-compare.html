@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>trip-expense-ledger 记账本改版提案 — 第72轮①比价卡改版逐屏对照</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#373736; --paper:#F7F7F6; --sand:#DBDAD6; --neutral:#A4A3A0;
+    --neutral-lt:#EDECE9; --neutral-dk:#6E6E6C; --muted:#6E6E6C;
+    --coral:#991B14; --negative:#A63926; --positive:#3D6141;
+    --negative-dk:#E6B1A8; --positive-dk:#B7D1A8;
+    --ok:#4C7A50; --ok-bg:#E3ECE0; --live:#3E7787; --live-bg:#DFEAEC;
+    --cream:#F3E9D2; --accent-700:#373736; --accent-800:#252524;
+    --hero-label: color-mix(in srgb, var(--sand) 70%, white);
+    --font-sans:'Inter',system-ui,sans-serif;
+    --font-serif:'IBM Plex Serif',serif;
+    --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:var(--font-sans); background:#EFEEEA; color:var(--ink); -webkit-font-smoothing:antialiased;}
+  .topbar{background:var(--ink); color:#fff; padding:18px 28px; display:flex; flex-direction:column; gap:4px;}
+  .topbar h1{margin:0; font-size:18px; font-weight:700;}
+  .topbar p{margin:0; font-size:12px; color:var(--hero-label); line-height:1.6; max-width:1000px;}
+  .layout{display:flex; align-items:flex-start; min-height:100vh;}
+  .sidebar{width:220px; flex-shrink:0; background:#fff; border-right:1px solid var(--sand); min-height:100vh; padding:14px 0; position:sticky; top:0;}
+  .sidebar-group-label{font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--neutral-dk); font-weight:600; padding:10px 16px 4px;}
+  .nav-btn{display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer; padding:9px 16px; font-size:12.5px; font-family:var(--font-sans); color:var(--ink); border-left:3px solid transparent; line-height:1.4;}
+  .nav-btn small{display:block; font-size:9.5px; color:var(--muted); margin-top:1px; font-weight:400;}
+  .nav-btn:hover{background:var(--neutral-lt);}
+  .nav-btn.active{background:var(--neutral-lt); border-left:3px solid var(--ink); font-weight:600;}
+  .main{flex:1; padding:26px 32px 80px; min-width:0;}
+  .screen{display:none;} .screen.active{display:block;}
+  .screen-head{margin-bottom:16px;}
+  .screen-head h2{font-size:17px; margin:0 0 4px;}
+  .screen-head .tag{display:inline-block; font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--live-bg); color:var(--live); margin-right:6px; vertical-align:middle;}
+  .screen-body{display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;}
+  .phone-col{display:flex; flex-direction:column; gap:10px; flex-shrink:0;}
+  .phone-label{font-size:10.5px; font-weight:600; color:var(--neutral-dk); text-align:center;}
+  .phone{width:390px; background:var(--paper); border-radius:34px; border:8px solid #1c1c1c; box-shadow:0 14px 30px rgba(0,0,0,.18); overflow:hidden; position:relative;}
+  .phone-screen{max-height:720px; overflow-y:auto; padding:14px 14px 20px; position:relative;}
+  .compare-row{display:flex; gap:16px; flex-wrap:wrap;}
+  .note-card{flex:1; min-width:320px; max-width:520px; background:#fff; border:1px solid var(--sand); border-radius:14px; padding:16px 18px; box-shadow:0 1px 2px rgba(55,55,54,.06);}
+  .note-card h3{font-size:12.5px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.06em; color:var(--neutral-dk); font-weight:700;}
+  .note-card h4{font-size:11.5px; margin:14px 0 6px; color:var(--ink); font-weight:700;}
+  .note-card p{font-size:11.5px; line-height:1.7; margin:0 0 8px; color:var(--ink);}
+  .note-card ul{margin:0 0 8px; padding-left:18px;} .note-card li{font-size:11.5px; line-height:1.7; margin-bottom:4px;}
+  .note-card table{width:100%; border-collapse:collapse; margin:0 0 10px; font-size:10.5px;}
+  .note-card th{text-align:left; font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--neutral-dk); padding:4px 6px; border-bottom:1px solid var(--sand);}
+  .note-card td{padding:5px 6px; border-bottom:1px solid rgba(55,55,54,.06); vertical-align:top;}
+  .note-card .diff{background:var(--neutral-lt); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:11px; line-height:1.7;}
+  .note-card .diff del{color:var(--coral); opacity:.75; text-decoration:line-through;}
+  .note-card .diff b{color:var(--positive); font-weight:700;}
+  .note-card .quote{border-left:3px solid var(--neutral); background:var(--neutral-lt); padding:8px 10px; font-size:10.5px; line-height:1.7; color:var(--neutral-dk); margin-bottom:8px; border-radius:0 6px 6px 0;}
+  .note-card .open-q{background:var(--ok-bg); border:1px solid var(--ok); border-radius:8px; padding:8px 10px; font-size:11px; line-height:1.7; color:var(--ink); margin-top:10px;}
+  .note-card .open-q b{color:var(--ok);}
+  .note-card .warn{background:#FBEEEC; border:1px solid var(--coral); border-radius:8px; padding:8px 10px; font-size:11px; line-height:1.7; color:var(--ink); margin-top:10px;}
+  .note-card .warn b{color:var(--coral);}
+  code{font-family:var(--font-mono); font-size:10px; background:var(--neutral-lt); padding:1px 4px; border-radius:4px;}
+  .field-label{font-size:9px; font-weight:500; color:var(--ink); display:block; margin-bottom:2px;}
+  .field-input{width:100%; border-radius:10px; border:1px solid var(--sand); padding:5px 7px; font-size:10px; font-family:var(--font-sans); background:#fff; color:var(--ink);}
+  .field-input.serif{font-family:var(--font-serif); font-weight:500;}
+  .helper{font-size:8.5px; line-height:1.5; color:var(--muted); margin-top:3px;}
+  .card-box{border:1px solid var(--sand); background:var(--paper); border-radius:12px; padding:10px;}
+  .big-cta{display:block; width:100%; background:var(--accent-700); color:#fff; border-radius:999px; padding:7px; text-align:center; font-size:11px; font-weight:500; border:none; margin-top:6px; cursor:pointer;}
+  .pill-row{display:flex; flex-wrap:wrap; gap:5px;}
+  .pill{display:inline-flex; align-items:center; border-radius:999px; padding:5px 7px; font-size:10px; font-weight:500; background:#fff; border:1px solid var(--sand); color:var(--ink);}
+  .pill.on{background:var(--ink); color:#fff; border-color:var(--ink);}
+  .before-after-label{display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-bottom:6px;}
+  .before-after-label.before{background:rgba(153,27,20,.1); color:var(--coral);}
+  .before-after-label.after{background:rgba(76,122,80,.12); color:var(--ok);}
+  footer.pagefoot{padding:20px 32px; font-size:10.5px; color:var(--neutral-dk); border-top:1px solid var(--sand); margin-top:10px;}
+
+  /* 比价卡专属 */
+  .fxcard{border:1px solid var(--sand); background:#fff; border-radius:14px; padding:10px; margin-bottom:8px;}
+  .fxcard-title{font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--neutral-dk); font-weight:700; margin-bottom:6px;}
+  .fx-conclusion{background:var(--ok-bg); border-radius:10px; padding:7px 9px; font-size:11px; color:var(--ink); margin-bottom:8px; line-height:1.5;}
+  .fx-conclusion b{color:var(--ok);}
+  .fx-row{display:flex; align-items:center; justify-content:space-between; padding:7px 4px; border-top:1px solid var(--sand);}
+  .fx-row:first-child{border-top:none;}
+  .fx-row-name{font-size:11px; font-weight:500; display:flex; align-items:center; gap:5px;}
+  .fx-row-sub{font-size:8.5px; color:var(--muted); margin-top:1px;}
+  .fx-row-amt{font-family:var(--font-serif); font-size:11.5px; font-weight:600; text-align:right;}
+  .fx-badge{display:inline-flex; align-items:center; border-radius:999px; background:var(--ok); padding:1px 6px; font-size:8px; font-weight:700; color:#fff;}
+  .fx-badge.tie{background:var(--live);}
+  .fx-dim{opacity:.55;}
+  .fx-greyed{color:var(--muted); font-size:9px;}
+  .clip-tag{position:absolute; font-size:8px; font-weight:700; background:var(--coral); color:#fff; padding:2px 6px; border-radius:999px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>trip-expense-ledger 记账本改版提案 — 第72轮任务③「比价卡该按什么建议最划算」逐屏对照（只出稿，不动代码）</h1>
+  <p>Remy 原话：手上多币种可付（MYR 卡、HKD 现金、USD 现金、CNY 支付宝、USDT 等），现在只在「我持有」同币种里比，还出现"比 Maybank 多换 0.0%"这种废话。这份稿子改成：以要付的当地金额为准，比较每个支付方式各自要花多少（统一折算），直接说用哪张卡/哪种现金最省，差距 0 时别硬写百分比。示例数据全部来自真实 D1 只读查询（🇭🇰2026香港行程，trip <code>f78a6b5e</code>，本位币 HKD），Remy 名下这趟行程真实的 6 个支付方式：HSBC 大马 Visa Signature(MYR，加点1%)／Maybank 2 Visa Platinum(MYR，加点0%)／支付宝(CNY，加点1%)／USDT钱包(USD，加点0%)／现金(HKD)／现金(USD)。汇率取自这条行程消费记录里实际用过的 <code>fx_rate_used</code>（1 USD=7.84 HKD／1 CNY=1.17 HKD／1 MYR≈0.5333 HKD 的倒数即 1.875），不是编造数字。没有打开真实行程页面、没有做任何写操作。</p>
+  <p style="margin-top:6px; color:var(--sand);">2026-09-26 去重说明：同一轮并行执行曾各自出过一份内容重叠的比价卡算法稿 <code>DESIGN-BRIEF-round72-fx-compare-algorithm.html</code>，两份对比后各有独到内容，已把那份里③屏更细的三档打平阈值表 + 阈值放宽的开放问题合并进本文件③屏，原文件删除，这份取代它。</p>
+</div>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-group-label">现状问题</div>
+    <button class="nav-btn active" data-target="s1">① 现状复现：只看得到 2 张卡+废话徽章
+      <small>fx-compare-card.tsx</small></button>
+    <div class="sidebar-group-label">新设计</div>
+    <button class="nav-btn" data-target="s2">② 改后：按「这笔要付多少」比全部 6 个支付方式
+      <small>lib/domain/fx-recommendation.ts（已存在，只是没接对地方）</small></button>
+    <button class="nav-btn" data-target="s3">③ 并列（差距为0）时怎么说
+      <small>文案规则</small></button>
+    <button class="nav-btn" data-target="s4">④ 渠道换汇参考价怎么共存
+      <small>次要/可折叠区块</small></button>
+  </nav>
+
+  <main class="main">
+
+    <!-- ============ SCREEN 1 ============ -->
+    <section class="screen active" id="s1">
+      <div class="screen-head">
+        <h2>① 现状复现：「我持有 MYR」时看不到 HKD 现金／USD 现金／CNY 支付宝／USDT，徽章还说废话</h2>
+        <span class="tag">真实复现</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改前 · 我持有＝MYR（当前默认）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="before-after-label before">现状</div>
+              <div class="fxcard">
+                <div class="fxcard-title">汇率比价</div>
+                <div class="pill-row" style="margin-bottom:6px;">
+                  <span class="field-label" style="margin:0;">我持有</span>
+                  <span class="pill on">MYR</span>
+                </div>
+                <div class="fx-conclusion">💡最划算：<b>Maybank 2 Visa Platinum</b>，比 HSBC 大马 Visa Signature 多换 <b>0.0%</b></div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">Maybank 2 Visa Platinum <span class="fx-badge">✓最划算</span></div><div class="fx-row-sub">刷卡支付</div></div>
+                  <div class="fx-row-amt">RM100.00</div>
+                </div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">HSBC 大马 Visa Signature</div><div class="fx-row-sub">刷卡支付</div></div>
+                  <div class="fx-row-amt">RM101.00</div>
+                </div>
+              </div>
+              <p class="helper" style="margin-top:8px;">只列出「我持有」= MYR 的这 2 张卡。Remy 手上明明还有 HKD 现金／USD 现金／CNY 支付宝／USDT 四种可以付这笔钱的方式，因为它们的结算币种不是 MYR，整组被过滤掉，完全看不到。</p>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改前 · 徽章文案放大看</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="before-after-label before">废话示例</div>
+              <div class="fxcard">
+                <div class="fx-conclusion">💡最划算：Maybank 2 Visa Platinum，比 HSBC 大马 Visa Signature 多换 <b>0.0%</b></div>
+              </div>
+              <p class="helper">两张卡的加点其实都是 0%（Maybank 记录的加点=0%，这次示例里跟 HSBC 比较时凑巧也是 0% 差距）——"多换 0.0%"这句话字面意思是"完全没有差别"，但用了"多换"这个暗示"有优势"的词，读起来像是有优势又没有优势，自相矛盾，Remy 反馈里点名的正是这句话。</p>
+            </div></div>
+          </div>
+        </div>
+        <div class="note-card">
+          <h3>改了什么</h3>
+          <div class="diff">
+            <del>「我持有」是一个单选下拉（MYR／USD／HKD／CNY 等 8 个候选），选中哪个币种，就只显示「结算币种＝＝这个币种」的那几张卡（<code>fx-compare-card.tsx</code> 第 591-597 行 <code>cardRows = ... .filter(r =&gt; r.settlementCurrency === effectiveHold)</code>）——这是一个「货币换算器」的框架：先选好你手上拿的是哪种钱，再看能换成什么。</del><br>
+            <b>整个「我的支付方式」这一块换成「这笔要付多少当地钱」的框架：不用先选"我持有什么"，直接列出全部 6 个已启用的支付方式各自要花多少钱，不管它们的结算币种是不是跟本位币一样。</b>
+          </div>
+          <h4>根因读代码确认——正确的算法早就写好了，只是没接对地方</h4>
+          <p><code>lib/domain/fx-recommendation.ts</code> 的 <code>recommendPaymentMethods()</code> 这个纯函数，输入就是「一笔当地金额＋原始币种＋比较币种＋全部支付方式列表」，对每个支付方式各自算出 <code>costInCompareCurrency</code>（换算成比较币种后的等值成本，已经把加点/手续费/固定费/现金回赠都算进去了），排好序返回——这正是 Remy 想要的"以要付的当地金额为准，比较每个支付方式各自要花多少"。这个函数<b>本身没有 bug</b>，问题是行程主页这张"汇率比价"卡片（<code>fx-compare-card.tsx</code>）从来没这么用过它，而是在这层外面包了一个"先选我持有的币种"当筛选闸门，把这个函数的能力浪费了。旁边还有一个 <code>FxCompareList</code> 组件（<code>app/trips/[tripId]/fx-compare-list.tsx</code>），本来就是照这个函数的排序结果渲染列表用的，round4 时从记账表单搬走"搁置"，现在完全没有任何地方引用——这次改版就是把这两块现成的东西接回行程主页，不是要新写一套排序/换算逻辑。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 ============ -->
+    <section class="screen" id="s2">
+      <div class="screen-head">
+        <h2>② 改后：填「这笔要付多少」，一次看全部 6 个支付方式各自要花多少</h2>
+        <span class="tag">核心改版</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改后 · 真实例子：HK$333.00（Luk On Kui 点心，真实消费）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="before-after-label after">改后</div>
+              <div class="fxcard">
+                <div class="fxcard-title">这笔该用哪个方式付</div>
+                <div class="card-box" style="margin-bottom:8px;">
+                  <label class="field-label">要付的当地金额</label>
+                  <input class="field-input serif" value="HK$ 333.00" readonly>
+                  <p class="helper">默认是这趟行程的本位币（HKD）；填多少就按多少比，不用先选"我持有什么"。</p>
+                </div>
+                <div class="fx-conclusion">💡最划算：<b>现金(HKD)</b>、Maybank 2 Visa Platinum、USDT钱包 —— 这三个一样划算，都不需要额外汇率成本</div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">现金(HKD) <span class="fx-badge tie">并列最划算</span></div><div class="fx-row-sub">现金支付 · 本身就是港币，无需换汇</div></div>
+                  <div class="fx-row-amt">HK$333.00</div>
+                </div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">Maybank 2 Visa Platinum <span class="fx-badge tie">并列最划算</span></div><div class="fx-row-sub">刷卡支付 · 加点 0%</div></div>
+                  <div class="fx-row-amt">HK$333.00</div>
+                </div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">USDT钱包 <span class="fx-badge tie">并列最划算</span></div><div class="fx-row-sub">刷卡支付 · 加点 0%</div></div>
+                  <div class="fx-row-amt">HK$333.00</div>
+                </div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">HSBC 大马 Visa Signature</div><div class="fx-row-sub">刷卡支付 · 加点 1%</div></div>
+                  <div class="fx-row-amt">HK$336.33</div>
+                </div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">支付宝</div><div class="fx-row-sub">刷卡支付 · 加点 1%</div></div>
+                  <div class="fx-row-amt">HK$336.33</div>
+                </div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">现金(USD)</div><div class="fx-row-sub">现金支付 · 按换钱店损耗估算 2.512%</div></div>
+                  <div class="fx-row-amt">HK$341.36</div>
+                </div>
+              </div>
+            </div></div>
+          </div>
+          <div class="phone-col">
+            <div class="phone-label">改后 · 换一个金额，排序会跟着变（HK$5,000）</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="before-after-label after">改后</div>
+              <div class="fxcard">
+                <div class="card-box" style="margin-bottom:8px;">
+                  <label class="field-label">要付的当地金额</label>
+                  <input class="field-input serif" value="HK$ 5,000.00" readonly>
+                </div>
+                <div class="fx-conclusion">💡最划算：<b>现金(HKD)</b>、Maybank 2 Visa Platinum、USDT钱包 —— 比第二便宜的（HSBC/支付宝）省 <b>1.0%</b>，约 HK$50</div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">现金(HKD) <span class="fx-badge tie">并列最划算</span></div></div>
+                  <div class="fx-row-amt">HK$5,000.00</div>
+                </div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">Maybank 2 Visa Platinum <span class="fx-badge tie">并列最划算</span></div></div>
+                  <div class="fx-row-amt">HK$5,000.00</div>
+                </div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">USDT钱包 <span class="fx-badge tie">并列最划算</span></div></div>
+                  <div class="fx-row-amt">HK$5,000.00</div>
+                </div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">HSBC 大马 Visa Signature</div></div>
+                  <div class="fx-row-amt">HK$5,050.00</div>
+                </div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">支付宝</div></div>
+                  <div class="fx-row-amt">HK$5,050.00</div>
+                </div>
+                <div class="fx-row">
+                  <div><div class="fx-row-name">现金(USD)</div></div>
+                  <div class="fx-row-amt">HK$5,125.60</div>
+                </div>
+              </div>
+              <p class="helper" style="margin-top:6px;">金额越大，同样 1%/2.512% 的加点差出来的绝对金额越明显——这里改成同时给百分比和约等值的钱数（"省 1.0%，约 HK$50"），比单独一个百分比更好判断值不值得为了省钱换一张卡付。</p>
+            </div></div>
+          </div>
+        </div>
+        <div class="note-card">
+          <h3>改了什么</h3>
+          <table>
+            <tr><th>支付方式</th><th>结算币种</th><th>加点</th><th>HK$333 要花多少</th></tr>
+            <tr><td>现金(HKD)</td><td>HKD</td><td>0%（本身就是港币）</td><td>HK$333.00</td></tr>
+            <tr><td>Maybank 2 Visa Platinum</td><td>MYR</td><td>0%</td><td>HK$333.00</td></tr>
+            <tr><td>USDT钱包</td><td>USD</td><td>0%</td><td>HK$333.00</td></tr>
+            <tr><td>HSBC 大马 Visa Signature</td><td>MYR</td><td>1%</td><td>HK$336.33</td></tr>
+            <tr><td>支付宝</td><td>CNY</td><td>1%</td><td>HK$336.33</td></tr>
+            <tr><td>现金(USD)</td><td>USD</td><td>2.512%（换钱店损耗估算，现金没填加点时的既有兜底逻辑，round62 已拍板不变）</td><td>HK$341.36</td></tr>
+          </table>
+          <p>算法本身不用重新发明：直接调 <code>recommendPaymentMethods({ amount: 33300, expenseCurrency: 'HKD', compareCurrency: 'HKD', paymentMethods: 这趟行程启用的全部 6 个, getMarketRate })</code>，因为比较币种就是当地金额本身的币种（HKD），"某支付方式的 HKD 等值成本"数学上就等于 <code>当地金额 × (1 + 该方式的有效加点%)</code>，不需要来回换算两次引入额外误差。</p>
+          <h4>UI 位置变化</h4>
+          <ul>
+            <li>去掉「我持有」单选下拉这个入口，换成一个「要付的当地金额」输入框（默认空或者上一次用过的值，不强制填才能看，不填时用一个占位金额比如 HK$100 先给个参考排序）。</li>
+            <li>「目标币种」下拉也去掉——不再是"我拿着 A 想换成 B"这种货币换算框架，改成"我要付 X 元当地钱，该用哪个方式"，只有一个方向。</li>
+            <li><code>FxCompareList</code>（<code>fx-compare-list.tsx</code>）这个现成组件原样复用来渲染这个排序列表，不用重写一份新的行渲染逻辑。</li>
+          </ul>
+          <div class="open-q"><b>需要 Remy 确认：</b>①默认的"要付的当地金额"要不要有一个初始值（比如空、或者这趟行程最近一笔消费的金额、或者固定 HK$100 当参考），纯粹留空点开就看不到任何排序会不会显得卡片是空的？②这张卡片以后要不要保留"快速填成上一笔消费金额"的按钮，方便记完账后立刻回头看"这笔如果换张卡付会不会更划算"（不是强制关联到某一笔消费，只是提供便利入口）？</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 3 ============ -->
+    <section class="screen" id="s3">
+      <div class="screen-head">
+        <h2>③ 差距为 0（并列最划算）时的文案规则——这是任务书原文点名要改的地方</h2>
+        <span class="tag">文案规则</span>
+      </div>
+      <div class="screen-body">
+        <div class="note-card" style="max-width:760px;">
+          <h3>规则</h3>
+          <table>
+            <tr><th>场景</th><th>改前（废话/误导）</th><th>改后</th></tr>
+            <tr><td>只有 1 个方式最便宜，跟第二名有真实差距</td><td>比 XX 多换 3.2%</td><td>💡最划算：现金(HKD)，比第二便宜的 HSBC 大马 Visa Signature 省 1.0%，约 HK$50</td></tr>
+            <tr><td>最便宜的有 2 个及以上并列（差距=0）</td><td>比 XX 多换 0.0%（现状真实复现的 bug）</td><td>💡最划算：现金(HKD)、Maybank 2 Visa Platinum、USDT钱包 —— 这三个一样划算，都不需要额外汇率成本</td></tr>
+            <tr><td>全部方式都一样贵（比如这趟行程只启用了 1 个支付方式）</td><td>（现状不会出现这种措辞，直接显示唯一一行）</td><td>不显示"最划算"这行结论文字（没有"划算"这个概念可言，只有一个选项时不需要比较），直接列出这一个方式要花多少钱</td></tr>
+          </table>
+          <h4>判断"并列"的口径</h4>
+          <p>不是比较浮点数是否完全相等（浮点数比较相等本身就容易出岔子），是四舍五入到显示用的最小货币单位（分）之后是否相等——<code>costInCompareCurrency</code> 本来就是整数分，天然不会有浮点误差，直接比较排序后最前面几行的 <code>costInCompareCurrency</code> 值是否跟第一行相等，相等的全部归入"并列最划算"这一组。</p>
+          <h4>"比第二便宜的省 X%"这句话什么时候才出现</h4>
+          <p>只有当"并列最划算"这组之外还有别的方式、且价差不是 0 时才显示这句话，价差用 <code>(第二组成本 - 最划算成本) / 最划算成本</code> 算百分比，同时给一个约等值的钱数（"约 HK$50"），不是只给一个孤零零的百分比——大金额时 1% 看起来很小，但配上"约 HK$50"这个具体数字，才好判断值不值得为了省这点钱专门换一张卡。</p>
+          <h4>更细一档：差距很小但不完全是 0 时怎么说（避免"多换 0.0%"式的尴尬重演）</h4>
+          <table>
+            <tr><th>差距</th><th>徽章</th><th>结论行/单行文案</th></tr>
+            <tr><td>差距 = 0（四舍五入到分之后完全相等）</td><td>每个并列的行都打「并列最划算」</td><td>"最划算：A / B / C，三个打平，都是 HK$212.00"——列出全部并列的名字，不说"多换 X%"</td></tr>
+            <tr><td>0 &lt; 差距 &lt; HK$0.5 或 &lt; 0.1%（四舍五入后显示会是 0.0% 但实际不为零）</td><td>只给排第一的打「✓最划算」</td><td>不显示百分比这句比较（避免"0.0%"这种精度不够又硬要显示的尴尬），改成"最划算：A，比 B 差距不到 HK$0.5，基本没差"</td></tr>
+            <tr><td>差距 ≥ HK$0.5 且 ≥ 0.1%</td><td>只给排第一的打「✓最划算」</td><td>正常显示"最划算：A，比 B 多花 HK$X.XX（Y.Y%）"</td></tr>
+          </table>
+          <div class="open-q"><b>需要 Remy 确认：</b>"打平"的判定阈值——上面②③屏用的是"四舍五入到分之后完全相等才算打平"这个严格口径，这一档补充规则是"差距 0～0.5 分/0.1% 之间不算打平，但也不硬显示看起来很怪的 0.0%"。要不要把"打平"本身的判定也放宽到"差距 &lt; 5 分也算打平"（现金换算本来就有取整误差，差 1～2 分可能只是舍入噪音，不是真的有优劣）？这版先按"分毫不差才算打平"的严格口径画，确认后再看要不要放宽。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 4 ============ -->
+    <section class="screen" id="s4">
+      <div class="screen-head">
+        <h2>④ 「渠道换汇参考价」（银行/换钱店的估算汇率）改成次要/可折叠区块，不跟「我的支付方式」抢位置</h2>
+        <span class="tag">保留但降级</span>
+      </div>
+      <div class="screen-body">
+        <div class="compare-row">
+          <div class="phone-col">
+            <div class="phone-label">改后 · 主要区块是"我的支付方式"，渠道参考价收起</div>
+            <div class="phone"><div class="phone-screen">
+              <div class="before-after-label after">改后</div>
+              <div class="fxcard">
+                <div class="fxcard-title">这笔该用哪个方式付</div>
+                <div class="card-box" style="margin-bottom:8px;">
+                  <label class="field-label">要付的当地金额</label>
+                  <input class="field-input serif" value="HK$ 333.00" readonly>
+                </div>
+                <div class="fx-conclusion">💡最划算：现金(HKD)、Maybank 2 Visa Platinum、USDT钱包</div>
+                <div class="fx-row"><div class="fx-row-name">现金(HKD) <span class="fx-badge tie">并列</span></div><div class="fx-row-amt">HK$333.00</div></div>
+                <div class="fx-row"><div class="fx-row-name">Maybank 2 Visa Platinum <span class="fx-badge tie">并列</span></div><div class="fx-row-amt">HK$333.00</div></div>
+                <div class="fx-row"><div class="fx-row-name">USDT钱包 <span class="fx-badge tie">并列</span></div><div class="fx-row-amt">HK$333.00</div></div>
+                <div class="fx-row"><div class="fx-row-name">HSBC 大马 Visa Signature</div><div class="fx-row-amt">HK$336.33</div></div>
+                <div class="fx-row"><div class="fx-row-name">支付宝</div><div class="fx-row-amt">HK$336.33</div></div>
+                <div class="fx-row"><div class="fx-row-name">现金(USD)</div><div class="fx-row-amt">HK$341.36</div></div>
+                <button class="big-cta" style="background:#fff; color:var(--ink); border:1px solid var(--sand); margin-top:8px;">看换汇渠道参考价（银行/换钱店估算）▾</button>
+              </div>
+            </div></div>
+          </div>
+        </div>
+        <div class="note-card">
+          <h3>改了什么</h3>
+          <p>这次改版只动"我的支付方式"这一块的比较框架，不动「渠道换汇参考价」（round62 已经拍板定案的现金换汇损耗估算+支付宝加点，见 <code>DEFAULT_CASH_EXCHANGE_MARKUP_PERCENT</code>）这个功能本身——这块还是有价值的（比如她手上现金不够、需要临时去换钱店换钱时，想知道大概行情），只是位置从跟"我的支付方式"平级并列，改成收在一个可展开的次要区块下面，默认收起，避免抢主结论的视觉重量。</p>
+          <p>这跟 round65/round66 已经拍板的"渠道换汇/我的支付方式分组"（PENDING-DECISIONS 里"B."那条悬案）是同一个方向的延续，这次借着重做比价算法一起把分组这件事定下来，不是另外又提一个新方案。</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="pagefoot">
+  trip-expense-ledger 第72轮任务③设计稿 · 本地文件 <code>DESIGN-BRIEF-round72-fx-compare.html</code> · 示例数据来自 Remy 真实「🇭🇰2026香港」行程（只读查询 D1，未打开真实行程页面、未做任何写操作）
+</footer>
+
+<script>
+  document.querySelectorAll('.nav-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+      window.scrollTo({top:0, behavior:'instant'});
+    });
+  });
+</script>
+
+</body>
+</html>

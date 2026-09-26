@@ -1,9 +1,8 @@
-import { and, eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db/client';
-import { participants } from '@/lib/db/schema';
 import { resolveUser, USER_SESSION_COOKIE_NAME } from '@/lib/auth/user-session';
 import { createSession } from '@/lib/auth/session';
+import { findParticipantForUserInTrip } from '@/lib/auth/find-participant-for-user';
 import { attachSessionCookie } from '@/lib/http/session-cookie';
 import { parseJsonBody } from '@/lib/http/validate';
 import { switchTripSchema } from '@/lib/validation/schemas';
@@ -53,9 +52,7 @@ export async function POST(request: NextRequest) {
     tripId = parsed.data.tripId;
   }
 
-  const participant = await db.query.participants.findFirst({
-    where: and(eq(participants.userId, user.userId), eq(participants.tripId, tripId)),
-  });
+  const participant = await findParticipantForUserInTrip(db, user.userId, tripId);
 
   if (!participant) {
     if (fromForm) return NextResponse.redirect(new URL('/', request.url), 303);
