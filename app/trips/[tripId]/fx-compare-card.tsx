@@ -765,7 +765,7 @@ export function FxCompareCard({
                 .map((h) => ({ value: h, label: h }))}
               ariaLabel="我持有的币种"
               triggerClassName="rounded-full bg-neutral-lt px-[9px] py-[5px] text-[10px] font-medium text-neutral-dk"
-              panelClassName="absolute left-0 top-full z-10 mt-1 min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
+              panelClassName="min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
               renderValue={() => `💰 我持有 ${effectiveHold || '…'}`}
             />
 
@@ -779,7 +779,7 @@ export function FxCompareCard({
               options={targetCandidates.map((c) => ({ value: c, label: TARGET_CURRENCY_LABELS[c] ?? c }))}
               ariaLabel="目标币种"
               triggerClassName="rounded-full bg-neutral-lt px-[9px] py-[5px] text-[10px] font-medium text-neutral-dk"
-              panelClassName="absolute left-0 top-full z-10 mt-1 min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
+              panelClassName="min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
               renderValue={() => '🎯 目标币种'}
             />
 
