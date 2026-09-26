@@ -98,7 +98,7 @@ export function SelectDropdown({
   ariaLabel?: string;
   triggerClassName: string;
   /** fix(2026-09-26 第七十二轮)：这个 prop 现在只管弹层的"外观"（边框/背景/圆角/
-   * 内边距/阴影/宽高），不要再传 `absolute`/`top-full`/`bottom-full`/`z-10`/
+   * 内边距/阴影/宽高），不要再传 `absolute`/`top-full`/`bottom-full`/`z-30`/
    * `mt-1`/`mb-1` 这类定位 class——组件本体会根据触发按钮离视口底部还有多少
    * 空间自动算好开合方向+定位，统一套在外面，调用方传的这串 class 只会拼接在
    * 定位 class 后面。 */
@@ -173,7 +173,13 @@ export function SelectDropdown({
         <ul
           id={listboxId}
           role="listbox"
-          className={`absolute left-0 z-10 ${directionClass} ${
+          // fix(2026-09-26 第七十二轮批次②)：z-index 从 z-10 提到 z-30，盖过
+          // `.action-bar` 的 z-20——round72 A组的方案A（上面 openUpward 那段）
+          // 已经能在"空间不够"时主动向上翻，解决了绝大多数被操作条盖住的场景，
+          // 但阈值判断本身留了安全余量，理论上还是可能出现"判断够用、实际向下开
+          // 的这一截刚好蹭到操作条覆盖区"这种边界情况——z-index 补这一层防御，
+          // 跟方案A的开合方向逻辑是互补关系，不是互相替代。
+          className={`absolute left-0 z-30 ${directionClass} ${
             panelClassName ??
             // fix(2026-09-17 第二十一轮，逐 token 核对)：Artifact `.fdrop-menu`/
             // `.cat-dropdown-list` 这类下拉弹层统一是 border-radius:10px，这里
