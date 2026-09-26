@@ -1,5 +1,36 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-27，第七十四轮任务①：loan/loan_repayment 正式接入结算净额计算 + htoo CNY ¥104.27 完成迁移，lifeos-pm 直接执行，claim `2026-09-27_030322_4173c642`】
+
+背景：上一轮（round73，claim `2026-09-26_110209...`）执行 htoo CNY ¥104.27 迁移时发现结构性阻塞——`loan_repayment` 没有参与人字段、`loan`/`loan_repayment` 完全没接入 `lib/domain/settlement.ts`，停手回报。这轮 Remy 已拍板，直接授权把这两张表接进结算净额计算，这次执行。
+
+**代码改动**：
+- schema：`loan` 新增 `amountBaseCurrency`/`fxRateUsed`/`fxRateSource`（跟 `expense` 表同一套"录入时固化"架构）；`loan_repayment` 新增同样三个字段 + `fromParticipantId`/`toParticipantId`（不挂 loan 也知道谁还给谁）+ `currency`，`loanId` 改可空（支持"不挂具体借款"的还款）。
+- `lib/domain/settlement.ts` 新增 4 个纯函数（`loanToSettlementInput(WithCurrency)`/`loanRepaymentToSettlementInput(WithCurrency)`）——方向定案：loan 的 payer=lender、repayment 的 payer=fromParticipantId（还钱人），两者叠加互相抵消。用真实生产数据核对过方向（US$7,500 借还清叠加=0；htoo CNY ¥104.27 迁移前后净额完全不变），mutation 自检过（故意反转方向，确认对应测试真的会失败）。
+- `lib/db/settlement-query.ts` 三处调用方（`loadSettlementInput(ForTrips)`/`loadSettlementInputWithCurrency`）接入，含"不挂具体 loan"的还款按 `fromParticipantId` 反查 tripId。**没有接入**`loadSettlementDetail`（"查看 XX 的分摊明细"展开 modal）——跟任务书字面要求（"结算净额计算"）对齐，这次没有扩大范围。
+- API 路由补 `fxRateUsed` 必填校验（`currency !== trip.baseCurrency` 时）+ 服务端派生 `fromParticipantId`/`toParticipantId`（不接受客户端覆盖，还款方向永远是 borrower 还给 lender）。
+- 迁移 `0017_needy_piledriver.sql`：`loan_repayment` 表重建时**手动改了 drizzle-kit 生成的 INSERT**（drizzle 生成的原始版本会因为老表没有新列直接报 "no such column" 失败），改成从关联 `loan` 表 JOIN 反推历史行的新字段；`loan.amount_base_currency` 手动加 `DEFAULT 0` 占位（SQLite 对已有数据的表 ADD NOT NULL 列必须给 DEFAULT），真实历史数值靠后续 backfill 精确覆盖。本地用 sqlite3 模拟真实历史行跑过一遍迁移验证不报错、字段值正确。
+
+**范围说明（如实标注，这次没做的）**：①"记一笔不挂具体 loan 的还款"目前只有数据层支持，没有对应的 UI/API 入口——这次没做面向用户的"记一笔独立还款"表单，只是为了让 htoo 这笔历史数据迁移有地方落，这条独立还款目前只能靠人工 SQL 迁移产生，不能靠 app 界面新建。
+
+**验证**：`npx tsc --noEmit` 0 错误、`npx eslint` 0 警告、`npx vitest run` 58 文件 449 条全过（含新增：settlement.ts 方向 mutation 自检 + 一条端到端集成测试真的打 `POST /loans` + `POST /repayments` + `GET /settlement` 三个真实 HTTP handler 确认查询层接上了）。commit `94a36c4`（`feat/loan-settlement-round74`）→ merge commit 到 main、push 后跑 `deploy.sh`，部署 Version `5372c5c6-98ab-4680-9ab9-c41cb397428d`。
+
+**生产 D1 数据迁移（严格按安全流程，全程逐项核对）**：
+1. 备份：`backups/2026-09-27-loan-settlement-migration/{loan_before,loan_repayment_before,expense_8e2f75fe_before,expense_split_8e2f75fe_before,wallets_before}.json`。迁移前 D1 Time Travel bookmark：`0000023c-00000000-000050f2-1a4a36ba89eaab2c2f34941753ed1604`。
+2. 跑 `scripts/migrate-remote.sh` 应用 schema 迁移（`0017_needy_piledriver.sql`）——`loan.amount_base_currency` 落地成占位值 `0`（`fx_rate_used=1`），`loan_repayment` 表重建时从关联 loan 反推出 `from_participant_id=htoo`/`to_participant_id=remy`（正确），但 `amount_base_currency` 同样是用占位 `fx_rate_used=1` 算出的临时错误值 `750000`（不是真实的 `5,880,000`）——这是迁移文件本身的已知临时状态，紧接着下一步立刻纠正，deploy.sh 还没跑，没有真实用户看到这个临时值。
+3. **backfill 纠正历史值**（带旧值条件的 `UPDATE`，逐条回读确认 `changes:1`）：`loan` 569a3dae 的 `amount_base_currency`/`fx_rate_used`/`fx_rate_source` 改成 `5880000`/`7.84`/`manual`；`loan_repayment` 9ac92353 同样改成 `5880000`/`7.84`/`manual`——跟备份里 round73 记录的原始 `a4dc5ffd`/`4c09fc33` expense 的 `amount_base_currency`/`fx_rate_used` 完全一致，不是编的数字。
+4. **dry-run 交叉核对**（迁移 htoo CNY 记录前，用跟 `computeSettlementByCurrency` 完全同一套算法重新跑一遍真实生产数据）：确认 HKD/MYR/CNY 三个币种净额跟 Remy 给的目标值一致，USD 已经因为 loan+repayment 抵消归零。这一步全部核对一致才继续。
+5. **执行 htoo CNY ¥104.27 迁移**：`DELETE expense_split`（1 行）→ `DELETE expense`（1 行，带 `WHERE amount=10427 AND currency='CNY' AND payer_participant_id=htoo` 精确条件）→ `INSERT loan_repayment`（新 id `c3ca5592-97bd-466c-ba24-6009ce9076f0`，`loan_id=NULL`，`from_participant_id=htoo`/`to_participant_id=remy`，`amount=10427`/`currency=CNY`/`amount_base_currency=12200`/`fx_rate_used=1.17`，`to_wallet_id=f08bb1de`〈支付宝〉——保留这笔钱走的是支付宝这个信息，但**没有对 wallet 表执行任何 UPDATE**，因为 `f08bb1de` 是未锚定钱包，`computeWalletDisplayBalance` 对未锚定钱包直接读 `currentBalance` 原始值、完全不看 loan/repayment 表，这次迁移前这笔本来就没有触发过直接扣款〈payer=htoo≠钱包主人 remy〉，保持"不触碰这个钱包余额"这个既有事实不变，不是疏漏）。迁移后 D1 bookmark：`0000023c-0000000e-000050f2-7fac8f07d1689fe5ebda74b124e72b55`。
+6. **迁移后重新核对（全部一致，逐项列出）**：
+   - 结算净额按币种（htoo 欠 Remy）：**HKD 390.00 / CNY 71.34 / MYR 21.27（原始币种近似值，本位币精确值 4000 分对应 htoo 侧 native 21.27、remy 侧 21.26，1 分误差是既有的最大余数法近似换算特性，非本次改动引入）/ USD 0（不产生转账行）**——用跟结算算法完全同构的 SQL 重新算过一遍生产数据，四项全部精确匹配 Remy 给的目标值。
+   - 四个钱包锚点：`872246bc`=812000、`82badf0e`=1613100、`7b9a57d5`=-110510、`f08bb1de`=-47777（迁移前基准值，迁移后原样不变）——全部一分不变。
+   - US$7,500 那对已迁移记录（`569a3dae`/`9ac92353`）接入结算计算后，净贡献确认为 0（不影响任何数字）。
+7. **ui-auditor 用 Remy 真实身份链接、真实香港行程真机走查确认（Version `5372c5c6`）**：结算页四个币种数字精确匹配（HKD $390.00 / ≈¥71.34 / ≈RM21.26〈1 分误差在容差内〉/ 没有 USD 行）、排版跟历史截图一致没有异常、console 0 报错、"借还款"区块正确显示 US$7,500 已还清。走查产生的 1 条 `user_session`（id `885db921...`）+ 1 条 Layer1 `session`（id `65d0f1a0...`，均 Chrome/153 测试 UA，跟 Remy 真实用的 Chrome/152 不同）——**ui-auditor 这次因为 2026-09-19 收紧的只读权限拦截，没法自己跑 `wrangler d1` 清理**，交由这一层用精确 id+created_at+UA 条件删除，删完 `COUNT(*)` 回读窗口内=0、按精确 id 查=0，确认没有误删 Remy 本人的登录态。
+
+**结论：任务①满足"生产数据安全迁移四项核对一致+ui-auditor 真机走查+真实行程数据验证"这条硬性要求，可以视为完成。**
+
+**留给 Remy 知情的事**：①"记一笔独立还款"（不挂 loan）目前没有 UI 入口，只有这次人工迁移用到；②MYR 那笔历史数据两侧（htoo -21.27 / remy +21.26）有 1 分钱不对称，是既有的近似换算特性（round72②③ 就有的已知行为），这次没有改动这条逻辑。
+
 ## 【2026-09-26，trip-expense-ledger-pm 补做三项已拍板但漏落地的任务，claim `2026-09-26_115553_8bbe0d0f`】
 
 背景：这三项之前被误判成"还在等 Remy 拍板"写进了开放问题清单，实际上都是 Remy 已经拍板、只是没人真的实现/合并的任务。这次补做，全部完成+部署+用 Remy 真实香港行程 ui-auditor 真机走查过。
