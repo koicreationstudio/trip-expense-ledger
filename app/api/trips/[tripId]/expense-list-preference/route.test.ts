@@ -62,6 +62,7 @@ const SAMPLE_PREFERENCE = {
   dateFilter: '2026-09-15',
   paymentMethodFilter: '现金HKD',
   splitFilter: 'included',
+  businessCostFilter: '__all__',
 };
 
 describe('GET/PUT /api/trips/[tripId]/expense-list-preference', () => {
@@ -163,6 +164,42 @@ describe('GET/PUT /api/trips/[tripId]/expense-list-preference', () => {
       jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
         ...SAMPLE_PREFERENCE,
         splitFilter: 'not-a-real-value',
+      }),
+      { params: { tripId } }
+    );
+    expect(res.status).toBe(400);
+
+    const rows = await db.query.expenseListPreferences.findMany({ where: (t, { eq }) => eq(t.tripId, tripId) });
+    expect(rows.length).toBe(0);
+  });
+
+  // 2026-09-26 命名纠正任务新增：businessCostFilter 值域固定 3 档
+  // （'__all__'|'yes'|'no'），跟 splitFilter 同一套精确 enum 校验覆盖范围。
+  it('businessCostFilter 传合法的三个值都能存住', async () => {
+    for (const value of ['__all__', 'yes', 'no'] as const) {
+      const { tripId, ownerToken } = await setupTripWithOwner(`🇭🇰测试行程-业务成本筛选-${value}`);
+      const putRes = await putHandler(
+        jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
+          ...SAMPLE_PREFERENCE,
+          businessCostFilter: value,
+        }),
+        { params: { tripId } }
+      );
+      expect(putRes.status).toBe(200);
+      const getRes = await getHandler(
+        jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'GET', ownerToken),
+        { params: { tripId } }
+      );
+      expect(((await getRes.json()) as any).preference.businessCostFilter).toBe(value);
+    }
+  });
+
+  it('businessCostFilter 传非法值（不在固定 3 档里）：400，不落库', async () => {
+    const { tripId, ownerToken } = await setupTripWithOwner('🇭🇰测试行程-列表偏好F');
+    const res = await putHandler(
+      jsonRequest(`http://localhost/api/trips/${tripId}/expense-list-preference`, 'PUT', ownerToken, {
+        ...SAMPLE_PREFERENCE,
+        businessCostFilter: 'not-a-real-value',
       }),
       { params: { tripId } }
     );
