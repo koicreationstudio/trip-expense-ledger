@@ -123,6 +123,11 @@ export function toWalletBalanceHistoryDto(row: WalletBalanceHistoryRow) {
     prevEffectiveDate: row.prevEffectiveDate ? row.prevEffectiveDate.toISOString() : null,
     displayBalanceBefore: row.displayBalanceBefore,
     displayBalanceAfter: row.displayBalanceAfter,
+    // round72 第三批（历史记录可直接编辑）新增：非 null 就代表这条记录被编辑过至少
+    // 一次，UI「已更正」标签是否显示直接看这个字段，不需要另外的布尔开关；语义详见
+    // lib/db/schema.ts wallet_balance_history 表定义里这两个字段的注释。
+    originalAmount: row.originalAmount,
+    originalEffectiveDate: row.originalEffectiveDate ? row.originalEffectiveDate.toISOString() : null,
   };
 }
 
