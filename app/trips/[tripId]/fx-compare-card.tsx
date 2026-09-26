@@ -765,7 +765,11 @@ export function FxCompareCard({
                 .map((h) => ({ value: h, label: h }))}
               ariaLabel="我持有的币种"
               triggerClassName="rounded-full bg-neutral-lt px-[9px] py-[5px] text-[10px] font-medium text-neutral-dk"
-              panelClassName="min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
+              // fix(2026-09-26 第七十二轮第四批，合并方案A+C)：panelClassName 收窄成
+              // 只管外观，定位/z-index/圆角/max-height 这几项现在固定由 SelectDropdown
+              // 组件本体算好（窄屏方案C底部抽屉/宽屏方案A智能开合悬浮面板两套定位），
+              // 这里不用再重复传一遍圆角。
+              panelClassName="min-w-[110px] border border-sand bg-white p-1 shadow-card"
               renderValue={() => `💰 我持有 ${effectiveHold || '…'}`}
             />
 
@@ -779,7 +783,7 @@ export function FxCompareCard({
               options={targetCandidates.map((c) => ({ value: c, label: TARGET_CURRENCY_LABELS[c] ?? c }))}
               ariaLabel="目标币种"
               triggerClassName="rounded-full bg-neutral-lt px-[9px] py-[5px] text-[10px] font-medium text-neutral-dk"
-              panelClassName="min-w-[110px] rounded-[10px] border border-sand bg-white p-1 shadow-card"
+              panelClassName="min-w-[110px] border border-sand bg-white p-1 shadow-card"
               renderValue={() => '🎯 目标币种'}
             />
 
