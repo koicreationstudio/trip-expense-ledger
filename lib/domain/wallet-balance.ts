@@ -121,6 +121,20 @@ export async function withDisplayBalance<T extends WalletRow>(
 }
 
 /**
+ * 「设置当前余额」防覆盖确认流程专用（2026-09-26 新增）：不写库，纯构造一个
+ * "假如新锚点是这个值/这个生效日"的钱包行，喂给 `computeWalletDisplayBalance`
+ * 现算出改完之后会是多少——确认页显示的"改后现余额"跟 PATCH 真正写库时算的
+ * 是同一个函数、同一套输入，不是另外发明一套算法拼出来的数字。
+ */
+export function withHypotheticalAnchor<T extends WalletRow>(
+  wallet: T,
+  newCurrentBalance: number,
+  newBalanceUpdatedAt: Date
+): T {
+  return { ...wallet, currentBalance: newCurrentBalance, balanceUpdatedAt: newBalanceUpdatedAt };
+}
+
+/**
  * chokepoint（第七十轮新增）：判断一笔消费（付款人 + 支付方式 + 币种）是不是
  * 该实时影响某个参与者名下"还没设置过当前余额"的钱包（旧的直接写入累加模式，
  * `balanceUpdatedAt` 仍是 null——已经设置过的钱包走上面 computeWalletDisplayBalance

@@ -154,16 +154,38 @@ export const createWalletSchema = z.object({
   paymentMethodId: z.string().min(1).optional(),
 });
 
-export const updateWalletSchema = z.object({
-  label: z.string().trim().min(1).max(100).optional(),
-  emoji: z.string().trim().min(1).max(8).optional(),
-  paymentMethodId: z.string().min(1).nullable().optional(),
-  // 允许手动订正余额（比如跟实际现金对不上时），不算「记一笔换汇」，直接覆盖。
-  currentBalance: z.number().int().optional(),
-  // 「设置当前余额」这个动作发生的记录时间，可选补录成之前的日期
-  // （2026-09-13 落地第四轮拍板屏⑤），只在同时传了 currentBalance 时才有意义。
-  balanceUpdatedAt: z.string().datetime().optional(),
-});
+export const updateWalletSchema = z
+  .object({
+    label: z.string().trim().min(1).max(100).optional(),
+    emoji: z.string().trim().min(1).max(8).optional(),
+    paymentMethodId: z.string().min(1).nullable().optional(),
+    // 允许手动订正余额（比如跟实际现金对不上时），不算「记一笔换汇」，直接覆盖。
+    currentBalance: z.number().int().optional(),
+    // 「设置当前余额」这个动作发生的记录时间（2026-09-13 落地第四轮拍板屏⑤）。
+    // fix(2026-09-26，防覆盖确认流程)：以前这个字段整个可选，没传就在 route 里
+    // 悄悄默认成"现在"——这正是防覆盖流程要堵的洞（前端表单不该有任何路径能不选
+    // 日期就把余额写进去）。现在改成"两个要么一起有、要么一起没有"：真的在设置
+    // 余额（带了 currentBalance）就必须带上这个日期，不许再由后端兜底默认成今天。
+    balanceUpdatedAt: z.string().datetime().optional(),
+  })
+  .refine((v) => (v.currentBalance === undefined) === (v.balanceUpdatedAt === undefined), {
+    message: '设置当前余额必须同时提供生效日期（balanceUpdatedAt），不能只填金额，也不能只填日期',
+    path: ['balanceUpdatedAt'],
+  });
+
+// 「设置当前余额」防覆盖确认流程的预览端点专用（2026-09-26 新增）：不落库，纯
+// 算"改前/改后现余额分别是多少"给确认页看。两个字段要么一起有（真的想预览改完
+// 之后的数字）要么一起没有（只是想看"改之前"这一半——钱包详情页第一步展示当前
+// 锚点+现余额那一刻用）。
+export const previewWalletBalanceSchema = z
+  .object({
+    newCurrentBalance: z.number().int().optional(),
+    newBalanceUpdatedAt: z.string().datetime().optional(),
+  })
+  .refine((v) => (v.newCurrentBalance === undefined) === (v.newBalanceUpdatedAt === undefined), {
+    message: 'newCurrentBalance 和 newBalanceUpdatedAt 要同时提供或同时不提供',
+    path: ['newBalanceUpdatedAt'],
+  });
 
 export const settlementConfirmationSchema = z.object({
   fromParticipantId: z.string().min(1),

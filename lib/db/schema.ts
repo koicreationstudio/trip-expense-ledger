@@ -388,6 +388,55 @@ export const wallets = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// wallet_balance_history：「设置当前余额」每次落地的审计轨迹（2026-09-26 新增）。
+// 只追加、不改写、不删除——每次 PATCH /wallets/[walletId] 真的带了
+// `currentBalance`（=一次"设置当前余额"动作，不是单纯改名字/绑支付方式那种
+// PATCH）就在写入新锚点的同一次请求里追加一条。
+//
+// `amount`/`effectiveDate` 记的是这次写入的新锚点（跟 `wallet.currentBalance`/
+// `wallet.balanceUpdatedAt` 这次写完之后的值完全一致）。`prevAmount`/
+// `prevEffectiveDate` 记改之前的锚点——如果这个钱包之前从没设置过当前余额
+// （旧的"未锚定/累加"模式，`wallet.balanceUpdatedAt` 是 null），这两个字段
+// 允许是 null，代表"改前从未设置过锚点"，不是"改前锚点是 0"，这条历史第一条
+// 该写照写，不能因为"改前没有锚点"就整条跳过不记。
+// `displayBalanceBefore`/`displayBalanceAfter` 各自是改之前/改之后，喂给
+// `computeWalletDisplayBalance`（lib/domain/wallet-balance.ts）算出来的现余额，
+// 不是另外发明一套算法算的——"未锚定模式"下这个函数本来就会把
+// `wallet.currentBalance`（累加值）原样当现余额返回，所以即使改前从未锚定，
+// `displayBalanceBefore` 也一样能算出一个有意义的数字。
+// `changedByParticipantId` 存但列表渲染不显示（Remy 明确要求这轮历史列表别
+// 出现"由谁设置"这种操作者文字），字段本身留着不删，以后有需要随时能读。
+// ---------------------------------------------------------------------------
+export const walletBalanceHistory = sqliteTable(
+  'wallet_balance_history',
+  {
+    id: id(),
+    walletId: text('wallet_id')
+      .notNull()
+      .references(() => wallets.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(), // 这次设置的新锚点金额，最小货币单位
+    effectiveDate: integer('effective_date', { mode: 'timestamp_ms' }).notNull(), // 这次设置的新生效日
+    changedByParticipantId: text('changed_by_participant_id')
+      .notNull()
+      .references(() => participants.id),
+    // 字段名跟别的表统一叫 createdAt() 的那套 helper 生成的列名都是 `created_at`——
+    // 这张表故意手写这一列（不用那个 helper），列名跟 TS 字段名一样叫 `changed_at`，
+    // 免得以后直接查 D1 原始表时，看到一列 `created_at` 却装的是"这次设置发生的
+    // 时间"，跟别的表里 `created_at` 表示"这一行本身何时被创建"的语义混在一起。
+    changedAt: integer('changed_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch('subsec') * 1000)`),
+    prevAmount: integer('prev_amount'), // 改前锚点金额；改前从未设置过锚点时为 null
+    prevEffectiveDate: integer('prev_effective_date', { mode: 'timestamp_ms' }), // 改前生效日；同上可为 null
+    displayBalanceBefore: integer('display_balance_before').notNull(),
+    displayBalanceAfter: integer('display_balance_after').notNull(),
+  },
+  (table) => ({
+    walletIdx: index('wallet_balance_history_wallet_idx').on(table.walletId),
+  })
+);
+
+// ---------------------------------------------------------------------------
 // exchange_record：一笔换汇/充值记录，私有规矩同 wallet。fromWalletId 为空
 // 代表「纯充值，没有可追踪的来源钱包」（比如带的实体现金第一次登记）。
 // 隐含汇率 = toAmount / fromAmount，故意不额外存 rate 字段——展示时现算，
@@ -691,6 +740,12 @@ export const walletsRelations = relations(wallets, ({ one, many }) => ({
   paymentMethod: one(paymentMethods, { fields: [wallets.paymentMethodId], references: [paymentMethods.id] }),
   exchangeRecordsFrom: many(exchangeRecords, { relationName: 'fromWallet' }),
   exchangeRecordsTo: many(exchangeRecords, { relationName: 'toWallet' }),
+  balanceHistory: many(walletBalanceHistory),
+}));
+
+export const walletBalanceHistoryRelations = relations(walletBalanceHistory, ({ one }) => ({
+  wallet: one(wallets, { fields: [walletBalanceHistory.walletId], references: [wallets.id] }),
+  changedBy: one(participants, { fields: [walletBalanceHistory.changedByParticipantId], references: [participants.id] }),
 }));
 
 export const exchangeRecordsRelations = relations(exchangeRecords, ({ one }) => ({

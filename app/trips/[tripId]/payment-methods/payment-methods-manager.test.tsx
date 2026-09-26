@@ -39,7 +39,12 @@ const WALLET = {
   paymentMethodId: null,
 };
 
-function mockFetch(opts: { postSpy?: (body: any) => void; patchSpy?: (body: any) => void }) {
+// 防覆盖确认流程（2026-09-26 新增）：POST balance-preview 不写库，纯算"改前/改后
+// 现余额"给确认页看。测试用的假逻辑只需要满足两条契约——不带新值时回"改前"这一半，
+// 带了新值时把 displayBalanceAfter 算成 newCurrentBalance 本身（这份 mock 不需要
+// 真的重现 computeWalletDisplayBalance 那套推导公式，那部分交给后端路由的
+// vitest 单独覆盖，这里只关心前端拿到响应之后有没有正确渲染/提交）。
+function mockFetch(opts: { postSpy?: (body: any) => void; patchSpy?: (body: any) => void; previewSpy?: (body: any) => void }) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     const method = (init?.method ?? 'GET').toUpperCase();
@@ -54,6 +59,23 @@ function mockFetch(opts: { postSpy?: (body: any) => void; patchSpy?: (body: any)
       const body = JSON.parse(String(init?.body ?? '{}'));
       opts.postSpy?.(body);
       return new Response(JSON.stringify({ paymentMethod: { id: 'pm-1' } }), { status: 200 });
+    }
+    if (url.endsWith(`/wallets/${WALLET.id}/balance-preview`) && method === 'POST') {
+      const body = JSON.parse(String(init?.body ?? '{}'));
+      opts.previewSpy?.(body);
+      const hasNewValues = body.newCurrentBalance !== undefined;
+      return new Response(
+        JSON.stringify({
+          prevAmount: WALLET.balanceUpdatedAt ? WALLET.currentBalance : null,
+          prevEffectiveDate: WALLET.balanceUpdatedAt,
+          displayBalanceBefore: WALLET.currentBalance,
+          displayBalanceAfter: hasNewValues ? body.newCurrentBalance : null,
+        }),
+        { status: 200 }
+      );
+    }
+    if (url.endsWith(`/wallets/${WALLET.id}/balance-history`) && method === 'GET') {
+      return new Response(JSON.stringify({ history: [] }), { status: 200 });
     }
     if (url.includes(`/wallets/${WALLET.id}`) && method === 'PATCH') {
       const body = JSON.parse(String(init?.body ?? '{}'));
@@ -118,14 +140,17 @@ describe('PaymentMethodsManager — 第六十八轮任务 J：钱包"设置当�
     await waitFor(() => expect(screen.getByText('现金钱包')).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: '设置' }));
-    const balanceInput = screen.getByLabelText('当前余额（MYR）') as HTMLInputElement;
+    // fix(2026-09-26，防覆盖确认流程)：点"设置"之后表单第一步先异步查一次锚点信息
+    // （balance-preview 不带新值），要等这次请求回来才会渲染下面的输入框。
+    const balanceInput = (await screen.findByLabelText('新余额（MYR）')) as HTMLInputElement;
     expect(balanceInput.type).toBe('text');
     expect(balanceInput.value).toBe('5,000');
   });
 
-  it('改成新余额（带千分位/小数），保存后 PATCH body 的 currentBalance（分）正确', async () => {
+  it('改成新余额（带千分位/小数），走完"下一步→确认保存"两步后 PATCH body 的 currentBalance（分）正确', async () => {
     const patchSpy = vi.fn();
-    vi.stubGlobal('fetch', mockFetch({ patchSpy }));
+    const previewSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch({ patchSpy, previewSpy }));
 
     render(<PaymentMethodsManager tripId={TRIP_ID} />);
     await waitFor(() => expect(screen.getByText('还没配置任何支付方式。')).toBeTruthy());
@@ -133,13 +158,49 @@ describe('PaymentMethodsManager — 第六十八轮任务 J：钱包"设置当�
     await waitFor(() => expect(screen.getByText('现金钱包')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: '设置' }));
 
-    const balanceInput = screen.getByLabelText('当前余额（MYR）') as HTMLInputElement;
+    const balanceInput = (await screen.findByLabelText('新余额（MYR）')) as HTMLInputElement;
     fireEvent.change(balanceInput, { target: { value: '12500.75', selectionStart: 8 } });
     expect(balanceInput.value).toBe('12,500.75');
 
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    // fix(2026-09-26)：生效日期不预填，必须自己选一天才能进入下一步（见④这条测试
+    // 覆盖的另一个场景——这里先走"选了日期"的正常路径）。
+    const dateInput = screen.getByLabelText('生效日期') as HTMLInputElement;
+    expect(dateInput.value).toBe('');
+    fireEvent.change(dateInput, { target: { value: '2026-09-25' } });
+
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }));
+    // 「下一步」带着新值再查一次 balance-preview 拿"改后现余额"，进入确认页才有
+    // "确认保存"这颗按钮。
+    await waitFor(() => expect(screen.getByRole('button', { name: '确认保存' })).toBeTruthy());
+    expect(previewSpy).toHaveBeenCalledWith({ newCurrentBalance: 1250075, newBalanceUpdatedAt: expect.any(String) });
+
+    fireEvent.click(screen.getByRole('button', { name: '确认保存' }));
     await waitFor(() => expect(patchSpy).toHaveBeenCalledTimes(1));
     expect(callArg(patchSpy).currentBalance).toBe(1250075);
+    expect(callArg(patchSpy).balanceUpdatedAt).toBeTruthy();
+  });
+
+  it('④生效日期不预填、必须选才能进入下一步——不选日期点"下一步"会被挡下来，不会发出预览请求', async () => {
+    const previewSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch({ previewSpy }));
+
+    render(<PaymentMethodsManager tripId={TRIP_ID} />);
+    await waitFor(() => expect(screen.getByText('还没配置任何支付方式。')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: '⚙ 设置当前余额' }));
+    await waitFor(() => expect(screen.getByText('现金钱包')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: '设置' }));
+
+    await screen.findByLabelText('新余额（MYR）');
+    const dateInput = screen.getByLabelText('生效日期') as HTMLInputElement;
+    expect(dateInput.value).toBe(''); // 没有任何预填值，包括今天
+
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }));
+    await waitFor(() => expect(screen.getByText(/请选择生效日期/)).toBeTruthy());
+    // previewSpy 在 startEditBalance 那次"查当前锚点"的请求里会被调用一次（不带
+    // 新值），但不该再多一次"带新值"的调用——用这一点区分"没有真的往下一步走"。
+    expect(previewSpy).toHaveBeenCalledTimes(1);
+    expect(callArg(previewSpy)).toEqual({});
+    expect(screen.queryByRole('button', { name: '确认保存' })).toBeNull();
   });
 });
 

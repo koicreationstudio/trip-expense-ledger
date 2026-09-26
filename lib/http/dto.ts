@@ -3,7 +3,15 @@
  * 这样新加一个数据库列不会自动被响应体带出去，尤其是 expense 的 note/receiptPath
  * 这类只有本人能看的字段，必须每个响应形状自己决定要不要包含。
  */
-import type { participants, trips, expenses, paymentMethods, wallets, exchangeRecords } from '../db/schema';
+import type {
+  participants,
+  trips,
+  expenses,
+  paymentMethods,
+  wallets,
+  exchangeRecords,
+  walletBalanceHistory,
+} from '../db/schema';
 
 type ParticipantRow = typeof participants.$inferSelect;
 type TripRow = typeof trips.$inferSelect;
@@ -11,6 +19,7 @@ type ExpenseRow = typeof expenses.$inferSelect;
 type PaymentMethodRow = typeof paymentMethods.$inferSelect;
 type WalletRow = typeof wallets.$inferSelect;
 type ExchangeRecordRow = typeof exchangeRecords.$inferSelect;
+type WalletBalanceHistoryRow = typeof walletBalanceHistory.$inferSelect;
 
 export function toParticipantSummaryDto(row: ParticipantRow) {
   return {
@@ -89,6 +98,27 @@ export function toWalletDto(row: WalletRow) {
     paymentMethodId: row.paymentMethodId,
     balanceUpdatedAt: row.balanceUpdatedAt ? row.balanceUpdatedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/**
+ * 私有资源，只会出现在「查自己钱包的历史」这个响应里。`changedByParticipantId`
+ * 照样带出来（字段本身留着，以后有需要随时能读），历史列表要不要渲染这个人是
+ * 前端自己的展示决定，不是这一层该管的事——Remy 明确要求这轮列表别显示"由谁
+ * 设置"这种操作者文字，但这不代表接口就该把这个字段砍掉。
+ */
+export function toWalletBalanceHistoryDto(row: WalletBalanceHistoryRow) {
+  return {
+    id: row.id,
+    walletId: row.walletId,
+    amount: row.amount,
+    effectiveDate: row.effectiveDate.toISOString(),
+    changedByParticipantId: row.changedByParticipantId,
+    changedAt: row.changedAt.toISOString(),
+    prevAmount: row.prevAmount,
+    prevEffectiveDate: row.prevEffectiveDate ? row.prevEffectiveDate.toISOString() : null,
+    displayBalanceBefore: row.displayBalanceBefore,
+    displayBalanceAfter: row.displayBalanceAfter,
   };
 }
 
