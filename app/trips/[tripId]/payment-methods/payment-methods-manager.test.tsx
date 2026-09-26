@@ -15,6 +15,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { PaymentMethodsManager } from './payment-methods-manager';
+import { formatMoney } from '@/lib/money';
 
 function callArg(spy: ReturnType<typeof vi.fn>, callIndex = 0): any {
   const call = spy.mock.calls[callIndex];
@@ -408,5 +409,263 @@ describe('PaymentMethodsManager — round72b：点名字进入编辑态改名', 
     // 编辑态还在（不会卡死也不会静默退出假装成功），原名字没有被顶掉。
     expect(screen.getByLabelText('支付方式名称')).toBeTruthy();
     expect(screen.queryByRole('button', { name: `编辑支付方式名称「新名字但会保存失败」` })).toBeNull();
+  });
+});
+
+/**
+ * round72 第三批（余额历史可直接编辑）：历史列表每条能点「编辑」直接改
+ * amount/effectiveDate，取代原本的纯只读展示。这份 mock 不重现后端真正的
+ * `computeHistoryEditFields`/`isCurrentBalanceHistoryEntry` 那套推导逻辑
+ * （那部分交给 app/api/.../balance-history/[historyId]/*.test.ts 单独覆盖），
+ * 只满足"前端拿到响应之后有没有正确渲染/提交"这条契约。
+ */
+describe('PaymentMethodsManager — round72 第三批：历史记录可直接编辑', () => {
+  const HIST_WALLET = {
+    id: 'w-hist-1',
+    label: 'USDT钱包',
+    currency: 'USD',
+    emoji: '💳',
+    currentBalance: 500000,
+    balanceUpdatedAt: '2026-09-24T00:00:00.000Z',
+    paymentMethodId: null,
+  };
+
+  const HIST_CURRENT_ID = 'h-current';
+  const HIST_OLD_ID = 'h-old';
+
+  function makeInitialHistory() {
+    return [
+      {
+        id: HIST_CURRENT_ID,
+        amount: 500000,
+        effectiveDate: '2026-09-24T00:00:00.000Z',
+        changedByParticipantId: 'p1',
+        changedAt: '2026-09-24T00:00:00.000Z',
+        prevAmount: 400000,
+        prevEffectiveDate: '2026-09-20T00:00:00.000Z',
+        displayBalanceBefore: 400000,
+        displayBalanceAfter: 500000,
+        originalAmount: null as number | null,
+        originalEffectiveDate: null as string | null,
+      },
+      {
+        id: HIST_OLD_ID,
+        amount: 400000,
+        effectiveDate: '2026-09-20T00:00:00.000Z',
+        changedByParticipantId: 'p1',
+        changedAt: '2026-09-20T00:00:00.000Z',
+        prevAmount: null,
+        prevEffectiveDate: null,
+        displayBalanceBefore: 0,
+        displayBalanceAfter: 400000,
+        // 已经带着"已更正"状态，方便直接测「已更正」标签展开/还原，不用先走一次编辑。
+        originalAmount: 350000 as number | null,
+        originalEffectiveDate: '2026-09-15T00:00:00.000Z' as string | null,
+      },
+    ];
+  }
+
+  function mockFetchForHistory(opts: {
+    previewSpy?: (url: string, body: any) => void;
+    patchSpy?: (url: string, body: any) => void;
+    revertSpy?: (url: string) => void;
+  }) {
+    const wallet = { ...HIST_WALLET };
+    const history = makeInitialHistory();
+
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = (init?.method ?? 'GET').toUpperCase();
+
+      if (url.endsWith('/payment-methods') && method === 'GET') {
+        return new Response(JSON.stringify({ paymentMethods: [] }), { status: 200 });
+      }
+      if (url.endsWith('/wallets') && method === 'GET') {
+        return new Response(JSON.stringify({ wallets: [wallet] }), { status: 200 });
+      }
+      if (url.endsWith(`/wallets/${wallet.id}/balance-history`) && method === 'GET') {
+        return new Response(JSON.stringify({ history }), { status: 200 });
+      }
+
+      const previewMatch = url.match(/\/balance-history\/([^/]+)\/preview$/);
+      if (previewMatch && method === 'POST') {
+        const historyId = previewMatch[1]!;
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        opts.previewSpy?.(url, body);
+        const isCurrent = history[0]!.id === historyId;
+        if (!isCurrent) return new Response(JSON.stringify({ isCurrent: false }), { status: 200 });
+        return new Response(
+          JSON.stringify({ isCurrent: true, displayBalanceBefore: wallet.currentBalance, displayBalanceAfter: body.newAmount }),
+          { status: 200 }
+        );
+      }
+
+      const revertMatch = url.match(/\/balance-history\/([^/]+)\/revert$/);
+      if (revertMatch && method === 'POST') {
+        const historyId = revertMatch[1]!;
+        opts.revertSpy?.(url);
+        const entry = history.find((h) => h.id === historyId)!;
+        const isCurrent = history[0]!.id === historyId;
+        entry.amount = entry.originalAmount!;
+        entry.effectiveDate = entry.originalEffectiveDate!;
+        entry.originalAmount = null;
+        entry.originalEffectiveDate = null;
+        if (isCurrent) {
+          wallet.currentBalance = entry.amount;
+          wallet.balanceUpdatedAt = entry.effectiveDate;
+          entry.displayBalanceAfter = entry.amount;
+          return new Response(JSON.stringify({ wallet, history: entry, isCurrent: true }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ history: entry, isCurrent: false }), { status: 200 });
+      }
+
+      // PATCH 必须放在 preview/revert 的 POST 匹配之后判断（避免误吞），用精确的
+      // "路径只到 historyId 结尾"匹配，不会跟上面两条 /preview /revert 撞上。
+      const patchMatch = url.match(/\/balance-history\/([^/]+)$/);
+      if (patchMatch && method === 'PATCH') {
+        const historyId = patchMatch[1]!;
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        opts.patchSpy?.(url, body);
+        const entry = history.find((h) => h.id === historyId)!;
+        const isCurrent = history[0]!.id === historyId;
+        if (entry.originalAmount === null) {
+          entry.originalAmount = entry.amount;
+          entry.originalEffectiveDate = entry.effectiveDate;
+        }
+        entry.amount = body.amount;
+        entry.effectiveDate = body.effectiveDate;
+        if (isCurrent) {
+          const displayBalanceBefore = wallet.currentBalance;
+          wallet.currentBalance = entry.amount;
+          wallet.balanceUpdatedAt = entry.effectiveDate;
+          entry.displayBalanceAfter = entry.amount;
+          return new Response(
+            JSON.stringify({ wallet, history: entry, isCurrent: true, displayBalanceBefore, displayBalanceAfter: entry.amount }),
+            { status: 200 }
+          );
+        }
+        return new Response(JSON.stringify({ history: entry, isCurrent: false }), { status: 200 });
+      }
+
+      throw new Error(`未预期的请求：${method} ${url}`);
+    });
+  }
+
+  async function openHistoryPanel() {
+    render(<PaymentMethodsManager tripId={TRIP_ID} />);
+    await waitFor(() => expect(screen.getByText('还没配置任何支付方式。')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: '⚙ 设置当前余额' }));
+    await waitFor(() => expect(screen.getByText('USDT钱包')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /历史/ }));
+    await waitFor(() => expect(screen.getAllByText('编辑').length).toBeGreaterThan(0));
+  }
+
+  it('点「编辑」进入表单态，金额/生效日预填这条记录现在的值', async () => {
+    vi.stubGlobal('fetch', mockFetchForHistory({}));
+    await openHistoryPanel();
+
+    const editButtons = screen.getAllByText('编辑');
+    fireEvent.click(editButtons[0]!); // 第一条是"当前生效"那条
+
+    const amountInput = (await screen.findByLabelText('金额（USD）')) as HTMLInputElement;
+    const dateInput = screen.getByLabelText('生效日') as HTMLInputElement;
+    expect(amountInput.value).toBe('5000');
+    expect(dateInput.value).toBe('2026-09-24');
+  });
+
+  it('编辑「当前生效」条目：走完两步，确认页显示改前→改后现余额，提交调用 PATCH 且参数正确', async () => {
+    const previewSpy = vi.fn();
+    const patchSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetchForHistory({ previewSpy, patchSpy }));
+    await openHistoryPanel();
+
+    const editButtons = screen.getAllByText('编辑');
+    fireEvent.click(editButtons[0]!);
+
+    const amountInput = await screen.findByLabelText('金额（USD）');
+    fireEvent.change(amountInput, { target: { value: '4800' } });
+    const dateInput = screen.getByLabelText('生效日');
+    fireEvent.change(dateInput, { target: { value: '2026-09-25' } });
+
+    fireEvent.click(screen.getByRole('button', { name: '下一步：确认改动' }));
+    await waitFor(() => expect(previewSpy).toHaveBeenCalledTimes(1));
+    const [previewUrl, previewBody] = previewSpy.mock.calls[0]!;
+    expect(previewUrl).toContain(`/balance-history/${HIST_CURRENT_ID}/preview`);
+    expect(previewBody.newAmount).toBe(480000);
+    expect(previewBody.newEffectiveDate).toBeTruthy();
+
+    // 确认页：isCurrent=true，走"改前→改后现余额"分支——"US$5,000.00"这个数字
+    // 在页面上不止这一处（钱包一行式列表本身也显示当前余额），所以用"现余额："
+    // 这一行自己的容器范围去断言改前/改后两个数字都在，不是整份文档全局找。
+    await waitFor(() => expect(screen.getByRole('button', { name: '确认修改' })).toBeTruthy());
+    const balanceRow = screen.getByText('现余额：').parentElement!;
+    expect(balanceRow.textContent).toContain(formatMoney(500000, 'USD')); // 改前
+    expect(balanceRow.textContent).toContain(formatMoney(480000, 'USD')); // 改后
+    // 不是"历史记录不影响余额"这条说明文字。
+    expect(screen.queryByText('这条是历史记录，改动不影响当前余额。')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '确认修改' }));
+    await waitFor(() => expect(patchSpy).toHaveBeenCalledTimes(1));
+    const [patchUrl, patchBody] = patchSpy.mock.calls[0]!;
+    expect(patchUrl).toContain(`/balance-history/${HIST_CURRENT_ID}`);
+    expect(patchBody.amount).toBe(480000);
+    expect(patchBody.effectiveDate).toBeTruthy();
+
+    // 提交后退出编辑态。
+    await waitFor(() => expect(screen.queryByRole('button', { name: '确认修改' })).toBeNull());
+  });
+
+  it('编辑「已被覆盖的历史」条目：确认页只显示说明文字，不显示"现余额"两行，提交调用 PATCH 到正确的历史 id', async () => {
+    const previewSpy = vi.fn();
+    const patchSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetchForHistory({ previewSpy, patchSpy }));
+    await openHistoryPanel();
+
+    const editButtons = screen.getAllByText('编辑');
+    fireEvent.click(editButtons[1]!); // 第二条是已被覆盖的历史条目
+
+    const amountInput = await screen.findByLabelText('金额（USD）');
+    fireEvent.change(amountInput, { target: { value: '3800' } });
+    const dateInput = screen.getByLabelText('生效日');
+    fireEvent.change(dateInput, { target: { value: '2026-09-18' } });
+
+    fireEvent.click(screen.getByRole('button', { name: '下一步：确认改动' }));
+    await waitFor(() => expect(previewSpy).toHaveBeenCalledTimes(1));
+    const [previewUrl] = previewSpy.mock.calls[0]!;
+    expect(previewUrl).toContain(`/balance-history/${HIST_OLD_ID}/preview`);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '确认修改' })).toBeTruthy());
+    expect(screen.getByText('这条是历史记录，改动不影响当前余额。')).toBeTruthy();
+    // 不该出现"现余额"这一行——设计稿④屏明确要求不硬凑"不变"这一行。
+    expect(screen.queryByText('现余额：')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '确认修改' }));
+    await waitFor(() => expect(patchSpy).toHaveBeenCalledTimes(1));
+    const [patchUrl, patchBody] = patchSpy.mock.calls[0]!;
+    expect(patchUrl).toContain(`/balance-history/${HIST_OLD_ID}`);
+    expect(patchBody.amount).toBe(380000);
+  });
+
+  it('「已更正」标签点开显示原始值，点「还原成原始值」调用正确的还原端点', async () => {
+    const revertSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetchForHistory({ revertSpy }));
+    await openHistoryPanel();
+
+    const correctedTag = screen.getByRole('button', { name: /已更正/ });
+    fireEvent.click(correctedTag);
+
+    // 展开后看到"最初原始值"（350000/2026-09-15），不是这条记录现在的 400000。
+    // 用 `^原始值` 锚定开头，避免跟"还原成原始值"这颗按钮的文字撞上。
+    await waitFor(() => expect(screen.getByText(/^原始值/)).toBeTruthy());
+    const originalBox = screen.getByText(/^原始值/).parentElement!;
+    expect(originalBox.textContent).toContain(formatMoney(350000, 'USD'));
+
+    fireEvent.click(screen.getByRole('button', { name: '还原成原始值' }));
+    await waitFor(() => expect(revertSpy).toHaveBeenCalledTimes(1));
+    const [revertUrl] = revertSpy.mock.calls[0]!;
+    expect(revertUrl).toContain(`/balance-history/${HIST_OLD_ID}/revert`);
+
+    // 还原之后重新拉取历史，这条记录不再带"已更正"标签（originalAmount 被清空）。
+    await waitFor(() => expect(screen.queryByRole('button', { name: /已更正/ })).toBeNull());
   });
 });

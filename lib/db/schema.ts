@@ -440,6 +440,28 @@ export const walletBalanceHistory = sqliteTable(
     prevEffectiveDate: integer('prev_effective_date', { mode: 'timestamp_ms' }), // 改前生效日；同上可为 null
     displayBalanceBefore: integer('display_balance_before').notNull(),
     displayBalanceAfter: integer('display_balance_after').notNull(),
+    // originalAmount/originalEffectiveDate（round72 第三批新增）：这条历史记录本身
+    // 支持直接编辑（改 amount/effectiveDate）之后，用来保留"最初原始值"的两个字段——
+    // **只在这条记录第一次被编辑时写入，非首次编辑不覆盖，还原之后清空成 null**，
+    // 这几句话必须先说清楚，不然以后看到"originalAmount 有值但 amount 好像跟原来的
+    // 差不多"这种表面矛盾会看懵：
+    //
+    // - 这条记录从没被编辑过：两个字段都是 null（跟"当前生效"/"历史条目"这两种
+    //   身份完全无关，是一条独立的"有没有被人手动改过金额/日期"的标记）。
+    // - 第一次编辑：写入的是"编辑前"的 amount/effectiveDate（也就是这条记录刚被
+    //   创建、还没被编辑过的那个原始值）。
+    // - 第二次及以后再编辑同一条：这两个字段**维持原样不动**，不会被这一次编辑的
+    //   "编辑前"值覆盖——目的是让"查原始值"永远查到最初那一次创建时的数字，不是
+    //   "上一次改之前"的中间值。判断逻辑收在
+    //   `lib/domain/wallet-balance-history.ts` 的 `computeHistoryEditFields`。
+    // - 「还原成原始值」：把 amount/effectiveDate 改回这两个字段存的值，同时把
+    //   这两个字段自己清空成 null——还原之后这条记录就不再带"已更正"标签，等于
+    //   完全抹平了这一路的编辑痕迹，回到"从没被人动过"的状态。
+    //
+    // 是否有值本身就是 UI 上「已更正」标签要不要显示的唯一依据（`originalAmount`
+    // 非 null 就显示），不需要另外维护一个布尔开关。
+    originalAmount: integer('original_amount'),
+    originalEffectiveDate: integer('original_effective_date', { mode: 'timestamp_ms' }),
   },
   (table) => ({
     walletIdx: index('wallet_balance_history_wallet_idx').on(table.walletId),

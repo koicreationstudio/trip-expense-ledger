@@ -187,6 +187,21 @@ export const previewWalletBalanceSchema = z
     path: ['newBalanceUpdatedAt'],
   });
 
+// round72 第三批（余额历史可直接编辑）：编辑一条 wallet_balance_history 记录前，
+// 先看"编辑之后会怎样"的预览端点专用——跟上面 previewWalletBalanceSchema 两个字段
+// 都可选不一样，这个端点永远是"要看编辑后会怎样"，两个字段都必填。
+export const previewBalanceHistoryEditSchema = z.object({
+  newAmount: z.number().int(),
+  newEffectiveDate: z.string().datetime(),
+});
+
+// round72 第三批：真正落库编辑一条历史记录，同样两个字段都必填（跟上面预览端点
+// 保持一致，不允许"只改金额不改日期"这种局部更新，避免调用方漏传导致语义不清）。
+export const updateBalanceHistorySchema = z.object({
+  amount: z.number().int(),
+  effectiveDate: z.string().datetime(),
+});
+
 // fix(2026-09-26，"结算按币种拆开显示")：确认/取消确认现在必须带具体币种——
 // 同一对 from/to 可能同时欠好几个币种，勾选框现在是"这一笔币种收到了没"，不再是
 // "这一对人之间的钱收到了没"。

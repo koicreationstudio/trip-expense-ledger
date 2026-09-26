@@ -55,6 +55,11 @@ interface WalletBalanceHistoryEntry {
   prevEffectiveDate: string | null;
   displayBalanceBefore: number;
   displayBalanceAfter: number;
+  // round72 第三批（余额历史可直接编辑）新增：非 null 就代表这条记录被编辑过至少
+  // 一次，「已更正」标签是否显示、展开后看到的原始值都靠这两个字段，语义详见
+  // lib/db/schema.ts wallet_balance_history 表定义的注释。
+  originalAmount: number | null;
+  originalEffectiveDate: string | null;
 }
 
 const emptyForm = {
@@ -161,13 +166,39 @@ export function PaymentMethodsManager({
   const [confirmPreview, setConfirmPreview] = useState<{ displayBalanceAfter: number } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
 
-  // 历史记录只读展示（2026-09-26 新增）——按钱包 id 各自缓存一份列表，展开哪个钱包
-  // 的历史就用哪个 id 当 key，`undefined` = 还没查过，`null` 会不出现（查过就是数组，
-  // 哪怕是空数组）。点击历史条目本身不做任何事（不预填表单、没有"恢复"按钮），
-  // 这轮 Remy 明确要求只做只读展示，交互留给下一份设计稿。
+  // 历史列表展示（2026-09-26 新增，round72 第三批取代旧的"纯只读"版本——现在每条
+  // 都能点「编辑」，见下面 editingHistoryId 那组 state）——按钱包 id 各自缓存一份
+  // 列表，展开哪个钱包的历史就用哪个 id 当 key，`undefined` = 还没查过，`null`
+  // 不会出现（查过就是数组，哪怕是空数组）。
   const [historyOpenWalletId, setHistoryOpenWalletId] = useState<string | null>(null);
   const [historyLoadingId, setHistoryLoadingId] = useState<string | null>(null);
   const [historyByWallet, setHistoryByWallet] = useState<Record<string, WalletBalanceHistoryEntry[]>>({});
+
+  // 「直接编辑一条历史记录」（round72 第三批新增，取代上面这份纯只读展示）——
+  // 跟"设置当前余额"表单同一套两步确认流程（`editingWalletId`/`balanceStep`/
+  // `anchorInfo`/`confirmPreview` 那组 state），只是操作对象换成某一条历史记录，
+  // 所以另起一组独立的 state，不跟上面那组混用。同一时刻最多只有一条历史记录
+  // 在编辑态，`editingHistoryId` 非空时 `editingHistoryWalletId` 一定也非空。
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+  const [editingHistoryWalletId, setEditingHistoryWalletId] = useState<string | null>(null);
+  const [historyEditStep, setHistoryEditStep] = useState<'form' | 'confirm'>('form');
+  const [historyEditAmountYuan, setHistoryEditAmountYuan] = useState('');
+  const [historyEditDate, setHistoryEditDate] = useState('');
+  const [historyEditError, setHistoryEditError] = useState<string | null>(null);
+  // 步骤①→②之间要不要显示"改前→改后现余额"两行，取决于这条记录是不是"当前生效"
+  // ——由 preview 端点直接告诉前端（`isCurrent`），前端不用自己重新判断一遍。
+  const [historyEditPreview, setHistoryEditPreview] = useState<{
+    isCurrent: boolean;
+    displayBalanceBefore?: number;
+    displayBalanceAfter?: number;
+  } | null>(null);
+  const [historyEditConfirmLoading, setHistoryEditConfirmLoading] = useState(false);
+  const [historyEditSubmitting, setHistoryEditSubmitting] = useState(false);
+
+  // 「已更正」标签点开看原值（round72 第三批新增）——同一时刻最多展开一条，跟这个
+  // 文件里"editingWalletId"/"historyOpenWalletId"这些单选式展开状态是同一套习惯。
+  const [expandedOriginalId, setExpandedOriginalId] = useState<string | null>(null);
+  const [revertingId, setRevertingId] = useState<string | null>(null);
 
   // fix(2026-09-24 第三十九轮，第四版，真正的根因——前三版都在"时机"上找，找错了
   // 维度）：用 Playwright 在生产环境实机插桩 `Element.prototype.scrollIntoView`
@@ -398,6 +429,136 @@ export function PaymentMethodsManager({
     setHistoryOpenWalletId(walletId);
     if (!historyByWallet[walletId]) {
       await loadHistory(walletId);
+    }
+  }
+
+  /**
+   * 「编辑」一条历史记录（round72 第三批新增）——预填这条记录现在的值，进入两步
+   * 确认流程的第①步。跟 `startEditBalance`（设置当前余额那套）是同一种模式，
+   * 只是操作对象换成某条已存在的历史记录，不用像那边一样先异步查一次锚点信息
+   * （这条记录现在的值本身就摆在眼前，不需要额外请求）。
+   */
+  function startEditHistory(walletId: string, entry: WalletBalanceHistoryEntry) {
+    setEditingHistoryId(entry.id);
+    setEditingHistoryWalletId(walletId);
+    setHistoryEditStep('form');
+    setHistoryEditAmountYuan(String(centsToYuan(entry.amount)));
+    setHistoryEditDate(entry.effectiveDate.slice(0, 10));
+    setHistoryEditError(null);
+    setHistoryEditPreview(null);
+  }
+
+  function cancelEditHistory() {
+    setEditingHistoryId(null);
+    setEditingHistoryWalletId(null);
+    setHistoryEditStep('form');
+    setHistoryEditPreview(null);
+    setHistoryEditError(null);
+  }
+
+  /**
+   * 「下一步：确认改动」——调 preview 端点（不写库）算出这次编辑会不会影响现余额、
+   * 影响的话改前/改后各是多少，查完才进入步骤②确认页。响应里的 `isCurrent` 直接
+   * 决定确认页要走哪个文案分支，前端不用自己重新判断一次"这条是不是当前生效"。
+   */
+  async function handleHistoryGoToConfirm(walletId: string, historyId: string) {
+    setHistoryEditError(null);
+    if (!historyEditDate) {
+      setHistoryEditError('请选择生效日期');
+      return;
+    }
+    const amount = Number(historyEditAmountYuan);
+    if (Number.isNaN(amount)) {
+      setHistoryEditError('金额格式不对');
+      return;
+    }
+    setHistoryEditConfirmLoading(true);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/wallets/${walletId}/balance-history/${historyId}/preview`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          newAmount: yuanToCents(amount),
+          newEffectiveDate: new Date(historyEditDate).toISOString(),
+        }),
+      });
+      if (!res.ok) {
+        setHistoryEditError('算不出改动后的结果，检查一下金额和日期');
+        return;
+      }
+      const data = (await res.json()) as any;
+      setHistoryEditPreview({
+        isCurrent: data.isCurrent,
+        displayBalanceBefore: data.displayBalanceBefore,
+        displayBalanceAfter: data.displayBalanceAfter,
+      });
+      setHistoryEditStep('confirm');
+    } finally {
+      setHistoryEditConfirmLoading(false);
+    }
+  }
+
+  /**
+   * 「确认修改」——真正落库，调 PATCH 编辑端点。成功后跟 `handleSetBalance` 一样
+   * 刷新钱包列表（这条记录如果是"当前生效"，钱包余额可能变了）+ 重新查一次这个
+   * 钱包的历史列表（看到编辑后的新值 + 新出现的"已更正"标签），退出编辑态。
+   */
+  async function handleSubmitHistoryEdit(walletId: string, historyId: string) {
+    setHistoryEditError(null);
+    if (!historyEditDate) {
+      setHistoryEditError('请选择生效日期');
+      return;
+    }
+    const amount = Number(historyEditAmountYuan);
+    if (Number.isNaN(amount)) {
+      setHistoryEditError('金额格式不对');
+      return;
+    }
+    setHistoryEditSubmitting(true);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/wallets/${walletId}/balance-history/${historyId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          amount: yuanToCents(amount),
+          effectiveDate: new Date(historyEditDate).toISOString(),
+        }),
+      });
+      if (!res.ok) {
+        setHistoryEditError('更新失败，检查一下金额');
+        return;
+      }
+      cancelEditHistory();
+      await loadWallets();
+      await loadHistory(walletId);
+    } finally {
+      setHistoryEditSubmitting(false);
+    }
+  }
+
+  /** 「已更正」标签点开/收起看原始值（round72 第三批新增）——只是本地展开状态，不发请求。 */
+  function toggleOriginalExpand(entryId: string) {
+    setExpandedOriginalId((prev) => (prev === entryId ? null : entryId));
+  }
+
+  /**
+   * 「还原成原始值」（round72 第三批新增）——设计稿明确要求单击直达，不像「编辑」
+   * 那样走两步确认（跟`②`不是同一套交互）。成功后刷新钱包列表 + 这个钱包的历史
+   * 列表，收起原来展开的"已更正"面板（还原之后这条记录不再带这个标签，没有面板
+   * 可收起了）。
+   */
+  async function handleRevertHistory(walletId: string, entryId: string) {
+    setRevertingId(entryId);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/wallets/${walletId}/balance-history/${entryId}/revert`, {
+        method: 'POST',
+      });
+      if (!res.ok) return;
+      if (expandedOriginalId === entryId) setExpandedOriginalId(null);
+      await loadWallets();
+      await loadHistory(walletId);
+    } finally {
+      setRevertingId(null);
     }
   }
 
@@ -1109,10 +1270,12 @@ export function PaymentMethodsManager({
                       </div>
                     )}
 
-                    {/* 历史记录只读展示（2026-09-26 新增）——每条只显示三块信息：这次设置
-                        的锚点值@生效日／改动日期＋现余额改前→改后，不显示"由谁设置"这种
-                        操作者文字（Remy 明确要求去掉），点击条目本身不做任何事，没有"恢复
-                        这版"/"带回表单预填"这两个交互，设计稿还没定，这轮只做只读展示。 */}
+                    {/* 历史列表（round72 第三批：取代原本的纯只读展示，见
+                        DESIGN-BRIEF-round72-balance-history-edit.html）——每条都能点
+                        「编辑」直接改 amount/effectiveDate 本身。列表本来就按 changedAt
+                        倒序排列（GET /balance-history），第 0 项永远是"当前生效"那条——
+                        不需要额外的字段，直接用 index 判断；不显示"由谁设置"这种操作者
+                        文字（Remy 明确要求去掉）。 */}
                     {historyOpenWalletId === w.id && (
                       <div className="flex flex-col gap-1.5 rounded-xl border border-sand bg-white p-2">
                         {historyLoadingId === w.id ? (
@@ -1123,26 +1286,189 @@ export function PaymentMethodsManager({
                           <p className="text-[9px] text-muted">还没设置过当前余额，没有历史记录。</p>
                         ) : (
                           <ul className="flex flex-col gap-1.5">
-                            {historyByWallet[w.id]!.map((h) => (
-                              <li
-                                key={h.id}
-                                className="flex flex-col gap-0.5 border-b border-dashed border-sand pb-1.5 last:border-b-0 last:pb-0"
-                              >
-                                <span className="font-serif text-[10.5px] tabular-nums text-ink">
-                                  {formatMoney(h.amount, w.currency)} · {new Date(h.effectiveDate).toLocaleDateString()}
-                                </span>
-                                <span className="text-[9px] text-muted">
-                                  {new Date(h.changedAt).toLocaleDateString()} ·{' '}
-                                  <span className="font-serif tabular-nums">
-                                    {formatMoney(h.displayBalanceBefore, w.currency)}
+                            {historyByWallet[w.id]!.map((h, index) => {
+                              const isCurrentEntry = index === 0;
+                              const isCorrected = h.originalAmount !== null;
+                              return (
+                                <li
+                                  key={h.id}
+                                  className="flex flex-col gap-1 border-b border-dashed border-sand pb-1.5 last:border-b-0 last:pb-0"
+                                >
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="font-serif text-[10.5px] tabular-nums text-ink">
+                                      {formatMoney(h.amount, w.currency)} ·{' '}
+                                      {new Date(h.effectiveDate).toLocaleDateString()}
+                                    </span>
+                                    {/* "当前生效"/"已更正"两个标签互不排斥（当前生效那条也
+                                        可能被编辑过），共用同一套「已更正」组件，独立判断、
+                                        独立渲染，见设计稿⑤屏说明。 */}
+                                    {isCurrentEntry && (
+                                      <span className="shrink-0 rounded-full bg-live-bg px-[6px] py-[1px] text-[8px] font-semibold text-live">
+                                        当前生效
+                                      </span>
+                                    )}
+                                    {isCorrected && (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleOriginalExpand(h.id)}
+                                        aria-expanded={expandedOriginalId === h.id}
+                                        className="shrink-0 rounded-full bg-cream px-[6px] py-[1px] text-[8px] font-semibold text-ink"
+                                      >
+                                        已更正{expandedOriginalId === h.id ? ' ▲' : ' ▾'}
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => startEditHistory(w.id, h)}
+                                      className="ml-auto shrink-0 text-[9px] text-muted underline underline-offset-2"
+                                    >
+                                      编辑
+                                    </button>
+                                  </div>
+                                  <span className="text-[9px] text-muted">
+                                    {new Date(h.changedAt).toLocaleDateString()} ·{' '}
+                                    <span className="font-serif tabular-nums">
+                                      {formatMoney(h.displayBalanceBefore, w.currency)}
+                                    </span>
+                                    {' → '}
+                                    <span className="font-serif tabular-nums">
+                                      {formatMoney(h.displayBalanceAfter, w.currency)}
+                                    </span>
                                   </span>
-                                  {' → '}
-                                  <span className="font-serif tabular-nums">
-                                    {formatMoney(h.displayBalanceAfter, w.currency)}
-                                  </span>
-                                </span>
-                              </li>
-                            ))}
+
+                                  {/* 「已更正」展开：显示最初原始值（不是"上一次改前的值"）
+                                      + 「还原成原始值」单击直达，不走两步确认（跟下面「编辑」
+                                      的两步流程不是同一套交互，见设计稿⑤屏）。 */}
+                                  {isCorrected && expandedOriginalId === h.id && (
+                                    <div className="flex flex-col gap-1 rounded-lg bg-[rgba(164,163,160,.14)] px-2 py-1.5 text-[9px] text-muted">
+                                      <span>
+                                        原始值：{' '}
+                                        <span className="font-serif tabular-nums text-ink">
+                                          {formatMoney(h.originalAmount!, w.currency)} ·{' '}
+                                          {new Date(h.originalEffectiveDate!).toLocaleDateString()}
+                                        </span>
+                                      </span>
+                                      <button
+                                        type="button"
+                                        disabled={revertingId === h.id}
+                                        onClick={() => handleRevertHistory(w.id, h.id)}
+                                        className="self-start text-[9px] text-muted underline underline-offset-2 disabled:opacity-60"
+                                      >
+                                        {revertingId === h.id ? '还原中…' : '还原成原始值'}
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {/* 编辑态第①步：金额 + 生效日两个输入框，样式跟"设置当前余额"
+                                      表单同一套 field-label/field-input 阶梯。 */}
+                                  {editingHistoryId === h.id &&
+                                    editingHistoryWalletId === w.id &&
+                                    historyEditStep === 'form' && (
+                                      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-white p-2">
+                                        <div className="flex flex-wrap items-end gap-2">
+                                          <div className="flex flex-col gap-1">
+                                            <label className="field-label" htmlFor={`history-amount-${h.id}`}>
+                                              金额（{w.currency}）
+                                            </label>
+                                            <input
+                                              id={`history-amount-${h.id}`}
+                                              type="text"
+                                              inputMode="decimal"
+                                              value={historyEditAmountYuan}
+                                              onChange={(e) => setHistoryEditAmountYuan(e.target.value)}
+                                              className="field-input w-28 font-serif tabular-nums"
+                                            />
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <label className="field-label" htmlFor={`history-date-${h.id}`}>
+                                              生效日
+                                            </label>
+                                            <input
+                                              id={`history-date-${h.id}`}
+                                              type="date"
+                                              value={historyEditDate}
+                                              onChange={(e) => setHistoryEditDate(e.target.value)}
+                                              className="field-input"
+                                            />
+                                          </div>
+                                        </div>
+                                        <p
+                                          className={`text-[8.5px] ${isCurrentEntry ? 'text-coral font-medium' : 'text-muted'}`}
+                                        >
+                                          {isCurrentEntry
+                                            ? '这条是当前生效的记录，改动会立刻影响这个钱包现在显示的余额。'
+                                            : '这条已经被后面的记录覆盖，只是一条历史记录，改动不会影响当前的余额。'}
+                                        </p>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            type="button"
+                                            disabled={historyEditConfirmLoading}
+                                            onClick={() => handleHistoryGoToConfirm(w.id, h.id)}
+                                            className="btn-secondary"
+                                          >
+                                            {historyEditConfirmLoading ? '算中…' : '下一步：确认改动'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={cancelEditHistory}
+                                            className="tap-link text-[11px] text-muted"
+                                          >
+                                            取消
+                                          </button>
+                                        </div>
+                                        {historyEditError && <p className="text-[10px] text-coral">{historyEditError}</p>}
+                                      </div>
+                                    )}
+
+                                  {/* 编辑态第②步确认页：isCurrent 才显示"改前→改后现余额"，
+                                      不是当前生效则只放一句说明文字，不硬凑"现余额：不变"
+                                      这一行（设计稿④屏解释过为什么故意不显示）。 */}
+                                  {editingHistoryId === h.id &&
+                                    editingHistoryWalletId === w.id &&
+                                    historyEditStep === 'confirm' &&
+                                    historyEditPreview && (
+                                      <div className="flex flex-col gap-2 rounded-xl border border-sand bg-white p-2">
+                                        {historyEditPreview.isCurrent ? (
+                                          <div className="flex flex-col gap-1 rounded-lg bg-[rgba(164,163,160,.14)] px-2 py-1.5 text-[9px] text-muted">
+                                            <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                                              <span>现余额：</span>
+                                              <span className="font-serif text-[10.5px] tabular-nums text-muted line-through">
+                                                {formatMoney(historyEditPreview.displayBalanceBefore!, w.currency)}
+                                              </span>
+                                              <span>→</span>
+                                              <span className="font-serif text-[10.5px] tabular-nums text-ink">
+                                                {formatMoney(historyEditPreview.displayBalanceAfter!, w.currency)}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <p className="rounded-lg bg-[rgba(164,163,160,.14)] px-2 py-1.5 text-[9px] text-muted">
+                                            这条是历史记录，改动不影响当前余额。
+                                          </p>
+                                        )}
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            type="button"
+                                            disabled={historyEditSubmitting}
+                                            onClick={() => handleSubmitHistoryEdit(w.id, h.id)}
+                                            className="btn-secondary"
+                                          >
+                                            {historyEditSubmitting ? '保存中…' : '确认修改'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setHistoryEditStep('form')}
+                                            className="tap-link text-[11px] text-muted"
+                                          >
+                                            上一步
+                                          </button>
+                                        </div>
+                                        {historyEditError && <p className="text-[10px] text-coral">{historyEditError}</p>}
+                                      </div>
+                                    )}
+                                </li>
+                              );
+                            })}
                           </ul>
                         )}
                       </div>
