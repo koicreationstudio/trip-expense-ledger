@@ -1,6 +1,19 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
-## 【2026-09-26，第七十二轮 A 组（这次 lifeos-pm 派给 trip-expense-ledger-pm 的原始批次，跟同时并行的另一批次互不重复），claim `2026-09-26_091215_a652cabe`】
+## 【2026-09-26，第七十二轮 A 组批次，trip-expense-ledger-pm（claim `2026-09-26_091215_a652cabe`）：5 项直接改代码任务合并部署，Version `c0a07446-725f-4185-9389-f5d91bf3f418`】
+
+这批是 lifeos-pm 分派给 trip-expense-ledger-pm 的 round72 A 组（不需要 Remy 先拍板、可以直接改代码的 5 项），用 4 个独立 worktree 并行开发，逐一验证（typecheck+单测+mutation+lint）后合并进 main，一次性部署。跟同一时间段并行进行的其它批次（B 组三份对照稿、C 组问答、round70 问题整理、USDT 钱包校正等，见上面/下面各节，均由同一 lifeos-pm 会话内的并行 lane 完成）是分开的两条工作线，这节只记 A 组代码本身。
+
+1. **任务①「当地金额」框改可编辑双向联动汇率 + 精度铁律**（commit `a3b84d0`）：`expense-form.tsx`（新建+编辑）、`quick-add-expense.tsx`（快速记账，之前完全没有这个字段，这次补上）三个入口的「当地金额」框从只读展示改成可编辑，跟「汇率」框双向联动（`lastManualFieldRef` 记录最后编辑的是哪一个）。存进数据库的 `amountBaseCurrency` 现在直接等于用户在「当地金额」框填的数字精确转换成的分，不再用 `Math.round(amountCents * rate)` 重新算一遍——新增 11 条单元测试覆盖 HKD/MYR、MYR/USD、USD/CNY 等组合的精度铁律，mutation 验证过（故意插入 0.9999 扰动因子，测试真的能抓到 10427≠10426 的偏差）。
+2. **任务②支付方式占位文案改「请选择」+ 按钮禁用主动提示**（同 `a3b84d0`）：`expense-form.tsx` 的「不指定」改「请选择」（`quick-add-expense.tsx` 本来就是「选支付方式」不用改）；两个文件的提交按钮变灰时新增主动显示的提示文字，不用等点了提交才看到错误。
+3. **任务④活动流加「计分摊/不计分摊」筛选**（commit `698eafa`）：新增 `splitFilter` 维度，全链路补齐（组件+云端同步表 `expense_list_filter_preference` 新列 `split_filter`+API+验证 schema），迁移 `0013_amazing_moondragon.sql`（简单 `ALTER TABLE ADD COLUMN`）已确认应用到生产 D1。筛选文案直接用 Remy 原话「计分摊/不计分摊」，没有 A/B 选项分歧。
+4. **任务⑦（round70 第⑤项）全站下拉智能开合方向**（commit `06b6441`）：`components/select-dropdown.tsx` 打开面板瞬间量触发按钮到视口底部的空间，不足 240px 就改成向上展开（`bottom-full`），足够就维持向下（`top-full`）——根治"支付方式"筛选这类选项多的下拉被底部 `.action-bar` 盖住的问题。全站共用组件，`fx-compare-card.tsx` 两处自定义 `panelClassName` 同步去重复定位 class。
+5. **任务⑥①行程路由 404/停在上一趟行程根因修复**（commit `9817371`）：真根因不是竞态，是 `app/trips/[tripId]/layout.tsx` 只认 Layer 1 `tel_session` 跟 URL tripId 精确相等，不相等就无脑弹回首页，完全不检查这个账号是否透过 Layer 2 账号真的拥有目标行程——首页看到 identity 还在又会送回"当前激活"的那一趟，两条逻辑叠加导致"直接输网址有时停在上一趟行程"100% 必然发生（不是概率性）。修法：新增 `/api/account/auto-switch-trip/[tripId]` 路由，mismatch 时先查这个账号是否合法拥有目标行程，有就地铸新 session 再放行，没有才真的弹首页。同时把 `my-trips.tsx`/`trip-header-nav.tsx` 的行程切换从 `router.push`+`refresh()` 软导航改成 `window.location.href` 硬导航，消掉一整类客户端路由缓存/时序风险（这条是保守加固，不是"已证实修复了 404"，样本量太小没能 100% 坐实 404 的根因，如实标注置信度）。
+6. **另外合并了一条不在原 A 组清单里、但同批次由并行 lane 完成的 Remy 已拍板修复**（commit `bf13452`，与 `a3b84d0` 存在测试文件合并冲突，已解决保留两组测试，46 文件 319 条全过）：编辑消费时分类没变就保留原来的 `excludeFromSplit` 手动标记，不再被"纯按分类派生"逻辑静默覆盖，解决生产库 33 条历史标记的遗留问题。
+
+**验证**：4 个 worktree 各自 mutation 验证过（`amount-fx-linkage`/`expense-filter-split`/`dropdown-open-direction`/`trip-routing-fix`，逐条抽查 diff+跑测试+故意插入 bug 确认测试真失败），合并后全量 `npx tsc --noEmit` 0 错误、`npx vitest run` 46 文件 319 条全过、`npx eslint` 0 警告。生产 D1 迁移（`split_filter` 列）已确认应用。
+
+**已知缺口，如实记录**：这批改动碰到了用户界面（支付方式文案、当地金额输入框、活动流筛选、下拉展开方向），本该强制走 `ui-auditor` 真机 Playwright 走查才能算完成，但这次调用 `ui-auditor` 连续两次都被系统"Subagent nesting limit reached (depth 3 of 3)"拦下，没能跑成。补救用 `curl` 带临时 QA session cookie（`user_agent='QA-temp-verify'`，绑定 remy 在真实🇭🇰2026香港行程 `f78a6b5e-8612-4097-8bfd-88a5db664045` 的 participant，验证完已删除、回读 count=0）打了服务端渲染的 HTML，只能确认"请选择"文案、`不计分摊`筛选下拉的存在、页面 200 可访问，**没能验证任何客户端 JS 交互行为**（双向联动算数对不对、下拉展开方向翻转、筛选点了真的会收窄列表这些都要真浏览器才能看）。这不满足项目"UI 改动必须过 ui-auditor 真机走查才算完成"的硬性要求，需要 lifeos-pm 用它自己的调用深度补一次真机走查，或者请 Remy 自己上线肉眼确认一下这几处，不能只凭这次的 curl 检查说"已完成"。## 【2026-09-26，第七十二轮 A 组（这次 lifeos-pm 派给 trip-expense-ledger-pm 的原始批次，跟同时并行的另一批次互不重复），claim `2026-09-26_091215_a652cabe`】
 
 背景：lifeos-pm 这轮把第七十二轮拆成 A/B/C 三组派给 trip-expense-ledger-pm：A 组（5 项不需要 Remy 拍板、直接做完上线）+ B 组（3 项需要先出对照稿）+ C 组（6 条问题整理，不擅自拍板）。执行期间发现 lifeos-pm 同时还在跑另一条并行批次（"第三批拍板"那几节，claim `2026-09-26_092646_d761a3ee`/`092238_253ac41b`/`093321_740e4edf`），两条线各自用 `git worktree` 隔离、互不冲突，但产出有重叠（尤其 B 组三份对照稿，两边各出了一份，文件名不同，都已入库，需要 lifeos-pm/Remy 决定留哪份或者合并）——如实记录这个情况，不是我漏查重复。
 
