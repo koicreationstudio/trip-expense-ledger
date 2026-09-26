@@ -536,3 +536,141 @@ describe('ExpenseForm — 第七十二轮任务①：当地金额双向联动 + 
     expect(screen.queryByRole('option', { name: '不指定' })).toBeNull();
   });
 });
+
+// fix(2026-09-26 第七十二轮批次②，Remy 拍板)：生产库 33 条历史手动标记
+// exclude_from_split=1（分类不是机票/宝石）的记录，编辑一次就会被静默改回
+// false（round70 把这个字段改成纯粹按分类派生的副作用）。这轮改成"编辑时分类
+// 没变就保留原值，分类真的变了才重新按分类派生"，下面 4 条覆盖 Remy 要求的
+// 全部场景（含 mutation 验证，见 PR 说明）。
+describe('ExpenseForm — 第七十二轮批次②：编辑消费保留历史手动 excludeFromSplit 标记', () => {
+  function baseInitialExpense(overrides: Partial<InitialExpense>): InitialExpense {
+    return {
+      id: 'exp-existing',
+      amount: 10000,
+      currency: 'MYR',
+      payerParticipantId: 'p1',
+      category: '🍜 餐饮',
+      merchant: null,
+      note: null,
+      expenseDate: '2026-09-01T00:00:00.000Z',
+      fxRateUsed: 1,
+      amountBaseCurrency: 10000,
+      hasReceipt: false,
+      splits: [{ participantId: 'p1', shareAmountBaseCurrency: 10000 }],
+      paymentMethodId: 'pm1',
+      excludeFromSplit: false,
+      ...overrides,
+    };
+  }
+
+  it('场景①：原标记为 true、分类没变、只改金额 → 保存后仍是 true', async () => {
+    const postSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(postSpy));
+    const initialExpense = baseInitialExpense({ category: '🚗 交通', excludeFromSplit: true });
+
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+        initialExpense={initialExpense}
+      />
+    );
+
+    // 只改金额，不碰分类字段。
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '150', selectionStart: 3 } });
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(1));
+    expect(callArg(postSpy).excludeFromSplit).toBe(true);
+  });
+
+  it('场景②：分类改成机票/宝石 → true（新逻辑本来就会派生成 true，跟保留值一致）', async () => {
+    const postSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(postSpy));
+    const initialExpense = baseInitialExpense({ category: '🍜 餐饮', excludeFromSplit: false });
+
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+        initialExpense={initialExpense}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('分类'), { target: { value: '✈️ 机票' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(1));
+    expect(callArg(postSpy).excludeFromSplit).toBe(true);
+  });
+
+  it('场景③：分类从机票改成餐饮 → 按新分类重新派生，变成 false', async () => {
+    const postSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(postSpy));
+    const initialExpense = baseInitialExpense({ category: '✈️ 机票', excludeFromSplit: true });
+
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+        initialExpense={initialExpense}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('分类'), { target: { value: '🍜 餐饮' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(1));
+    expect(callArg(postSpy).excludeFromSplit).toBe(false);
+  });
+
+  it('场景④：普通记录（原本就是分类正常派生出的 false），分类没变，编辑金额 → 行为不变，仍是 false', async () => {
+    const postSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(postSpy));
+    const initialExpense = baseInitialExpense({ category: '🍜 餐饮', excludeFromSplit: false });
+
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+        initialExpense={initialExpense}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '200', selectionStart: 3 } });
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(1));
+    expect(callArg(postSpy).excludeFromSplit).toBe(false);
+  });
+
+  it('新建消费（没有 initialExpense）永远纯按分类派生，不受这条改动影响', async () => {
+    const postSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(postSpy));
+
+    render(
+      <ExpenseForm
+        tripId={TRIP_ID}
+        baseCurrency="MYR"
+        myParticipantId="p1"
+        participants={PARTICIPANTS}
+        paymentMethods={PAYMENT_METHODS}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '80', selectionStart: 2 } });
+    fireEvent.change(screen.getByLabelText('分类'), { target: { value: '💎 宝石' } });
+    selectPaymentMethod('现金');
+    fireEvent.click(screen.getByRole('button', { name: '记这笔账' }));
+    await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(1));
+    expect(callArg(postSpy).excludeFromSplit).toBe(true);
+  });
+});

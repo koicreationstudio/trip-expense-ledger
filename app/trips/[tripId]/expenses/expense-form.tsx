@@ -177,16 +177,17 @@ export function ExpenseForm({
   // 排除，选别的分类就不排除，没有任何手动覆盖的余地。之前的 excludeFromSplitTouched
   // "手动点过就不再跟着分类联动"这层折中逻辑整段删掉。
   //
-  // 边界情况（已用真实数据查证，写清楚留给 Remy 确认）：生产库里有 46 条
-  // exclude_from_split=1 的记录，其中 33 条 category 不是机票/宝石（比如"交通"
-  // "住宿""餐饮"这些），是这次改动之前 Remy 手动勾过的。这些历史记录本身不受影响——
-  // 行程主页 Hero 卡"我承担"合计读的是数据库里存的 excludeFromSplit 字段本身
-  // （page.tsx `loadMyShareBreakdown`），不是这里重新按分类现算，所以这次改动上线
-  // 后这 33 条记录显示不会变。但如果 Remy 之后编辑（哪怕只是改个商家名字这种不相关
-  // 的小修改）这 33 条里的某一条，保存时这里会按新逻辑把 excludeFromSplit 静默改回
-  // false（因为它的分类不是机票/宝石）——那笔历史记录会从"不计入分摊"变回"计入分摊"，
-  // 这是一次真实的行为改变，不是假设，需要 Remy 知道。
-  const excludeFromSplit = AUTO_EXCLUDE_CATEGORIES.has(category);
+  // fix(2026-09-26 第七十二轮批次②，Remy 拍板)：上面那段注释记录的边界情况——生产库
+  // 46 条 exclude_from_split=1 里有 33 条 category 不是机票/宝石，是这次改动之前
+  // Remy 手动勾过的历史标记——已经从"假设风险"变成"确认要修"。规则：编辑一笔已有
+  // 消费时，只要这次没有真的改分类（category 跟 initialExpense.category 一样），
+  // 保留数据库里原来那个 excludeFromSplit 值，不重新按分类派生；只有分类真的变了，
+  // 才用新分类重新派生（选了机票/宝石变 true，选别的变 false）。新建消费（没有
+  // initialExpense）永远纯按分类派生，跟之前行为一致，不受这条影响。
+  const excludeFromSplit =
+    isEdit && initialExpense && category === initialExpense.category
+      ? initialExpense.excludeFromSplit
+      : AUTO_EXCLUDE_CATEGORIES.has(category);
 
   function handleCategoryChange(value: string) {
     setCategory(value);
@@ -662,8 +663,9 @@ export function ExpenseForm({
       </div>
 
       {/* fix(2026-09-25 第七十轮)：手动"不计入分摊"勾选框整段删掉——excludeFromSplit
-          现在纯粹由分类派生（见上面 state 定义），选了机票/宝石这两个分类会自动不计入
-          「我承担」合计，用户没有单独的开关可以改。 */}
+          由分类派生（见上面 state 定义），选了机票/宝石这两个分类会自动不计入
+          「我承担」合计，用户没有单独的开关可以改。fix(2026-09-26 第七十二轮批次②)：
+          编辑已有消费且没改分类时会保留原值而不是重新派生，见上面 state 定义的注释。 */}
 
       {/* fix(2026-09-14 第四轮走查，Remy 本人明确要求"都要做")：这里原本是一张带"比价"
           按钮的卡片（点了拉 /api/trips/{tripId}/fx-recommendation 算哪张卡最划算），
