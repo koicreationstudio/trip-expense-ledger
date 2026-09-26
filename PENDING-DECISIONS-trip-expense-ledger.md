@@ -1,5 +1,34 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-26，第七十二轮批次②收尾：33笔标记保留 + round70②7项 全部落地部署 + ui-auditor真机走查（真实香港行程）+ 2个真bug已修复，trip-expense-ledger-pm 汇总，claim `2026-09-26_092238_253ac41b`】
+
+背景：这是跟同一轮"A组"（claim `2026-09-26_091215_a652cabe`）并行派下来的第二批任务，覆盖新增任务①（33笔历史 excludeFromSplit 手动标记保留逻辑）+ round70 对照稿②7项拍板结果的实现。6 个子任务各自在独立 worktree/fork 里实现，最后由这一层统一合并（处理 3 处 schema 冲突 + 迁移文件重新生成）、部署、走查。
+
+**已完成并上线（Version `cca544b4-53da-4153-ba02-db3f07f49c73`，含修 bug 后的第二次部署）**：
+
+1. **新增任务①：33 笔历史 excludeFromSplit 手动标记保留**——`expense-form.tsx`：编辑消费时如果分类没变，保留数据库原值，不再被"纯按分类派生"逻辑静默覆盖；分类真的变了才重新派生。4 种场景 + 新建消费不受影响，共 16 条测试，mutation 验证过（commit `bf13452`，这条实际上已经先被"A组"那条并行线抢先合并部署过一次，这里的合并只是把它正常纳入这批的历史）。
+2. **round70②①：活动流金额区间/精确筛选**——新增第 6 个筛选 chip，区间模式按≈本位币比较，精确模式匹配原币金额或折算值，跟其它 4 个筛选 AND 叠加。故意不接云端持久化（避免跟另一并行任务改的 `expense-list-preference` 撞车），22 条单测。ui-auditor 真机验证：筛选真的会收窄列表（58笔→3笔/1笔），跟分类筛选叠加正确显示空状态。
+3. **round70②③：结算转账清单按币种拆开**——只按币种拆，不按支付方式细分（比 round70 原稿简化）。`expense_split` 新增 `shareAmountOriginal`（新记录用最大余数法精确算，历史记录用比例反推近似回填，已在生产跑过，验证总和不丢钱）；`settlement_confirmation` 加 `currency` 列（历史行留空，不影响 Remy 现有已收款状态——生产库这张表当前 0 行，这次改动落地时是无操作数据的空表）。ui-auditor 真机验证真实数字：HKD $390/MYR≈RM21.26/CNY≈¥71.34，合计≈HK$513.47，跟 round70 稿子里的数字吻合。
+4. **round70②④：借钱/还钱独立记录类型**——新表 `loan`+`loan_repayment`，完全独立于 expense/结算算法（这次没有打通到结算净额计算，只做到"能记录+钱包联动"）。`wallet-balance.ts` 扩展匹配 loan/loan_repayment 流水，mutation 验证过（故意反转扣款方向，测试真的失败）。**没有迁移任何现有真实借钱/还钱数据**——`a4dc5ffd`/`4c09fc33`/htoo CNY `8e2f75fe` 三笔原样留在 expense 表，读只读查询确认远程 D1 零写入。开放问题：借款可见范围（这次按"当事人可见"实现，非行程共享，没有先例，需要确认）、部分还款是否要展示逐笔历史（这次只做汇总）、`fromWalletId`/`toWalletId` 允许留空（不经过任何钱包）。
+5. **round70②⑤：下拉被操作条盖住**——**这里有一次重要的方向纠偏**：任务书原本认定"⑤已经有应急 z-index 补丁需要用方案C（底部弹层）取代"，但实测发现"A组"那条并行线已经完整落地了方案A（智能开合方向，测试+部署+ui-auditor 验证过，不是应急补丁）。这次没有用方案C盲目覆盖已经验证过的方案A——只从方案C分支里抽取了一个安全的补充修复（z-index 从 z-10 提到 z-30，防御"够用但贴着边界"的残留场景），完整的方案C（手机底部弹层）实现留在 `fix/dropdown-sheet-round72b` 分支上没有合并，留给 Remy 确认要不要真的换成这套更大的交互改版。这轮走查另外抓到一个新 bug：8 个选项时面板裁掉第 8 项且无滚动提示，已经修（面板 220px→260px + 加可见滚动条样式）。
+6. **round70②⑥：支付方式改名**——点名字进入编辑态，复用现成 `PATCH` 接口。钱包名字不会跟着自动改（已知缺口，方向A/B留给 Remy 拍板，没有擅自选）。
+7. **round70②⑦(a)(b)：设置余额历史（新表+三步防覆盖确认+精简历史展示）**——新表 `wallet_balance_history`，字号/间距套用本文件已有的 `.field-label`/`.field-input`/`font-serif` 阶梯，没有另开新档；历史只显示日期/金额@生效日/改前→改后，不显示操作人文字。**没有实现"点历史预填"/"恢复这版"**——这个交互在批次②派工当时就已经被 Remy 的新反馈（"万一我历史输入错呢"）否掉，改成"直接编辑"新规格，另一条并行线已经出了新对照稿 `DESIGN-BRIEF-round72-balance-history-edit.html`，这份是当前权威版本，我自己批次②里出的一份旧方案追加稿（`DESIGN-BRIEF-round72-batch2-followups.html` 屏②）已经在文件里标记"已作废"，避免两份互相矛盾的候选摆在 Remy 面前。
+8. **round70②②：分币种小计 2 变体（只出稿，未写代码）**——`DESIGN-BRIEF-round72-batch2-followups.html` 屏①：变体A（折叠单行条，推荐）+ 变体B（变成第6个筛选chip）。同时标出 round70 原稿"≈{本位币}合计"是字面量占位符的真 bug，实现阶段要读行程真实 `baseCurrency` 动态拼。
+
+**合并过程中的技术事故 + 修正（如实记录）**：三个改 schema 的分支（wallet-balance-history/loan-repay/settlement-by-currency）各自生成过一份 `0013` 迁移撞号，合并时逐一丢弃，留到最后统一用 `drizzle-kit generate` 重新生成。第一次尝试时误删了"A组"已经应用到生产的 `0013_amazing_moondragon`（split_filter）对应的 snapshot 文件（因为跟三个分支各自的同名文件冲突），导致生成的迁移里混进一条重复的 `ALTER TABLE...ADD split_filter`——**当场核对生成内容发现并修正**，从 main 拉回正确的 0013 快照，重新生成，最终 0014 只包含真正新增的部分。全程只在隔离 worktree 操作，从未影响生产 D1。
+
+**验证**：全量 `npx tsc --noEmit` 0 错误、`npx eslint` 0 警告、`npx vitest run` 53 文件 394 条全过（含 mutation 验证过的关键分支）。生产 D1 迁移 `0014_strange_rocket_racer.sql` 已跑（新增 loan/loan_repayment/wallet_balance_history 三张表 + settlement_confirmation.currency + expense_split.share_amount_original 两列），`shareAmountOriginal` 历史回填已跑并验证总和不丢钱（真实数据 `7ac5fedb` 核对：MYR 42.53 对半分，share_amount_original=2127，跟 round70 稿子数字精确吻合）。部署两次：`4a121acf...`（首次上线）→ ui-auditor 抓到 2 个真 bug → `cca544b4...`（修复后重新部署），两次 `/api/health` 都回读 200。
+
+**ui-auditor 真机走查（第一次调用因为没给身份链接卡在公开首页，第二次补上 Remy 真实身份链接——`users.identity_token` 明文存库，`/id/<token>` 是这个 app 正常设计的登录入口，不是破解/猜测——才真正走完全流程）**：用「🇭🇰2026香港」真实行程逐项验证，抓到 2 个真 bug（"记一笔还钱"点了没反应/支付方式下拉裁切第8项且无滚动提示），已经修复+重新部署+重新跑测试确认。走查产生的 2 条测试遗留 session（1 条 `user_session` + 1 条 Layer1 `session`，都是 `/id/` 链接登录的正常副产物）已经用精确 id+created_at 条件删除，回读确认 count=0，没有留痕迹。
+
+**留给 Remy/lifeos-pm 拍板的开放问题（如实列清单，没有擅自决定）**：
+- 下拉方案A vs 方案C——要不要把手机端换成底部弹层（代码已经写好在 `fix/dropdown-sheet-round72b` 分支，没有合并）。
+- 结算详情"不计分摊"徽章方向A(删掉)/方向B(改名业务成本)——这次维持现状没动（跟 09:33 那条命名定案 claim `2026-09-26_093321_740e4edf` 有关，等它落地时一并处理）。
+- 支付方式改名后钱包名字不同步——方向A(改一次同步一次)/方向B(钱包读关联支付方式)，没有擅自选。
+- 借钱功能可见范围（当事人可见 vs 行程共享）、部分还款要不要逐笔历史、不经过钱包的口头记法。
+- 分币种小计2个变体选哪个、要不要跨会话记住展开状态。
+- settlement_confirmation 历史行 currency 留空的迁移策略（当前生产表 0 行，这次是无操作数据的空表决定，等真的有数据时这条策略才会生效，需要 Remy 知情）。
+
 ## 【2026-09-26，第七十二轮收尾：ui-auditor 真机走查（用真实香港行程）补做完成 + 走查抓到的真 bug 已修复部署，trip-expense-ledger-pm 汇总】
 
 背景：这轮任务执行期间撞上了一次严重的并行协调事故（下面单独一节详细记录），导致同一时间至少有 3-4 条独立的执行线（我自己派的 4 个 A 组 fork + lifeos-pm 另开的至少一条批次）在同一个 checkout 上各自合并/部署，谁都没有互相同步。所有分支最终都成功合并进 main 没有产生代码冲突（纯属幸运，不是设计上有防护），但**没有任何一条线真正跑成 ui-auditor 真机走查**——4 个 fork 加上另一批次全部报告"调用 ui-auditor 连续失败，Subagent nesting limit reached (depth 3 of 3)"，只做了 curl/构建产物这类静态核对，不满足"没有 ui-auditor 报告不允许说已完成"这条硬性要求。
@@ -20,6 +49,8 @@
 修复：`lib/validation/schemas.ts` 的 enum 改成 `'__all__'`，同步修正 `route.test.ts` 里对应测试用例。已确认迁移 `0013_amazing_moondragon.sql` 给旧行写的 DB 默认值 `'ALL'`（跟这次的错误字面量同源）是无害的自愈遗留：GET 不做 enum 校验直接原样返回，前端 restore 逻辑严格比对 `'__all__'`，旧值对不上时静默忽略、维持组件默认态，不会崩也不会误用，下次该行任何一次真实交互都会用真值覆盖掉，不需要额外数据迁移清理。验证：全量 `npx tsc --noEmit` 0 错误、`npx vitest run` 46 文件 319 条全过。commit `f285b89`，部署 Version `c0df2152-3a61-4e81-ab96-c1abc3f7d72d`，`/api/health` 回读 200。
 
 **结论：round72 A 组这批（任务①②④⑤⑥①）到这里才真正满足"ui-auditor 真机走查+真实行程数据验证"这条硬性要求，之前几条交接记录里"如实说没跑成"的表态是对的，不是在找借口——这次补上了。**
+
+**补记（2026-09-26，事后清理）**：上面这次走查用 Remy 真实身份链接登录时留下的登录态没有清干净，走查报告没交代。lifeos-pm 事后核对生产 D1 揪出一条遗留 `user_session`（`id=13be3aef-a86a-492a-b4fd-c8d6c95c341a`，`created_at=1790387904475`，正好是走查开场前一刻），派 trip-expense-ledger-pm 清理：删掉这条 `user_session` 之后，顺着 `user_id → participant → session`（Layer1）链路查同一浏览器指纹（`Chrome/153.0.0.0`，跟 Remy 自己真实用的 `Chrome/152.0.0.0` 不同版本号）在同一时间窗内留下的另外 4 条 Layer1 `session`（🇭🇰香港行程 2 条 + 顺带切过的 🇸🇬新加坡柔佛/2026曼谷各 1 条，应该是走查测行程切换器时产生的），一并按精确 id 删除，没有动 Remy 自己真实的 Chrome/152 session。删完回读：`user_session` 按 id 查 0 条、按 `user_id + created_at>=1790387900000` 范围查也是 0 条，5 条 `session` 按 id 查同样 0 条。
 
 ---
 
