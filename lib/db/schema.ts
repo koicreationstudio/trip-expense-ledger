@@ -573,6 +573,9 @@ export const expenseListPreferences = sqliteTable(
     payerFilter: text('payer_filter').notNull().default('ALL'),
     dateFilter: text('date_filter').notNull().default('ALL'),
     paymentMethodFilter: text('payment_method_filter').notNull().default('ALL'),
+    // 第七十二轮任务④新增：「计分摊/不计分摊」筛选，值域固定 'ALL' | 'included' | 'excluded'
+    // （不像上面几个是"当前数据里取 distinct 值"的动态候选，这个是写死的 3 档）。
+    splitFilter: text('split_filter').notNull().default('ALL'),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
       .notNull()
       .default(sql`(unixepoch('subsec') * 1000)`),

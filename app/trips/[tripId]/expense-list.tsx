@@ -110,6 +110,12 @@ export function ExpenseList({
   const [payerFilter, setPayerFilter] = useState(ALL);
   const [dateFilter, setDateFilter] = useState(ALL);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState(ALL);
+  // 第七十二轮任务④新增：「计分摊 / 不计分摊」筛选，判断依据是既有的
+  // `excludeFromSplit` 字段（机票/宝石这类默认不计分摊，见字段定义处注释）。
+  // 值域固定只有 3 档（不像其它 4 个筛选是"从当前数据里取 distinct 值"的动态候选），
+  // 'included' = 只看计分摊的（excludeFromSplit === false），'excluded' = 只看
+  // 不计分摊的（excludeFromSplit === true）。
+  const [splitFilter, setSplitFilter] = useState<typeof ALL | 'included' | 'excluded'>(ALL);
   // 哪一行的编辑/删除操作区正展开——同一时间只让一行展开，点别的行/再点一次
   // 当前行都会收起，不需要额外的"点击外部关闭"监听（列表本身就在页面主体里，
   // 没有浮层遮挡问题）。
@@ -140,6 +146,7 @@ export function ExpenseList({
             payerFilter: string;
             dateFilter: string;
             paymentMethodFilter: string;
+            splitFilter: string;
           } | null;
         };
         const saved = data.preference;
@@ -151,6 +158,7 @@ export function ExpenseList({
               payerFilter: saved.payerFilter,
               dateFilter: saved.dateFilter,
               paymentMethodFilter: saved.paymentMethodFilter,
+              splitFilter: saved.splitFilter,
             }
           : null;
         if (!saved) return;
@@ -164,6 +172,9 @@ export function ExpenseList({
         if (saved.payerFilter) setPayerFilter(saved.payerFilter);
         if (saved.dateFilter) setDateFilter(saved.dateFilter);
         if (saved.paymentMethodFilter) setPaymentMethodFilter(saved.paymentMethodFilter);
+        if (saved.splitFilter === ALL || saved.splitFilter === 'included' || saved.splitFilter === 'excluded') {
+          setSplitFilter(saved.splitFilter);
+        }
       } catch {
         // 拉取失败静默走默认值，不阻塞列表渲染。
       }
@@ -184,6 +195,7 @@ export function ExpenseList({
         payerFilter,
         dateFilter,
         paymentMethodFilter,
+        splitFilter,
       };
       if (isSameExpenseListPreference(lastSavedSnapshotRef.current, nextSnapshot)) return;
       lastSavedSnapshotRef.current = nextSnapshot;
@@ -194,7 +206,7 @@ export function ExpenseList({
       });
     }, 600);
     return () => clearTimeout(timer);
-  }, [tripId, sortMode, categoryFilter, payerFilter, dateFilter, paymentMethodFilter]);
+  }, [tripId, sortMode, categoryFilter, payerFilter, dateFilter, paymentMethodFilter, splitFilter]);
 
   // fix(2026-09-26 第七十一轮，任务⑤)：手动排序拖拽。`serverManualOrder` 是服务端
   // 按 sortOrder 排好的基准顺序（页面刷新/新增删除消费后 `expenses` prop 变化时
@@ -346,6 +358,8 @@ export function ExpenseList({
       if (payerFilter !== ALL && e.payerName !== payerFilter) return false;
       if (dateFilter !== ALL && e.expenseDate.slice(0, 10) !== dateFilter) return false;
       if (paymentMethodFilter !== ALL && (e.paymentMethodLabel ?? '未指定') !== paymentMethodFilter) return false;
+      if (splitFilter === 'included' && e.excludeFromSplit) return false;
+      if (splitFilter === 'excluded' && !e.excludeFromSplit) return false;
       return true;
     });
     if (sortMode === 'date') {
@@ -362,10 +376,14 @@ export function ExpenseList({
     return [...filtered].sort(
       (a, b) => (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER)
     );
-  }, [expenses, sortMode, categoryFilter, payerFilter, dateFilter, paymentMethodFilter, manualOrder]);
+  }, [expenses, sortMode, categoryFilter, payerFilter, dateFilter, paymentMethodFilter, splitFilter, manualOrder]);
 
   const hasActiveFilter =
-    categoryFilter !== ALL || payerFilter !== ALL || dateFilter !== ALL || paymentMethodFilter !== ALL;
+    categoryFilter !== ALL ||
+    payerFilter !== ALL ||
+    dateFilter !== ALL ||
+    paymentMethodFilter !== ALL ||
+    splitFilter !== ALL;
 
   // fix(2026-09-26 第七十一轮，任务⑤)：开着筛选时列表只显示部分消费，此时拖拽
   // 调整的"相对顺序"跟实际存的全量顺序会脱节（用户看到的是收窄过的子集，以为
@@ -379,6 +397,7 @@ export function ExpenseList({
     setPayerFilter(ALL);
     setDateFilter(ALL);
     setPaymentMethodFilter(ALL);
+    setSplitFilter(ALL);
   }
 
   async function performDelete(expenseId: string) {
@@ -491,6 +510,24 @@ export function ExpenseList({
           options={[
             { value: ALL, label: '支付方式：全部' },
             ...paymentMethodOptions.map((m) => ({ value: m, label: m })),
+          ]}
+        />
+        {/* 第七十二轮任务④新增：「计分摊/不计分摊」筛选，值域固定 3 档，跟其它 4 个
+            动态候选筛选器不一样，不需要从 expenses 里取 distinct 值。文案暂定，
+            这两个具体命名（"不计分摊" vs 备选说法）留了 A/B 方案给 Remy 选，见
+            PENDING-DECISIONS 里 C 组问题清单，不影响这里的筛选逻辑本身。 */}
+        <SelectDropdown
+          ariaLabel="按是否计分摊筛选"
+          value={splitFilter}
+          onChange={(next) => {
+            markUserInteracted();
+            setSplitFilter(next as typeof ALL | 'included' | 'excluded');
+          }}
+          triggerClassName="min-h-[26px] max-w-[92px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
+          options={[
+            { value: ALL, label: '分摊：全部' },
+            { value: 'included', label: '计分摊' },
+            { value: 'excluded', label: '不计分摊' },
           ]}
         />
         {hasActiveFilter && (

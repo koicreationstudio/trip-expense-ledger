@@ -201,6 +201,9 @@ export const expenseListPreferenceSchema = z.object({
   payerFilter: z.string().trim().min(1).max(120),
   dateFilter: z.string().trim().min(1).max(120),
   paymentMethodFilter: z.string().trim().min(1).max(120),
+  // 第七十二轮任务④新增：「计分摊/不计分摊」筛选，跟上面几个不一样——值域固定只有
+  // 3 档（不是从当前数据动态取的候选值），用精确 enum 校验，非法值直接 400。
+  splitFilter: z.enum(['ALL', 'included', 'excluded']),
 });
 
 // fix(2026-09-26 第七十一轮，任务⑤)：活动流拖拽重排，一次提交"新顺序的完整 id
