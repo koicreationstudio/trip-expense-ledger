@@ -299,3 +299,109 @@ describe('ExpenseList — 2026-09-26 命名纠正任务新增：「业务成本�
     expect(body.businessCostFilter).toBe('yes');
   });
 });
+
+describe('ExpenseList — round72 第三批②：按当前筛选结果分币种小计（默认收起，点开展开明细）', () => {
+  it('默认收起：只显示"N 笔 · 金额..."一行，不显示分币种明细行', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [
+      makeExpense({ id: 'A', currency: 'HKD', amount: 10000, amountBaseCurrency: 10000 }),
+      makeExpense({ id: 'B', currency: 'MYR', amount: 20000, amountBaseCurrency: 6000 }),
+    ];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="HKD" />);
+
+    const trigger = screen.getByLabelText('按当前筛选分币种小计');
+    expect(trigger.textContent).toContain('2 笔');
+    expect(trigger.textContent).toContain('HK$100.00');
+    expect(trigger.textContent).toContain('RM');
+    expect(trigger.textContent).toContain('200.00');
+    expect(trigger.textContent).toContain('HK$160.00');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    // 明细行（币种代码单独一行）这时候不应该出现——collapsed 状态下不渲染展开区块。
+    expect(screen.queryByText('MYR')).toBeNull();
+  });
+
+  it('点开展开：显示分币种明细行 + "≈{本位币}合计"行，本位币读的是真实 baseCurrency prop（不是写死的字面量占位符）', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [
+      makeExpense({ id: 'A', currency: 'HKD', amount: 10000, amountBaseCurrency: 10000 }),
+      makeExpense({ id: 'B', currency: 'MYR', amount: 20000, amountBaseCurrency: 6000 }),
+    ];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="HKD" />);
+
+    fireEvent.click(screen.getByLabelText('按当前筛选分币种小计'));
+    expect(screen.getByLabelText('按当前筛选分币种小计').getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('HKD')).not.toBeNull();
+    expect(screen.getByText('MYR')).not.toBeNull();
+    expect(screen.getByText('≈HKD 合计')).not.toBeNull();
+    expect(screen.queryByText('≈MYR 合计')).toBeNull();
+  });
+
+  it('换一趟本位币不同的行程（同样的多币种数据），"≈合计"这一行的币种代码跟着变——证明不是写死的固定字符串', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [
+      makeExpense({ id: 'A', currency: 'HKD', amount: 10000, amountBaseCurrency: 3000 }),
+      makeExpense({ id: 'B', currency: 'MYR', amount: 20000, amountBaseCurrency: 6000 }),
+    ];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="USD" />);
+    fireEvent.click(screen.getByLabelText('按当前筛选分币种小计'));
+    expect(screen.getByText('≈USD 合计')).not.toBeNull();
+    expect(screen.queryByText('≈HKD 合计')).toBeNull();
+    expect(screen.queryByText('≈MYR 合计')).toBeNull();
+  });
+
+  it('只有一种币种、且正好是本位币时，不显示多余的"≈合计"行（跟上面那笔金额完全重复）', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [makeExpense({ id: 'A', currency: 'HKD', amount: 10000, amountBaseCurrency: 10000 })];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="HKD" />);
+    const trigger = screen.getByLabelText('按当前筛选分币种小计');
+    expect(trigger.textContent).toContain('1 笔');
+    expect(trigger.textContent).toContain('HK$100.00');
+    expect(trigger.textContent).not.toContain('≈');
+    fireEvent.click(trigger);
+    expect(screen.queryByText('≈HKD 合计')).toBeNull();
+  });
+
+  it('只有一种币种、但不是本位币时，仍显示"≈合计"（提供换算参考，不是"多币种才显示"的误判）', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [makeExpense({ id: 'A', currency: 'MYR', amount: 20000, amountBaseCurrency: 6000 })];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="HKD" />);
+    const trigger = screen.getByLabelText('按当前筛选分币种小计');
+    expect(trigger.textContent).toContain('RM');
+    expect(trigger.textContent).toContain('200.00');
+    expect(trigger.textContent).toContain('≈');
+    expect(trigger.textContent).toContain('HK$60.00');
+  });
+
+  it('小计会跟着当前筛选结果收窄——切筛选后笔数和金额都跟着变，不是对全部消费算的固定值', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [
+      makeExpense({ id: 'A', merchant: 'A店', category: '🍜 餐饮', currency: 'HKD', amount: 10000, amountBaseCurrency: 10000 }),
+      makeExpense({ id: 'B', merchant: 'B店', category: '🚕 交通', currency: 'HKD', amount: 5000, amountBaseCurrency: 5000 }),
+    ];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="HKD" />);
+    expect(screen.getByLabelText('按当前筛选分币种小计').textContent).toContain('2 笔');
+
+    fireEvent.click(screen.getByLabelText('按分类筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '🍜 餐饮' }));
+
+    const trigger = screen.getByLabelText('按当前筛选分币种小计');
+    expect(trigger.textContent).toContain('1 笔');
+    expect(trigger.textContent).toContain('HK$100.00');
+    expect(trigger.textContent).not.toContain('HK$50.00');
+  });
+
+  it('筛选后 0 笔（还有其它消费，只是这条筛选谁都不符合）时不渲染小计区块——空状态文案已经说清楚了，不重复一条"0 笔"', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [
+      makeExpense({ id: 'A', merchant: 'A店', currency: 'HKD', isOnlyMeSplit: false }),
+    ];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="HKD" />);
+    // 「计分摊/不计分摊」筛选选项是固定的三选一（全部/计分摊/不计分摊），不依赖
+    // 数据里实际出现过哪些值——这条消费 isOnlyMeSplit=false，切到「不计分摊」
+    // （要求 isOnlyMeSplit=true）谁都不符合，正好用来测"筛选后 0 笔"这个场景。
+    fireEvent.click(screen.getByLabelText('按是否计分摊筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '不计分摊' }));
+    expect(screen.queryByLabelText('按当前筛选分币种小计')).toBeNull();
+    expect(screen.getByText('没有符合筛选条件的消费。')).not.toBeNull();
+  });
+});

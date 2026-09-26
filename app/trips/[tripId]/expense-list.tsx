@@ -488,6 +488,48 @@ export function ExpenseList({
   // 调整顺序"比允许一个会让人困惑的局部拖拽更安全，这是任务书原文明确要求的边界。
   const dragDisabled = sortMode !== 'manual' || hasActiveFilter;
 
+  // round72 第三批②：按当前筛选结果分币种小计，默认收起只占一行（`DESIGN-BRIEF-
+  // round72-batch2-followups.html` 屏①变体A，Remy 认可的方向"平时收成一行，点开
+  // 展开明细"）。收起/展开状态故意不跨会话持久化（每次进页面都是收起态）——稿子
+  // 里这条本来就是留给 Remy 的开放问题，这次选更简单的那个方向，不是漏做持久化。
+  const [subtotalExpanded, setSubtotalExpanded] = useState(false);
+  const subtotalByCurrency = useMemo(() => {
+    const sums = new Map<string, number>();
+    for (const e of visibleExpenses) {
+      sums.set(e.currency, (sums.get(e.currency) ?? 0) + e.amount);
+    }
+    // 本位币排最前（跟稿子示例"HKD 排在 MYR 前面"一致——这趟行程本位币就是
+    // HKD），其余按合计金额（约算成本位币的 `amountBaseCurrency`，不是原始
+    // 币种金额本身，不同币种的原始数字不能直接比大小）从高到低排。
+    const totalsByCurrency = new Map<string, number>();
+    for (const e of visibleExpenses) {
+      totalsByCurrency.set(e.currency, (totalsByCurrency.get(e.currency) ?? 0) + e.amountBaseCurrency);
+    }
+    const currencies = Array.from(sums.keys()).sort((a, b) => {
+      if (a === baseCurrency) return -1;
+      if (b === baseCurrency) return 1;
+      return (totalsByCurrency.get(b) ?? 0) - (totalsByCurrency.get(a) ?? 0);
+    });
+    return currencies.map((currency) => ({ currency, amount: sums.get(currency)! }));
+  }, [visibleExpenses, baseCurrency]);
+  // fix(2026-09-26 第七十二轮第三批②，真bug)：round70 原稿"≈{本位币}合计"这一行
+  // 的 `{本位币}` 是字面量占位符，从没被替换成真实币种代码——这里必须读这趟行程
+  // 实际的 `baseCurrency` prop 动态拼进去（HKD 行程显示"≈HKD 合计"，MYR 行程
+  // 显示"≈MYR 合计"），不能是任何写死的字符串。
+  const subtotalTotalBaseCents = useMemo(
+    () => visibleExpenses.reduce((sum, e) => sum + e.amountBaseCurrency, 0),
+    [visibleExpenses]
+  );
+  // 只有涉及多个币种、或唯一那个币种不是本位币时，"≈合计"这一行才提供额外信息——
+  // 只有一种币种、且正好就是本位币时，"≈HKD 合计"会跟上面已经显示的那一笔金额
+  // 完全重复，不显示这多余的一行。
+  const subtotalNeedsApprox =
+    subtotalByCurrency.length > 1 ||
+    (subtotalByCurrency.length === 1 && subtotalByCurrency[0]?.currency !== baseCurrency);
+  const subtotalCollapsedText =
+    subtotalByCurrency.map((s) => formatMoney(s.amount, s.currency)).join(' + ') +
+    (subtotalNeedsApprox ? ` ≈ ${formatMoney(subtotalTotalBaseCents, baseCurrency)}` : '');
+
   // 「金额」chip 按钮上要显示的文字——没开这个筛选就是纯文字"金额"，开了按当前
   // 模式显示具体数值（跟其它 chip"分类：xxx"这种带当前值的展示习惯一致），用
   // 元（不是分）显示，两位小数对齐全站金额展示习惯。
@@ -776,6 +818,47 @@ export function ExpenseList({
           拖拽功能坏了。 */}
       {sortMode === 'manual' && hasActiveFilter && (
         <p className="text-[9.5px] text-muted">清除筛选之后才能拖拽调整顺序。</p>
+      )}
+
+      {/* round72 第三批②：按当前筛选结果分币种小计——默认收起只占一行（`DESIGN-
+          BRIEF-round72-batch2-followups.html` 屏①变体A），点这一行展开成分币种
+          明细，再点一次收起。没有任何符合条件的消费时不显示（下面空状态文案
+          已经说明白了，不需要一条"0 笔"的小计再重复一遍）。 */}
+      {visibleExpenses.length > 0 && (
+        <div className="rounded-xl border border-sand bg-[rgba(164,163,160,.14)] px-2 py-1.5">
+          <button
+            type="button"
+            onClick={() => setSubtotalExpanded((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 text-left"
+            aria-expanded={subtotalExpanded}
+            aria-label="按当前筛选分币种小计"
+          >
+            <span className="min-w-0 flex-1 truncate font-serif text-[10.5px] tabular-nums text-ink">
+              {visibleExpenses.length} 笔 · {subtotalCollapsedText}
+            </span>
+            <span aria-hidden="true" className="shrink-0 text-[9px] text-muted">
+              {subtotalExpanded ? '▴ 收起' : '▾'}
+            </span>
+          </button>
+          {subtotalExpanded && (
+            <div className="mt-1.5 flex flex-col gap-1 border-t border-dashed border-sand pt-1.5">
+              {subtotalByCurrency.map((s) => (
+                <div key={s.currency} className="flex items-center justify-between text-[9.5px]">
+                  <span className="text-muted">{s.currency}</span>
+                  <span className="font-serif tabular-nums text-ink">{formatMoney(s.amount, s.currency)}</span>
+                </div>
+              ))}
+              {subtotalNeedsApprox && (
+                <div className="flex items-center justify-between border-t border-sand pt-1 text-[9.5px] font-medium">
+                  <span className="text-ink">≈{baseCurrency} 合计</span>
+                  <span className="font-serif tabular-nums text-ink">
+                    {formatMoney(subtotalTotalBaseCents, baseCurrency)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {visibleExpenses.length === 0 ? (
