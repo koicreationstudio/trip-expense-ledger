@@ -377,8 +377,15 @@ export default async function TripPage({ params }: { params: { tripId: string } 
 
       {/* 借款清单（round72b 新增）："仅当事人可见"，不是整个行程共享，见上面查询
           处的注释。跟 expense/exchangeRecord 是三个平级的独立区块，不参与 Hero
-          卡"我承担"、活动流、结算净额这几处既有计算。 */}
-      <section className="flex flex-col gap-2">
+          卡"我承担"、活动流、结算净额这几处既有计算。
+          fix(round72 批次②，ui-auditor 抓到的真 bug)：底部"＋"菜单里"记一笔还钱"
+          点了跳 `#loans`（见 record-expense-bar.tsx 注释——还钱要先挑是哪一笔
+          欠款，落地位置是这个区块，不整一个只填金额、猜是哪笔的独立表单），但这个
+          section 之前没有 `id="loans"`，浏览器 hash 跳转找不到目标锚点，点了完全
+          没反应（URL 变了，页面纹丝不动），用户会以为点击没生效。这里补上 id，
+          恢复原生锚点跳转；没有借出记录时下面 LoanList 自己有空状态文案会跟着
+          一起被滚进视口，不用再额外写"还没有可还的借款"这类专属提示。 */}
+      <section id="loans" className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
           <h2 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">
             借还款 · <span className="font-mono uppercase tracking-wide">LOANS</span>

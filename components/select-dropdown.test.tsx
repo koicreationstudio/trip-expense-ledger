@@ -6,7 +6,12 @@
  * （`bottom-full`）。
  *
  * 覆盖三个场景：①下方空间充足→维持向下开 ②下方空间不足（扣掉操作条 60px 之后
- * 撑不下 240px 安全高度）→改成向上开 ③边界值（刚好等于阈值）不误判成"不足"。
+ * 撑不下 280px 安全高度）→改成向上开 ③边界值（刚好等于阈值）不误判成"不足"。
+ *
+ * fix(2026-09-26 第七十二轮批次②，ui-auditor 用真实香港行程抓到真 bug 后同步
+ * 调整)：面板 max-h 从 220px 提到 260px（8 个选项时最后一项被裁在面板边界外，
+ * 且滚动条本身没有可见提示），安全高度阈值同步从 240px 提到 280px，边界值测试
+ * ③ 的数字跟着改，不是随便调的。
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -62,7 +67,7 @@ describe('SelectDropdown 弹层开合方向', () => {
 
   it('②触发按钮靠近视口底部、下方空间不足时，面板向上开（bottom-full）', () => {
     // 视口 800px，触发按钮底部在 700px 处 → 下方剩余 100px，扣掉操作条 60px 只剩
-    // 40px，远小于 240px 安全高度，必须向上开。
+    // 40px，远小于 280px 安全高度，必须向上开。
     mockViewportAndTriggerRect(800, 700);
     renderAndOpen();
     const panel = screen.getByRole('listbox');
@@ -71,10 +76,10 @@ describe('SelectDropdown 弹层开合方向', () => {
   });
 
   it('③边界值：扣掉操作条后剩余空间刚好等于安全高度阈值，不误判成"不足"（维持向下开）', () => {
-    // 视口 1000px，安全高度阈值 240px，操作条占 60px → 触发按钮底部要在
-    // 1000 - 240 - 60 = 700px 处，此时 spaceBelow 恰好等于 240（不小于阈值，
-    // 判断条件是 `< 240` 才算不足），维持向下开。
-    mockViewportAndTriggerRect(1000, 700);
+    // 视口 1000px，安全高度阈值 280px，操作条占 60px → 触发按钮底部要在
+    // 1000 - 280 - 60 = 660px 处，此时 spaceBelow 恰好等于 280（不小于阈值，
+    // 判断条件是 `< 280` 才算不足），维持向下开。
+    mockViewportAndTriggerRect(1000, 660);
     renderAndOpen();
     const panel = screen.getByRole('listbox');
     expect(panel.className).toContain('top-full');

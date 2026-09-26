@@ -141,8 +141,9 @@ export function SelectDropdown({
     // ACTION_BAR_RESERVE_PX 跟 app/globals.css 的 --action-bar-h（60px）同步，
     // 写死不读 CSS 变量——这个值本身极少变、写死更简单可靠，改的话两边一起改。
     const ACTION_BAR_RESERVE_PX = 60;
-    // 面板 max-h-[220px]，留一点余量（可能有 min-w 换行/更多选项），阈值给够。
-    const PANEL_SAFE_HEIGHT_PX = 240;
+    // 面板 max-h-[260px]（第七十二轮批次②从 220px 提高，见下面渲染处注释），
+    // 留一点余量（可能有 min-w 换行/更多选项），阈值给够。
+    const PANEL_SAFE_HEIGHT_PX = 280;
     const spaceBelow = window.innerHeight - rect.bottom - ACTION_BAR_RESERVE_PX;
     setOpenUpward(spaceBelow < PANEL_SAFE_HEIGHT_PX);
   }, [open]);
@@ -185,7 +186,19 @@ export function SelectDropdown({
             // `.cat-dropdown-list` 这类下拉弹层统一是 border-radius:10px，这里
             // 之前是 rounded-xl(12px)——这是全站共用的 SelectDropdown 组件，
             // 改这一处会同步修正全站所有用到它的下拉弹层，不用逐处改。
-            'max-h-[220px] w-full min-w-[140px] overflow-y-auto rounded-[10px] border border-sand bg-white p-1 shadow-card'
+            //
+            // fix(2026-09-26 第七十二轮批次②，ui-auditor 用真实香港行程抓到的
+            // 真 bug)：这趟行程支付方式筛选有 8 个选项（全部/未指定+6个支付
+            // 方式），面板 `max-h-[220px]` 刚好只够显示 7 项，第 8 项被裁在
+            // 面板边界正下方——`overflow-y-auto` 本身没错（确认过程序化选中
+            // 隐藏选项依然生效，滚动容器是存在的），但 macOS/触屏常见的"滚动时
+            // 才出现"覆盖式滚动条完全没有任何视觉提示，用户根本看不出面板下面
+            // 还有内容，会以为选项就只有这 7 个。两处修：①面板高度从 220px
+            // 提到 260px，多数场景（8-9 个短选项）不用滚动就能看全 ②即使真的
+            // 还要滚动，显式给滚动条上颜色（不再是可能被系统设成"永远隐藏"的
+            // 覆盖式滚动条），至少在支持 `::-webkit-scrollbar` 的桌面 Chrome/
+            // Safari/Edge 上有个持续可见的细条提示"这里能滚"。
+            'max-h-[260px] w-full min-w-[140px] overflow-y-auto rounded-[10px] border border-sand bg-white p-1 shadow-card [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sand'
           }`}
         >
           {options.map((opt) => (
