@@ -44,6 +44,7 @@ export const GET = withSession<Context>(async (_request, { params }, identity) =
       dateFilter: row.dateFilter,
       paymentMethodFilter: row.paymentMethodFilter,
       splitFilter: row.splitFilter,
+      businessCostFilter: row.businessCostFilter,
     },
   });
 });
@@ -70,6 +71,7 @@ export const PUT = withSession<Context>(async (request, { params }, identity) =>
     dateFilter: parsed.data.dateFilter,
     paymentMethodFilter: parsed.data.paymentMethodFilter,
     splitFilter: parsed.data.splitFilter,
+    businessCostFilter: parsed.data.businessCostFilter,
     updatedAt: new Date(),
   };
 
@@ -87,6 +89,7 @@ export const PUT = withSession<Context>(async (request, { params }, identity) =>
         dateFilter: values.dateFilter,
         paymentMethodFilter: values.paymentMethodFilter,
         splitFilter: values.splitFilter,
+        businessCostFilter: values.businessCostFilter,
         updatedAt: values.updatedAt,
       },
     });

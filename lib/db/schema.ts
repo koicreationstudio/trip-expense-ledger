@@ -735,7 +735,15 @@ export const expenseListPreferences = sqliteTable(
     paymentMethodFilter: text('payment_method_filter').notNull().default('ALL'),
     // 第七十二轮任务④新增：「计分摊/不计分摊」筛选，值域固定 'ALL' | 'included' | 'excluded'
     // （不像上面几个是"当前数据里取 distinct 值"的动态候选，这个是写死的 3 档）。
+    // 2026-09-26 命名纠正任务：这一列存的值域没变，但它现在的判断依据是
+    // expense-list.tsx 里新的推导字段 `isOnlyMeSplit`（这笔消费的 expense_split
+    // 是不是只分给了付款人自己），不再是 excludeFromSplit——这一列只存"用户当前
+    // 选的是哪一档筛选"，不存判断依据本身，所以列定义/迁移不需要跟着改。
     splitFilter: text('split_filter').notNull().default('ALL'),
+    // 2026-09-26 命名纠正任务新增：「业务成本」筛选（判断依据是既有的
+    // `expenses.excludeFromSplit` 字段），值域固定 'ALL' | 'yes' | 'no'，跟上面
+    // `splitFilter` 是两个完全独立的筛选条件，同时存在，不合并成一列。
+    businessCostFilter: text('business_cost_filter').notNull().default('ALL'),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
       .notNull()
       .default(sql`(unixepoch('subsec') * 1000)`),

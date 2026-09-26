@@ -229,9 +229,12 @@ export function SettlementBody({
                     >
                       <span className="min-w-0 flex-1 truncate font-medium">
                         {primaryName}
+                        {/* 这次命名纠正任务（2026-09-26）：文案从"不计分摊"改成
+                            "业务成本"，判断依据（d.excludeFromSplit）没变——见
+                            expense-list.tsx 同款标签处的注释，不重复抄一遍原因。 */}
                         {d.excludeFromSplit && (
                           <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.3)] px-[5px] py-[1px] align-middle text-[8px] font-normal text-muted">
-                            不计分摊
+                            业务成本
                           </span>
                         )}
                       </span>

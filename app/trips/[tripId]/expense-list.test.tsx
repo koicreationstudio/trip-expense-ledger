@@ -41,6 +41,7 @@ function makeExpense(overrides: Partial<ExpenseListItem>): ExpenseListItem {
     enteredByParticipantId: MY_ID,
     paymentMethodLabel: null,
     excludeFromSplit: false,
+    isOnlyMeSplit: false,
     sortOrder: 0,
     ...overrides,
   };
@@ -165,12 +166,12 @@ describe('ExpenseList — 任务⑥：排序/筛选偏好云端同步，零交�
   });
 });
 
-describe('ExpenseList — 第七十二轮任务④：「计分摊/不计分摊」筛选', () => {
-  it('切到「计分摊」：只剩 excludeFromSplit=false 的记录', () => {
+describe('ExpenseList — 第七十二轮任务④ + 2026-09-26 命名纠正任务：「计分摊/不计分摊」筛选（判断依据改成 isOnlyMeSplit）', () => {
+  it('切到「计分摊」：只剩 isOnlyMeSplit=false 的记录（真的分给了别人）', () => {
     vi.stubGlobal('fetch', mockFetch(vi.fn()));
     const expenses = [
-      makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: false }),
-      makeExpense({ id: 'B', merchant: 'B店', excludeFromSplit: true }),
+      makeExpense({ id: 'A', merchant: 'A店', isOnlyMeSplit: false }),
+      makeExpense({ id: 'B', merchant: 'B店', isOnlyMeSplit: true }),
     ];
     render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
     fireEvent.click(screen.getByLabelText('按是否计分摊筛选'));
@@ -179,11 +180,11 @@ describe('ExpenseList — 第七十二轮任务④：「计分摊/不计分摊�
     expect(screen.queryByText('B店')).toBeNull();
   });
 
-  it('切到「不计分摊」：只剩 excludeFromSplit=true 的记录', () => {
+  it('切到「不计分摊」：只剩 isOnlyMeSplit=true 的记录（只分给了付款人自己）', () => {
     vi.stubGlobal('fetch', mockFetch(vi.fn()));
     const expenses = [
-      makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: false }),
-      makeExpense({ id: 'B', merchant: 'B店', excludeFromSplit: true }),
+      makeExpense({ id: 'A', merchant: 'A店', isOnlyMeSplit: false }),
+      makeExpense({ id: 'B', merchant: 'B店', isOnlyMeSplit: true }),
     ];
     render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
     fireEvent.click(screen.getByLabelText('按是否计分摊筛选'));
@@ -192,11 +193,20 @@ describe('ExpenseList — 第七十二轮任务④：「计分摊/不计分摊�
     expect(screen.queryByText('A店')).toBeNull();
   });
 
-  it('这个筛选也会触发拖拽手柄消失（跟其它 4 个筛选一样被 hasActiveFilter 判定）', () => {
+  it('这个筛选跟 excludeFromSplit 完全无关：excludeFromSplit=true 但 isOnlyMeSplit=false（业务成本但分给了同行人）时，切到「计分摊」仍然显示', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: true, isOnlyMeSplit: false })];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
+    fireEvent.click(screen.getByLabelText('按是否计分摊筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '计分摊' }));
+    expect(screen.getByText('A店')).not.toBeNull();
+  });
+
+  it('这个筛选也会触发拖拽手柄消失（跟其它筛选一样被 hasActiveFilter 判定）', () => {
     vi.stubGlobal('fetch', mockFetch(vi.fn()));
     const expenses = [
-      makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: false }),
-      makeExpense({ id: 'B', merchant: 'B店', excludeFromSplit: true }),
+      makeExpense({ id: 'A', merchant: 'A店', isOnlyMeSplit: false }),
+      makeExpense({ id: 'B', merchant: 'B店', isOnlyMeSplit: true }),
     ];
     render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
     fireEvent.click(screen.getByLabelText('按是否计分摊筛选'));
@@ -216,5 +226,76 @@ describe('ExpenseList — 第七十二轮任务④：「计分摊/不计分摊�
     await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1));
     const body = JSON.parse(putSpy.mock.calls[0]![1]);
     expect(body.splitFilter).toBe('excluded');
+  });
+});
+
+describe('ExpenseList — 2026-09-26 命名纠正任务新增：「业务成本」筛选（判断依据是 excludeFromSplit）', () => {
+  it('行内小标签文案是"业务成本"，不再是"不计分摊"', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: true })];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
+    expect(screen.getByText('业务成本')).not.toBeNull();
+    expect(screen.queryByText('不计分摊')).toBeNull();
+  });
+
+  it('切到「业务成本」：只剩 excludeFromSplit=true 的记录', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [
+      makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: false }),
+      makeExpense({ id: 'B', merchant: 'B店', excludeFromSplit: true }),
+    ];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
+    fireEvent.click(screen.getByLabelText('按是否业务成本筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '业务成本' }));
+    expect(screen.getByText('B店')).not.toBeNull();
+    expect(screen.queryByText('A店')).toBeNull();
+  });
+
+  it('切到「非业务成本」：只剩 excludeFromSplit=false 的记录', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [
+      makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: false }),
+      makeExpense({ id: 'B', merchant: 'B店', excludeFromSplit: true }),
+    ];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
+    fireEvent.click(screen.getByLabelText('按是否业务成本筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '非业务成本' }));
+    expect(screen.getByText('A店')).not.toBeNull();
+    expect(screen.queryByText('B店')).toBeNull();
+  });
+
+  it('这个筛选是跟「计分摊/不计分摊」完全独立的条件：excludeFromSplit=true 但 isOnlyMeSplit=false 时，切到「业务成本」仍然显示', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: true, isOnlyMeSplit: false })];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
+    fireEvent.click(screen.getByLabelText('按是否业务成本筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '业务成本' }));
+    expect(screen.getByText('A店')).not.toBeNull();
+  });
+
+  it('这个筛选也会触发拖拽手柄消失（跟其它筛选一样被 hasActiveFilter 判定）', () => {
+    vi.stubGlobal('fetch', mockFetch(vi.fn()));
+    const expenses = [
+      makeExpense({ id: 'A', merchant: 'A店', excludeFromSplit: false }),
+      makeExpense({ id: 'B', merchant: 'B店', excludeFromSplit: true }),
+    ];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
+    fireEvent.click(screen.getByLabelText('按是否业务成本筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '业务成本' }));
+    expect(screen.queryByLabelText('拖拽调整顺序')).toBeNull();
+  });
+
+  it('这个筛选真实交互后也会触发 PUT，body 里带上 businessCostFilter', async () => {
+    const putSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetch(putSpy, null));
+    const expenses = [makeExpense({ id: 'A', merchant: 'A店' })];
+    render(<ExpenseList tripId={TRIP_ID} expenses={expenses} myParticipantId={MY_ID} baseCurrency="MYR" />);
+
+    fireEvent.click(screen.getByLabelText('按是否业务成本筛选'));
+    fireEvent.mouseDown(screen.getByRole('option', { name: '业务成本' }));
+
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(putSpy.mock.calls[0]![1]);
+    expect(body.businessCostFilter).toBe('yes');
   });
 });

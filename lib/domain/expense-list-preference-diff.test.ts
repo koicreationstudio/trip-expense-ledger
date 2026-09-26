@@ -8,6 +8,7 @@ const BASE: ExpenseListPreferenceSnapshot = {
   dateFilter: '__all__',
   paymentMethodFilter: '__all__',
   splitFilter: 'ALL',
+  businessCostFilter: '__all__',
 };
 
 describe('isSameExpenseListPreference', () => {
@@ -20,7 +21,7 @@ describe('isSameExpenseListPreference', () => {
     expect(isSameExpenseListPreference(BASE, null)).toBe(false);
   });
 
-  it('完全相同的 6 个字段返回 true', () => {
+  it('完全相同的 7 个字段返回 true', () => {
     expect(isSameExpenseListPreference(BASE, { ...BASE })).toBe(true);
   });
 
@@ -28,6 +29,12 @@ describe('isSameExpenseListPreference', () => {
   it('splitFilter 不同返回 false', () => {
     expect(isSameExpenseListPreference(BASE, { ...BASE, splitFilter: 'included' })).toBe(false);
     expect(isSameExpenseListPreference(BASE, { ...BASE, splitFilter: 'excluded' })).toBe(false);
+  });
+
+  // 2026-09-26 命名纠正任务新增字段
+  it('businessCostFilter 不同返回 false', () => {
+    expect(isSameExpenseListPreference(BASE, { ...BASE, businessCostFilter: 'yes' })).toBe(false);
+    expect(isSameExpenseListPreference(BASE, { ...BASE, businessCostFilter: 'no' })).toBe(false);
   });
 
   it('sortMode 不同返回 false', () => {

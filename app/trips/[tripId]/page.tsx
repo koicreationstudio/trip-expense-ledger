@@ -5,6 +5,7 @@ import { getDb } from '@/lib/db/client';
 import {
   exchangeRecords,
   expenses,
+  expenseSplits,
   loanRepayments,
   loans,
   participants,
@@ -16,6 +17,7 @@ import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadMyShareBreakdown, loadSettlementInput } from '@/lib/db/settlement-query';
 import { computeNetBalances } from '@/lib/domain/settlement';
 import { computeLoanProgress } from '@/lib/domain/loan';
+import { isOnlyMeSplit } from '@/lib/domain/expense-split-mode';
 import { formatMoney } from '@/lib/money';
 import { deriveMidRate, ensureMyrRatesFresh, getMyrRateSnapshot } from '@/lib/fx/rate-cache';
 import { ExpenseList } from './expense-list';
@@ -80,6 +82,34 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     .from(expenses)
     .where(eq(expenses.tripId, params.tripId))
     .orderBy(desc(expenses.expenseDate));
+
+  // 「计分摊/不计分摊」判定要用的 splits 参与人清单（这次命名纠正任务新增）：
+  // 一次查询批量拿这趟行程全部消费的 expense_split 行，按 expenseId 分组成
+  // "这笔消费分给了哪些 participantId"，再用 `isOnlyMeSplit` 算出"是不是只分
+  // 给了付款人自己"——不逐笔查询（N+1），一次查完这趟行程全部消费对应的
+  // split 行就够了。某笔消费查不到任何 split 行（异常情况，正常流程 splits
+  // 一定至少有 1 行）时 Map 里没有这个 key，下面兜底给 false，不阻塞渲染。
+  const tripExpenseIds = tripExpenses.map((e) => e.id);
+  const splitParticipantIdsByExpenseId = new Map<string, string[]>();
+  if (tripExpenseIds.length > 0) {
+    const splitRows = await db
+      .select({ expenseId: expenseSplits.expenseId, participantId: expenseSplits.participantId })
+      .from(expenseSplits)
+      .where(inArray(expenseSplits.expenseId, tripExpenseIds));
+    for (const row of splitRows) {
+      const list = splitParticipantIdsByExpenseId.get(row.expenseId);
+      if (list) {
+        list.push(row.participantId);
+      } else {
+        splitParticipantIdsByExpenseId.set(row.expenseId, [row.participantId]);
+      }
+    }
+  }
+  const isOnlyMeSplitByExpenseId = new Map<string, boolean>();
+  for (const e of tripExpenses) {
+    const splitParticipantIds = splitParticipantIdsByExpenseId.get(e.id) ?? [];
+    isOnlyMeSplitByExpenseId.set(e.id, isOnlyMeSplit(splitParticipantIds, e.payerParticipantId));
+  }
 
   // 活动流"约算金额"要用的本位币→MYR中间汇率（2026-09-19 第二十八轮新增）：
   // 只在本位币不是 MYR 时才需要，本位币就是 MYR 的行程约算等于自己换算自己没意义，
@@ -347,6 +377,10 @@ export default async function TripPage({ params }: { params: { tripId: string } 
               ? paymentMethodLabelById.get(e.paymentMethodId) ?? '其他人的支付方式'
               : null,
             excludeFromSplit: e.excludeFromSplit,
+            // 「计分摊/不计分摊」筛选真正依据的推导字段（这次命名纠正任务新增，
+            // 见上面 isOnlyMeSplitByExpenseId 的算法注释）——跟 excludeFromSplit
+            // 是两个独立维度，不要混用。
+            isOnlyMeSplit: isOnlyMeSplitByExpenseId.get(e.id) ?? false,
             sortOrder: e.sortOrder,
           }))}
         />

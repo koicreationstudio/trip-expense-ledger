@@ -42,8 +42,17 @@ export interface ExpenseListItem {
   // 别人录入的一律是 '其他人的支付方式' 或 null（没选支付方式）。
   paymentMethodLabel: string | null;
   // 2026-09-16 新增：这笔是不是被标了"不计入 Hero 卡我承担合计"（机票/宝石这类
-  // 默认如此），纯展示小标记，不影响这里任何排序/筛选/金额计算。
+  // 默认如此）。这次命名纠正任务（2026-09-26）之前这里的界面文案曾经错误地
+  // 写成"计分摊/不计分摊"，现在改回它真正的意思——界面上统一显示成"业务成本"，
+  // 纯展示小标记 + 独立的「业务成本」筛选依据，不影响排序/其它筛选/金额计算。
   excludeFromSplit: boolean;
+  // 这次命名纠正任务（2026-09-26）新增：这笔消费的 expense_split 明细是不是
+  // "只分给了付款人自己"（≈这笔完全是自己的钱，没有实际分给任何同行人）——
+  // 服务端（page.tsx）用 `lib/domain/expense-split-mode.ts` 的 isOnlyMeSplit
+  // 算好传下来，不管原始录入时选的是"仅我自己"模式还是凑巧只选了付款人一个人
+  // 的"平分"/"自定义"模式，形状一样就是 true。「计分摊/不计分摊」这四个字
+  // 现在专指这件事，不再是 excludeFromSplit 的同义词。
+  isOnlyMeSplit: boolean;
   // 2026-09-26 第七十一轮任务⑤新增："手动排序"模式下的顺序，服务端已经按这个
   // 字段排过一次（page.tsx 现在改成按 sortOrder 传下来，见下面组件里的用法），
   // 这里只是同一份数据在前端拖拽时的排序基准。
@@ -116,12 +125,21 @@ export function ExpenseList({
   const [payerFilter, setPayerFilter] = useState(ALL);
   const [dateFilter, setDateFilter] = useState(ALL);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState(ALL);
-  // 第七十二轮任务④新增：「计分摊 / 不计分摊」筛选，判断依据是既有的
-  // `excludeFromSplit` 字段（机票/宝石这类默认不计分摊，见字段定义处注释）。
-  // 值域固定只有 3 档（不像其它 4 个筛选是"从当前数据里取 distinct 值"的动态候选），
-  // 'included' = 只看计分摊的（excludeFromSplit === false），'excluded' = 只看
-  // 不计分摊的（excludeFromSplit === true）。
+  // 第七十二轮任务④新增，2026-09-26 命名纠正任务改判断依据：「计分摊 / 不计
+  // 分摊」筛选，现在判断依据是新的推导字段 `e.isOnlyMeSplit`（这笔消费的
+  // expense_split 明细是不是"只分给了付款人自己"），不再是 `excludeFromSplit`
+  // ——那个字段现在专指"业务成本"，是下面新增的 `businessCostFilter` 管的事，
+  // 两个筛选完全独立，不要混用。值域固定只有 3 档（不像其它筛选是"从当前数据
+  // 里取 distinct 值"的动态候选），'included' = 只看计分摊的
+  // （isOnlyMeSplit === false，即真的分给了别人），'excluded' = 只看不计分摊的
+  // （isOnlyMeSplit === true，只分给了付款人自己）。
   const [splitFilter, setSplitFilter] = useState<typeof ALL | 'included' | 'excluded'>(ALL);
+  // 这次命名纠正任务（2026-09-26）新增：「业务成本」筛选，判断依据是既有的
+  // `excludeFromSplit` 字段（机票/宝石这类默认是业务成本，见字段定义处注释）。
+  // 值域固定 3 档，'yes' = 只看业务成本的（excludeFromSplit === true），
+  // 'no' = 只看非业务成本的（excludeFromSplit === false）。跟上面 `splitFilter`
+  // 是两个完全独立的筛选条件，同时存在，不合并成一个。
+  const [businessCostFilter, setBusinessCostFilter] = useState<typeof ALL | 'yes' | 'no'>(ALL);
 
   // 第 6 个筛选 chip「金额」——跟上面 4 个不一样，故意**不**接进下面
   // expense-list-preference 那套 D1 云端存档（另一条并行任务正在改那套持久化
@@ -175,6 +193,7 @@ export function ExpenseList({
             dateFilter: string;
             paymentMethodFilter: string;
             splitFilter: string;
+            businessCostFilter: string;
           } | null;
         };
         const saved = data.preference;
@@ -187,6 +206,7 @@ export function ExpenseList({
               dateFilter: saved.dateFilter,
               paymentMethodFilter: saved.paymentMethodFilter,
               splitFilter: saved.splitFilter,
+              businessCostFilter: saved.businessCostFilter,
             }
           : null;
         if (!saved) return;
@@ -202,6 +222,9 @@ export function ExpenseList({
         if (saved.paymentMethodFilter) setPaymentMethodFilter(saved.paymentMethodFilter);
         if (saved.splitFilter === ALL || saved.splitFilter === 'included' || saved.splitFilter === 'excluded') {
           setSplitFilter(saved.splitFilter);
+        }
+        if (saved.businessCostFilter === ALL || saved.businessCostFilter === 'yes' || saved.businessCostFilter === 'no') {
+          setBusinessCostFilter(saved.businessCostFilter);
         }
       } catch {
         // 拉取失败静默走默认值，不阻塞列表渲染。
@@ -224,6 +247,7 @@ export function ExpenseList({
         dateFilter,
         paymentMethodFilter,
         splitFilter,
+        businessCostFilter,
       };
       if (isSameExpenseListPreference(lastSavedSnapshotRef.current, nextSnapshot)) return;
       lastSavedSnapshotRef.current = nextSnapshot;
@@ -234,7 +258,7 @@ export function ExpenseList({
       });
     }, 600);
     return () => clearTimeout(timer);
-  }, [tripId, sortMode, categoryFilter, payerFilter, dateFilter, paymentMethodFilter, splitFilter]);
+  }, [tripId, sortMode, categoryFilter, payerFilter, dateFilter, paymentMethodFilter, splitFilter, businessCostFilter]);
 
   // fix(2026-09-26 第七十一轮，任务⑤)：手动排序拖拽。`serverManualOrder` 是服务端
   // 按 sortOrder 排好的基准顺序（页面刷新/新增删除消费后 `expenses` prop 变化时
@@ -397,8 +421,10 @@ export function ExpenseList({
       if (payerFilter !== ALL && e.payerName !== payerFilter) return false;
       if (dateFilter !== ALL && e.expenseDate.slice(0, 10) !== dateFilter) return false;
       if (paymentMethodFilter !== ALL && (e.paymentMethodLabel ?? '未指定') !== paymentMethodFilter) return false;
-      if (splitFilter === 'included' && e.excludeFromSplit) return false;
-      if (splitFilter === 'excluded' && !e.excludeFromSplit) return false;
+      if (splitFilter === 'included' && e.isOnlyMeSplit) return false;
+      if (splitFilter === 'excluded' && !e.isOnlyMeSplit) return false;
+      if (businessCostFilter === 'yes' && !e.excludeFromSplit) return false;
+      if (businessCostFilter === 'no' && e.excludeFromSplit) return false;
       if (isAmountFilterActive) {
         // 跟上面 `showConverted`（约算行要不要显示）同一条判断：行程本位币不是
         // MYR 时用 amountMyr（服务端已经算好的 MYR 参考值），本位币是 MYR 时这笔
@@ -437,6 +463,7 @@ export function ExpenseList({
     dateFilter,
     paymentMethodFilter,
     splitFilter,
+    businessCostFilter,
     manualOrder,
     baseCurrency,
     isAmountFilterActive,
@@ -452,6 +479,7 @@ export function ExpenseList({
     dateFilter !== ALL ||
     paymentMethodFilter !== ALL ||
     splitFilter !== ALL ||
+    businessCostFilter !== ALL ||
     isAmountFilterActive;
 
   // fix(2026-09-26 第七十一轮，任务⑤)：开着筛选时列表只显示部分消费，此时拖拽
@@ -482,6 +510,7 @@ export function ExpenseList({
     setDateFilter(ALL);
     setPaymentMethodFilter(ALL);
     setSplitFilter(ALL);
+    setBusinessCostFilter(ALL);
     // 金额筛选不接云端存档（见上面 state 声明处的注释），这里只是清一下本地
     // 输入框内容，不涉及 hasUserInteractedRef/PUT 那条链路。
     setAmountMinInput('');
@@ -601,10 +630,11 @@ export function ExpenseList({
             ...paymentMethodOptions.map((m) => ({ value: m, label: m })),
           ]}
         />
-        {/* 第七十二轮任务④新增：「计分摊/不计分摊」筛选，值域固定 3 档，跟其它 4 个
-            动态候选筛选器不一样，不需要从 expenses 里取 distinct 值。文案暂定，
-            这两个具体命名（"不计分摊" vs 备选说法）留了 A/B 方案给 Remy 选，见
-            PENDING-DECISIONS 里 C 组问题清单，不影响这里的筛选逻辑本身。 */}
+        {/* 第七十二轮任务④新增，2026-09-26 命名纠正任务改判断依据：「计分摊/不计
+            分摊」筛选，值域固定 3 档，跟其它 4 个动态候选筛选器不一样，不需要从
+            expenses 里取 distinct 值。判断依据是 `e.isOnlyMeSplit`（见字段定义
+            处注释），不再是 excludeFromSplit——文案本身（"计分摊"/"不计分摊"）
+            没变，只是现在它真的对上了这四个字原本该表达的意思。 */}
         <SelectDropdown
           ariaLabel="按是否计分摊筛选"
           value={splitFilter}
@@ -617,6 +647,24 @@ export function ExpenseList({
             { value: ALL, label: '分摊：全部' },
             { value: 'included', label: '计分摊' },
             { value: 'excluded', label: '不计分摊' },
+          ]}
+        />
+        {/* 这次命名纠正任务（2026-09-26）新增：「业务成本」筛选，判断依据是
+            `e.excludeFromSplit`（机票/宝石这类默认是业务成本），跟上面的
+            「计分摊/不计分摊」是两个独立筛选条件，同时存在。值域固定 3 档，
+            不需要从 expenses 里取 distinct 值。 */}
+        <SelectDropdown
+          ariaLabel="按是否业务成本筛选"
+          value={businessCostFilter}
+          onChange={(next) => {
+            markUserInteracted();
+            setBusinessCostFilter(next as typeof ALL | 'yes' | 'no');
+          }}
+          triggerClassName="min-h-[26px] max-w-[100px] rounded-full border border-sand bg-white px-[9px] text-[10px] font-medium text-ink"
+          options={[
+            { value: ALL, label: '业务成本：全部' },
+            { value: 'yes', label: '业务成本' },
+            { value: 'no', label: '非业务成本' },
           ]}
         />
         {/* 「金额」筛选 chip——跟上面 4 个不同，不是单选下拉，是"区间/精确"两种
@@ -801,9 +849,14 @@ export function ExpenseList({
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-[12px] font-medium">
                       {primaryName}
+                      {/* 这次命名纠正任务（2026-09-26）：文案从"不计分摊"改成
+                          "业务成本"——判断依据（e.excludeFromSplit）没变，这个
+                          小标签一直是在说"这笔是业务成本，不算进 Hero 卡分摊
+                          合计"，不是在说"计分摊/不计分摊"（那四个字现在专指
+                          e.isOnlyMeSplit，是上面独立的筛选条件，不是这个标签）。 */}
                       {e.excludeFromSplit && (
                         <span className="ml-1 inline-flex items-center rounded-full bg-[rgba(164,163,160,.2)] px-[6px] py-[1px] align-middle text-[8.5px] font-medium text-muted">
-                          不计分摊
+                          业务成本
                         </span>
                       )}
                     </span>

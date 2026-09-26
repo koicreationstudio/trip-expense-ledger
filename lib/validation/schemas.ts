@@ -261,6 +261,9 @@ export const expenseListPreferenceSchema = z.object({
   // `z.string()`，凑巧不管字面量是 `'ALL'` 还是 `'__all__'` 都能通过校验，没暴露
   // 这个问题，只有这个新增的精确 enum 校验会拿字面量不一致当真。
   splitFilter: z.enum(['__all__', 'included', 'excluded']),
+  // 2026-09-26 命名纠正任务新增：「业务成本」筛选，值域固定 3 档，跟上面
+  // `splitFilter` 一样用精确 enum 校验（不是从当前数据动态取的候选值）。
+  businessCostFilter: z.enum(['__all__', 'yes', 'no']),
 });
 
 // fix(2026-09-26 第七十一轮，任务⑤)：活动流拖拽重排，一次提交"新顺序的完整 id
