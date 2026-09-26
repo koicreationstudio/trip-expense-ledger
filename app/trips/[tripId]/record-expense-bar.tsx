@@ -1,8 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Plus } from 'lucide-react';
+import { useDismissableOpen } from '@/components/select-dropdown';
 
 /**
  * 底部「记一笔消费」操作条。
@@ -38,13 +40,37 @@ import { Plus } from 'lucide-react';
  * 守护：`record-expense-bar.test.ts` 静态盯住这几条不变量（不许再出现
  * `data-fab-avoid`、不许再出现贴底/贴角的 fixed 元素、预留高度必须跟操作条
  * 共用同一个变量），防止以后有人把悬浮胶囊那套改回来。
+ *
+ * ## round72b：单一按钮改成"＋"触发的小菜单
+ *
+ * 借钱/还钱功能上线后这条操作条要装三个入口（记消费/借钱给同行人/记一笔还钱），
+ * 不能再是一颗直接跳转的 Link。改成点"＋"弹出一个贴着 `.action-bar` 上方向上
+ * 展开的小菜单——这是全新、独立的一块 UI（不是 `SelectDropdown` 那个 value/
+ * onChange 单值下拉，这里是"点了直接导航"的菜单项，形状不一样），只借它同一个
+ * `useDismissableOpen` hook 处理点空白/Escape 关闭，不重复手写第二份监听器
+ * （见 components/select-dropdown.tsx 顶部注释，这个 hook 就是为这类场景抽出来的）。
+ *
+ * 只保证自己向上弹、不被这条操作条自己盖住（`bottom-full` + `mb-2`，菜单永远
+ * 长在触发按钮正上方）——这跟另一个并行任务在修的"下拉遮挡"是同一类"贴底部
+ * 容易被操作条盖住"的场景，但这里是全新 UI 自己控制定位，不去动
+ * `select-dropdown.tsx` 那个共享组件。
  */
 export function RecordExpenseBar({ tripId }: { tripId: string }) {
   const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useDismissableOpen(menuOpen, () => setMenuOpen(false));
+  // fix(round72b)：这个组件挂在 trip 共享布局里，切 tab/换页不会重新挂载——
+  // 跟 navigation-state-reset.test.ts 第 64 轮横扫的那条规则同一类坑，路径一变
+  // 就把菜单收起，不然点开菜单再点别的 tab 链接，菜单会跟着人"走"到下一页。
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
   const onFormPage =
     pathname.includes('/expenses/new') ||
     pathname.includes('/edit') ||
     pathname.includes('/exchange/new') ||
+    pathname.includes('/loans/new') ||
     // 支付方式设置页自己的主提交按钮("添加支付方式")就在页面底部，跟这条操作条
     // 是同一类"最主要的操作入口"，两个深色按钮叠在一起容易误触，处理方式跟记消费/
     // 换汇表单一致：这页不需要"记一笔消费"这个快捷入口。
@@ -58,7 +84,42 @@ export function RecordExpenseBar({ tripId }: { tripId: string }) {
           边缘对齐，不会横跨整个窗口。按钮本身保持原来那颗胶囊的样子和右对齐位置（只是
           字号从手写的 14px 换成全站 .btn-primary 这个 chokepoint 的 12.5px），这轮改的是
           它待的地方，不是它长什么样——要不要改成满宽主 CTA 是另一个设计决定，交 Remy 定。 */}
-      <div className="mx-auto flex w-full max-w-3xl justify-end px-4">
+      <div ref={menuRef} className="relative mx-auto flex w-full max-w-3xl justify-end px-4">
+        {menuOpen && (
+          <div
+            role="menu"
+            aria-label="记一笔"
+            className="absolute bottom-full right-4 mb-2 flex w-[min(220px,calc(100vw-32px))] flex-col overflow-hidden rounded-xl border border-sand bg-white shadow-card"
+          >
+            <Link
+              href={`/trips/${tripId}/expenses/new`}
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="px-3 py-2.5 text-left text-[12.5px] font-medium text-ink hover:bg-neutral-lt"
+            >
+              记消费
+            </Link>
+            <Link
+              href={`/trips/${tripId}/loans/new`}
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="border-t border-sand px-3 py-2.5 text-left text-[12.5px] font-medium text-ink hover:bg-neutral-lt"
+            >
+              借钱给同行人
+            </Link>
+            <Link
+              // 还钱要先挑是哪一笔欠款，落地位置是行程主页"借还款"区块（LoanList
+              // 每行自己带"记还款"按钮），不整一个只填金额、猜是哪笔的独立表单——
+              // 见 loan-list.tsx 顶部注释。
+              href={`/trips/${tripId}#loans`}
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="border-t border-sand px-3 py-2.5 text-left text-[12.5px] font-medium text-ink hover:bg-neutral-lt"
+            >
+              记一笔还钱
+            </Link>
+          </div>
+        )}
         {/* 2026-09-23 第三十二轮：round18 那次把圆角局部收成 rounded-xl 的例外已经
             撤销，改回全站统一的 pill（跟着 .btn-primary 这个 chokepoint 的
             rounded-full 走，不再局部覆盖圆角）。权威裁决和理由见
@@ -72,13 +133,16 @@ export function RecordExpenseBar({ tripId }: { tripId: string }) {
             是没人专门核对过的漂移，不是这轮才发现"要故意缩得比方案还小"。这里跟
             圆角一样局部覆盖三个值到字面一致，触控高度 min-h-[44px]（Apple HIG
             最小热区）继续保留不收——热区是安全底线，不跟着视觉密度一起收。 */}
-        <Link
-          href={`/trips/${tripId}/expenses/new`}
+        <button
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
           className="btn-primary gap-[6px] !px-[14px] !py-[9px] !text-[12px] shadow-card"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
-          记一笔消费
-        </Link>
+          记一笔
+        </button>
       </div>
     </div>
   );

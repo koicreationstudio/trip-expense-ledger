@@ -11,6 +11,8 @@ import type {
   wallets,
   exchangeRecords,
   walletBalanceHistory,
+  loans,
+  loanRepayments,
 } from '../db/schema';
 
 type ParticipantRow = typeof participants.$inferSelect;
@@ -20,6 +22,8 @@ type PaymentMethodRow = typeof paymentMethods.$inferSelect;
 type WalletRow = typeof wallets.$inferSelect;
 type ExchangeRecordRow = typeof exchangeRecords.$inferSelect;
 type WalletBalanceHistoryRow = typeof walletBalanceHistory.$inferSelect;
+type LoanRow = typeof loans.$inferSelect;
+type LoanRepaymentRow = typeof loanRepayments.$inferSelect;
 
 export function toParticipantSummaryDto(row: ParticipantRow) {
   return {
@@ -131,6 +135,36 @@ export function toExchangeRecordDto(row: ExchangeRecordRow) {
     fromAmount: row.fromAmount,
     toAmount: row.toAmount,
     exchangeDate: row.exchangeDate.toISOString(),
+    note: row.note,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** round72b：借钱/还钱功能。跟 expense 不同，这两张表没有"私密归属"这条边界——
+ * lender/borrower 都是这笔记录的当事人，路由层按"我是当事人之一"过滤，不是
+ * 单一 participantId 收窄，具体口径见 loans/route.ts 顶部注释。 */
+export function toLoanDto(row: LoanRow) {
+  return {
+    id: row.id,
+    tripId: row.tripId,
+    lenderParticipantId: row.lenderParticipantId,
+    borrowerParticipantId: row.borrowerParticipantId,
+    amount: row.amount,
+    currency: row.currency,
+    fromWalletId: row.fromWalletId,
+    date: row.date.toISOString(),
+    note: row.note,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function toLoanRepaymentDto(row: LoanRepaymentRow) {
+  return {
+    id: row.id,
+    loanId: row.loanId,
+    amount: row.amount,
+    toWalletId: row.toWalletId,
+    date: row.date.toISOString(),
     note: row.note,
     createdAt: row.createdAt.toISOString(),
   };

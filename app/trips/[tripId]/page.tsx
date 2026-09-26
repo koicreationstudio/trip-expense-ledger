@@ -1,16 +1,27 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getDb } from '@/lib/db/client';
-import { exchangeRecords, expenses, participants, paymentMethods, trips, wallets } from '@/lib/db/schema';
+import {
+  exchangeRecords,
+  expenses,
+  loanRepayments,
+  loans,
+  participants,
+  paymentMethods,
+  trips,
+  wallets,
+} from '@/lib/db/schema';
 import { getCurrentIdentity } from '@/lib/auth/current-session';
 import { loadMyShareBreakdown, loadSettlementInput } from '@/lib/db/settlement-query';
 import { computeNetBalances } from '@/lib/domain/settlement';
+import { computeLoanProgress } from '@/lib/domain/loan';
 import { formatMoney } from '@/lib/money';
 import { deriveMidRate, ensureMyrRatesFresh, getMyrRateSnapshot } from '@/lib/fx/rate-cache';
 import { ExpenseList } from './expense-list';
 import { WalletCard } from './wallet-card';
 import { ExchangeRecordList } from './exchange-record-list';
+import { LoanList } from './loans/loan-list';
 import { FxCompareCard } from './fx-compare-card';
 import { loadEnabledPaymentMethodIds, paymentMethodOwnerFilter } from '@/lib/domain/payment-method-scope';
 import { computeWalletDisplayBalances } from '@/lib/domain/wallet-balance';
@@ -99,6 +110,32 @@ export default async function TripPage({ params }: { params: { tripId: string } 
     .orderBy(desc(exchangeRecords.exchangeDate));
 
   const walletById = new Map(myWallets.map((w) => [w.id, w]));
+
+  // 借款清单（round72b 新增）：跟 expense/exchangeRecord 完全独立的一张新表，
+  // 私密边界是"我是当事人之一（lender 或 borrower）"，不是"我自己名下"（loan
+  // 天然是两个人的事），也不是"整个行程都能看"（跟 activity 流那种共享可见度
+  // 不是同一档），具体口径见 app/api/trips/[tripId]/loans/route.ts 顶部注释。
+  const myLoans = await db
+    .select()
+    .from(loans)
+    .where(
+      and(
+        eq(loans.tripId, params.tripId),
+        or(eq(loans.lenderParticipantId, identity.participantId), eq(loans.borrowerParticipantId, identity.participantId))
+      )
+    )
+    .orderBy(desc(loans.date));
+
+  const loanIds = myLoans.map((l) => l.id);
+  const loanRepaymentSums = new Map<string, number>();
+  if (loanIds.length > 0) {
+    const sumRows = await db
+      .select({ loanId: loanRepayments.loanId, total: sql<number>`coalesce(sum(${loanRepayments.amount}), 0)` })
+      .from(loanRepayments)
+      .where(inArray(loanRepayments.loanId, loanIds))
+      .groupBy(loanRepayments.loanId);
+    for (const row of sumRows) loanRepaymentSums.set(row.loanId, Number(row.total));
+  }
 
   // fix(2026-09-24 第五十轮，"设置当前余额"覆盖式 bug 修复)：行程主页「我的钱包」
   // 这里是直接查 DB 拿 `w.currentBalance` 原始存储值，不经过 wallets/route.ts 那个
@@ -335,6 +372,32 @@ export default async function TripPage({ params }: { params: { tripId: string } 
             exchangeDate: r.exchangeDate.toISOString(),
             note: r.note,
           }))}
+        />
+      </section>
+
+      {/* 借款清单（round72b 新增）："仅当事人可见"，不是整个行程共享，见上面查询
+          处的注释。跟 expense/exchangeRecord 是三个平级的独立区块，不参与 Hero
+          卡"我承担"、活动流、结算净额这几处既有计算。 */}
+      <section className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-[10px] font-medium tracking-[0.08em] text-neutral-dk">
+            借还款 · <span className="font-mono uppercase tracking-wide">LOANS</span>
+          </h2>
+          <span className="text-[10px] text-muted">仅当事人可见</span>
+        </div>
+        <LoanList
+          tripId={trip.id}
+          loans={myLoans.map((l) => ({
+            id: l.id,
+            lenderName: nameById.get(l.lenderParticipantId) ?? '未知',
+            borrowerName: nameById.get(l.borrowerParticipantId) ?? '未知',
+            amount: l.amount,
+            currency: l.currency,
+            date: l.date.toISOString(),
+            note: l.note,
+            progress: computeLoanProgress(l.amount, [{ amount: loanRepaymentSums.get(l.id) ?? 0 }]),
+          }))}
+          wallets={myWallets.map((w) => ({ id: w.id, label: w.label, currency: w.currency, emoji: w.emoji }))}
         />
       </section>
     </main>

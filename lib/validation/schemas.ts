@@ -214,6 +214,27 @@ export const createExchangeRecordSchema = z
     path: ['fromAmount'],
   });
 
+// round72b 新增：借钱/还钱功能，跟 expense/expense_split 完全独立的一张新表，
+// 见 lib/db/schema.ts loan/loan_repayment 顶部大段注释。fromWalletId 可为空
+// ——开放问题①"不经过任何钱包的现金往来"，这版允许不选。
+export const createLoanSchema = z.object({
+  lenderParticipantId: z.string().min(1),
+  borrowerParticipantId: z.string().min(1),
+  amount: z.number().int().positive(),
+  currency: currencyCode,
+  fromWalletId: z.string().min(1).optional(),
+  date: z.string().datetime(),
+  note: z.string().trim().max(2000).optional(),
+});
+
+/** loan_repayment 没有单独的 currency 字段，见 schema.ts 顶部注释——币种由 toWalletId 隐式决定。 */
+export const createLoanRepaymentSchema = z.object({
+  amount: z.number().int().positive(),
+  toWalletId: z.string().min(1).optional(),
+  date: z.string().datetime(),
+  note: z.string().trim().max(2000).optional(),
+});
+
 // fix(2026-09-26 第七十一轮，任务⑥)：活动流排序模式 + 4 个筛选条件云端同步，跟
 // fxComparePreferenceSchema 同一套模式——'ALL' 是 expense-list.tsx 既有的
 // "不筛选"字面量，原样存字符串。

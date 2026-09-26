@@ -1,6 +1,6 @@
 import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { exchangeRecords, expenses, wallets } from '../db/schema';
+import { exchangeRecords, expenses, loanRepayments, loans, wallets } from '../db/schema';
 
 type WalletRow = typeof wallets.$inferSelect;
 
@@ -31,6 +31,15 @@ type WalletRow = typeof wallets.$inferSelect;
  *     锚点值 − Σ(记录日期当天及以后、匹配这个钱包的消费金额)
  *            + Σ(记录日期当天及以后、这个钱包收到的换汇金额)
  *            − Σ(记录日期当天及以后、这个钱包转出的换汇金额)
+ *            − Σ(记录日期当天及以后、这个钱包借出去的 loan 金额)
+ *            + Σ(记录日期当天及以后、这个钱包收到的 loan_repayment 金额)
+ *
+ *   最后两项是 round72b 新增（借钱/还钱功能）：`loan.fromWalletId = 这个钱包` 记一笔
+ *   减少（借出去的钱从这个钱包出），`loan_repayment.toWalletId = 这个钱包` 记一笔
+ *   增加（还回来的钱进这个钱包），跟上面 exchangeRecords 的 to/from 是完全同一种
+ *   匹配方式——直接按 walletId 精确匹配，不额外按币种/tripId 收窄（loan_repayment
+ *   甚至没有 currency 字段，这笔钱的币种由它进的那个钱包的 currency 隐式决定，
+ *   跟 exchangeRecords.fromAmount/toAmount 同一套"不重复存派生值"的哲学）。
  *
  *   "匹配这个钱包"跟 expenses/route.ts POST 现有的自动扣款判断口径完全一致：
  *   `payerParticipantId = 钱包主人`（第七十轮改：以前误用
@@ -90,7 +99,23 @@ export async function computeWalletDisplayBalance(db: Db, wallet: WalletRow): Pr
 
   const exchangeNet = Number(toRows[0]?.total ?? 0) - Number(fromRows[0]?.total ?? 0);
 
-  return wallet.currentBalance - expenseSum + exchangeNet;
+  // round72b 新增：loan（借出，减少 fromWalletId 钱包）+ loan_repayment（还款，
+  // 增加 toWalletId 钱包），匹配方式跟上面 exchangeRecords 完全一致——直接按
+  // walletId 精确匹配这个钱包在锚点生效日（>=）之后的流水，见函数顶部大段注释。
+  const [loanRows, loanRepaymentRows] = await Promise.all([
+    db
+      .select({ total: sql<number>`coalesce(sum(${loans.amount}), 0)` })
+      .from(loans)
+      .where(and(eq(loans.fromWalletId, wallet.id), gte(loans.date, anchor))),
+    db
+      .select({ total: sql<number>`coalesce(sum(${loanRepayments.amount}), 0)` })
+      .from(loanRepayments)
+      .where(and(eq(loanRepayments.toWalletId, wallet.id), gte(loanRepayments.date, anchor))),
+  ]);
+  const loanSum = Number(loanRows[0]?.total ?? 0);
+  const loanRepaymentSum = Number(loanRepaymentRows[0]?.total ?? 0);
+
+  return wallet.currentBalance - expenseSum + exchangeNet - loanSum + loanRepaymentSum;
 }
 
 /**
