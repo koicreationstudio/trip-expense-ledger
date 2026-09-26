@@ -97,6 +97,11 @@ export function SelectDropdown({
   /** 没有关联 <label htmlFor> 时用这个（expense-list.tsx 筛选器场景）。 */
   ariaLabel?: string;
   triggerClassName: string;
+  /** fix(2026-09-26 第七十二轮)：这个 prop 现在只管弹层的"外观"（边框/背景/圆角/
+   * 内边距/阴影/宽高），不要再传 `absolute`/`top-full`/`bottom-full`/`z-10`/
+   * `mt-1`/`mb-1` 这类定位 class——组件本体会根据触发按钮离视口底部还有多少
+   * 空间自动算好开合方向+定位，统一套在外面，调用方传的这串 class 只会拼接在
+   * 定位 class 后面。 */
   panelClassName?: string;
   /** 当前值在 options 里找不到匹配项时的兜底显示文字。 */
   placeholder?: string;
@@ -117,6 +122,31 @@ export function SelectDropdown({
     setOpen(false);
     triggerRef.current?.focus();
   });
+
+  // fix(2026-09-26 第七十二轮，round70 对照稿第⑤项方案 A)：全站底部常驻一条
+  // `.action-bar`（`app/globals.css`，`fixed inset-x-0 bottom-0 z-20`，高度
+  // `--action-bar-h`=60px），面板之前永远 `top-full` 向下开——触发按钮滚到视口
+  // 下半部分时，面板向下展开的这一截会落在操作条覆盖的区域里，永远看不到、滚不动
+  // （固定定位元素的天然特性，不是"没滚到"）。这里在面板打开的那一刻算一次触发
+  // 按钮到视口底部的可用空间，不够用（要扣掉操作条占的 60px）就改成向上开
+  // （`bottom-full`），够用维持原来向下开——只在打开瞬间判断一次，不监听
+  // scroll/resize 做实时反悬浮（面板开着时用户很少还在滚页面，一次性判断够用，
+  // 不需要过度设计）。
+  const [openUpward, setOpenUpward] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    // ACTION_BAR_RESERVE_PX 跟 app/globals.css 的 --action-bar-h（60px）同步，
+    // 写死不读 CSS 变量——这个值本身极少变、写死更简单可靠，改的话两边一起改。
+    const ACTION_BAR_RESERVE_PX = 60;
+    // 面板 max-h-[220px]，留一点余量（可能有 min-w 换行/更多选项），阈值给够。
+    const PANEL_SAFE_HEIGHT_PX = 240;
+    const spaceBelow = window.innerHeight - rect.bottom - ACTION_BAR_RESERVE_PX;
+    setOpenUpward(spaceBelow < PANEL_SAFE_HEIGHT_PX);
+  }, [open]);
+  const directionClass = openUpward ? 'bottom-full mb-1' : 'top-full mt-1';
 
   return (
     <div ref={containerRef} className="relative">
@@ -143,14 +173,14 @@ export function SelectDropdown({
         <ul
           id={listboxId}
           role="listbox"
-          className={
+          className={`absolute left-0 z-10 ${directionClass} ${
             panelClassName ??
             // fix(2026-09-17 第二十一轮，逐 token 核对)：Artifact `.fdrop-menu`/
             // `.cat-dropdown-list` 这类下拉弹层统一是 border-radius:10px，这里
             // 之前是 rounded-xl(12px)——这是全站共用的 SelectDropdown 组件，
             // 改这一处会同步修正全站所有用到它的下拉弹层，不用逐处改。
-            'absolute left-0 top-full z-10 mt-1 max-h-[220px] w-full min-w-[140px] overflow-y-auto rounded-[10px] border border-sand bg-white p-1 shadow-card'
-          }
+            'max-h-[220px] w-full min-w-[140px] overflow-y-auto rounded-[10px] border border-sand bg-white p-1 shadow-card'
+          }`}
         >
           {options.map((opt) => (
             <li
