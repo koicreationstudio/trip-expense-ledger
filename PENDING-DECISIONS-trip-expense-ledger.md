@@ -1,5 +1,32 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-26，lifeos-pm 直接执行，任务③「业务成本」命名定案落地 + 任务④离线第①期骨架，claim `2026-09-26_110209_ec4906d1`】
+
+### 任务③：已合并部署，Version `aaf185a3-a095-468c-ae8e-5c2ecdcb6c28`，commit `9d8c8af`（squash 合并进 main `b6ee67e`）
+
+- 新增 `lib/domain/expense-split-mode.ts::isOnlyMeSplit`——不新增数据库字段，从现有 `expense_split` 明细形状推导"这笔是不是只分给了付款人自己"。
+- 活动流原有「计分摊/不计分摊」筛选（round72 A组④，之前判断依据是 `excludeFromSplit`）改成判断依据 `isOnlyMeSplit`。
+- 新增独立的「业务成本」筛选（`ALL`/`yes`/`no`），判断依据仍是 `excludeFromSplit`，全链路接了 schema 新列 `business_cost_filter`（迁移 `0015_brainy_goliath.sql` 已跑生产 D1）+ validation + diff + API route。
+- 活动流单条消费小标签、结算明细小标签，显示文字从"不计分摊"改成"业务成本"（判断依据不变）。
+- 验证：`npx tsc --noEmit` 0 错误、`npx eslint`/`next lint` 0 警告、`npx vitest run` 54 文件 408 测试全过（我在合并前自己重新跑过一遍确认，不是只信实现方自述）。全站 grep "不计分摊" 逐条核对无残留指向 `excludeFromSplit` 的情况。
+
+**ui-auditor 用 Remy 真实香港行程（`f78a6b5e-8612-4097-8bfd-88a5db664045`）真机走查结论**：
+- ①「计分摊/不计分摊」筛选改判断依据——**通过**，找到明确非机票/宝石反例（🚗永东巴士/🍜茶餐厅旺旺冰室 单独出现在"不计分摊"结果里），证明判断依据真的换成了 `isOnlyMeSplit` 不是继续按类目判断。
+- ②独立「业务成本」筛选——**通过，但有一个数据现象需要如实说明**：这条真实行程里，「业务成本」筛选跟「不计分摊」筛选筛出的集合高度重叠（56 笔里只差 2 笔）。**查证过不是 bug**：生产库这趟行程 `exclude_from_split=1` 的记录横跨咖啡/餐饮/住宿/宝石/交通/购物几乎所有类目（不止机票/宝石），根因是 round72 批次②那次"Remy 拍板保留 33 笔历史手动标记"的决定——这次商务采购行程里 Remy 自己手动把很多"我自己单独花的钱"也标成了业务成本，两个字段在这条真实数据上高度相关是**这趟行程本身的业务性质决定的数据巧合**，不是这次改动把两个筛选逻辑焊在一起了。有 2 个反例（🍜旺旺冰室、📦拜神：`isOnlyMeSplit=true` 但 `excludeFromSplit=false`）实测证明两个字段在代码层面确实互相独立。
+- ③文案改名——**通过**，两处小标签全部改成"业务成本"，"不计分摊"四个字只留在筛选器自己的选项文字上。
+- ④排版——**通过**，手机 375px/桌面 1280px 下筛选行新增的「业务成本」chip 都没有挤坏排版。
+- 走查中发现一个跟这次改动无关的既有现象（如实记录，这次不算数）：「支付方式」筛选会跨 session 记住上次选的值（round71 任务⑥的既有云端同步行为），走查时曾一度卡在"现金（USD）"导致第一轮样本被收窄，发现后清空重测。这不是本轮改动引入的问题，不在这次任务范围内处理。
+- 走查用 Remy 真实身份链接登录，登录时间窗口 2026-09-26 11:37:41-11:48，产生的 1 条 `user_session`（`8a045603-e5f8-4c87-ac49-a34b93e46a06`）+ 1 条 Layer1 `session`（`f090b355-9749-4ac7-a080-f4a512ce883c`）已按精确 id 删除，回读 `COUNT(*)` 均为 0，UA 是测试用 Chrome/153，跟 Remy 真实用的 Chrome/152 不同，没有误删她自己的登录态。
+
+**结论：任务③满足"ui-auditor 真机走查+真实行程数据验证"这条硬性要求，可以视为完成。**
+
+### 任务④：离线第①期骨架，只在独立分支 `feat/offline-phase1-scaffold`（commit `8e29b05`），**没有合并进 main，没有部署**
+
+- 新增 `public/sw.js`（网络优先+离线快照，只覆盖行程主页/结算页两条路由，POST/PATCH/DELETE 不拦截）、`components/offline-banner.tsx`（顶部离线状态条，24h 分级）、`lib/storage/offline-snapshot.ts`（localStorage 存快照时间戳）、`scripts/check-sw-version.mjs`。
+- 我独立在这个 worktree 里重新跑过一遍验证：`npx vitest run` 3 个新测试文件 28 条全过、`node --check public/sw.js` 通过。
+- **故意没有做的事，如实记录**：SW 注册代码没有接进 `app/layout.tsx`（这批改动目前是"存在但不生效"的纯新增文件）；`check-sw-version.mjs` 没有接进 `deploy.sh`；数据快照用 `localStorage`（只存时间戳，真正的页面数据靠 SW Cache Storage 原生持有的 SSR HTML，理由跟设计稿建议的 IndexedDB 不同）。
+- **为什么没合并进 main**：这批改动虽然从代码层面看是"纯新增文件、不修改任何现有文件行为"，风险应该很低，但按当时任务派工时"这次只搭骨架，不部署，不合并进 main 的部署路径"的明确要求，这次没有自己判断"反正风险低就合并"——留在独立分支，commit hash `8e29b05`，等 Remy/lifeos-pm 确认要不要真的接上线（接注册进 layout.tsx、接版本校验进 deploy.sh）再进行下一步。
+
 ## 【2026-09-26，lifeos-pm 直接执行，任务①借还钱真实数据迁移：安全的一对（a4dc5ffd/4c09fc33）已迁移落库；htoo CNY ¥104.27（8e2f75fe）发现结构性阻塞，没有执行，停手回报】
 
 背景：`loan`/`loan_repayment` 表已在 round72 批次②（commit `4558a72`）落地生产，依赖满足，这次执行真实数据迁移。
