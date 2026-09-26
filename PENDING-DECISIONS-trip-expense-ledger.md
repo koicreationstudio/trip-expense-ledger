@@ -1,5 +1,39 @@
 # trip-expense-ledger 视觉统一化 — 待拍板记录
 
+## 【2026-09-26，第七十二轮 A 组（这次 lifeos-pm 派给 trip-expense-ledger-pm 的原始批次，跟同时并行的另一批次互不重复），claim `2026-09-26_091215_a652cabe`】
+
+背景：lifeos-pm 这轮把第七十二轮拆成 A/B/C 三组派给 trip-expense-ledger-pm：A 组（5 项不需要 Remy 拍板、直接做完上线）+ B 组（3 项需要先出对照稿）+ C 组（6 条问题整理，不擅自拍板）。执行期间发现 lifeos-pm 同时还在跑另一条并行批次（"第三批拍板"那几节，claim `2026-09-26_092646_d761a3ee`/`092238_253ac41b`/`093321_740e4edf`），两条线各自用 `git worktree` 隔离、互不冲突，但产出有重叠（尤其 B 组三份对照稿，两边各出了一份，文件名不同，都已入库，需要 lifeos-pm/Remy 决定留哪份或者合并）——如实记录这个情况，不是我漏查重复。
+
+**A 组 5 项，全部完成+部署+验证，commit 区间 `65aac59..312e5cf`（含 4 个 merge commit）**：
+
+1. **记账表单「当地金额」框改可编辑+双向联动汇率，精度铁律**（`fix/amount-fx-linkage-round72`，commit `a3b84d0`）：`expense-form.tsx`（新建+编辑共用）+ `quick-add-expense.tsx`（快速记账，之前完全没有这个字段，这次新增）三个入口的"当地金额"框从只读展示改成真正可编辑，用 `lastManualFieldRef` 记录用户最后编辑的是汇率框还是当地金额框，另一边跟着反算。**存进数据库的 `amountBaseCurrency` 现在直接取用户在当地金额框看到的整数分（`localAmountCents`），不再用 `Math.round(amountCents * fxRateUsed)` 重新算一次**——旧算法这一步四舍五入正是"填 HK$35.00 却存成 3499/3501"的来源。新增 11 条单元测试覆盖 HKD/MYR、MYR/USD、USD/CNY 等组合的精度铁律，mutation 验证过（插入 0.9999 扰动因子，测试能抓到 10427≠10426 的偏差）。
+2. **支付方式占位文案「不指定」→「请选择」+ 按钮禁用主动提示**（同上 commit）：`expense-form.tsx` 第 627 行占位文案改字（`quick-add-expense.tsx` 原本就是"选支付方式"不用改，已核实）；两个文件提交按钮变灰时新增主动提示文字（不用等点击提交才看到 `error` 状态里的话）。
+3. **活动流筛选加「计分摊/不计分摊」选项**（`fix/expense-filter-split-round72`，commit `698eafa`）：`expense-list.tsx` 新增第 5 个筛选（基于 `excludeFromSplit` 字段），云端同步链路（`expense-list-preference-diff.ts`/`schema.ts`/API route/校验 schema）跟着扩展，新增 D1 迁移 `0013_amazing_moondragon.sql`（`expense_list_filter_preference` 表加 `split_filter` 列，默认 `'ALL'`）。**⚠️ 重要遗留**：lifeos-pm 并行批次里 09:33 才拍板的命名定案（claim `2026-09-26_093321_740e4edf`，"待现有3批任务落地后再执行"）把"计分摊/不计分摊"重新定义成基于 `splitMode`（split维度，≈只算Remy自己）而不是 `excludeFromSplit`（改叫"业务成本"），跟这里已经落地的实现口径不一致——这条命名定案本身写明是"等现有几批任务落地后再统一执行"，我这个实现应该正是它预期要覆盖的对象之一，**这次没有抢先按新命名改，维持原始任务书字面意思（`excludeFromSplit`）先落地，等那条命名定案的执行者接手时需要把这个筛选器也一并调整成新语义**，否则用户会看到两套不同维度但同名的"计分摊/不计分摊"。
+4. **全站下拉弹层智能开合方向**（`fix/dropdown-open-direction-round72`，commit `06b6441`）：`components/select-dropdown.tsx` 打开瞬间测量触发按钮到视口底部空间（扣掉 `.action-bar` 60px），不足 240px 就改 `bottom-full` 向上开，够用维持 `top-full`。`panelClassName` 语义收窄成"只管外观"，同步清理 `fx-compare-card.tsx` 两处旧的定位 class。新增 4 条测试，mutation 验证过（改成恒定向下开，2/4 测试真的失败）。
+5. **行程路由根治：直接输网址有时停在上一趟行程 + 加固切换导航**（`fix/trip-routing-round72`，commit `9817371`）：**真根因是鉴权设计的结构性缺口，不是 race**——`TripLayout` 只认 `tel_session.tripId` 跟 URL 是否精确相等，不等就无条件 `redirect('/')`，完全不检查这个账号是否透过 Layer 2 账号真的拥有目标行程；首页看到 `identity` 还在又送回 `identity.tripId`。两条逻辑叠加：账号名下多趟行程时，直接输其它行程 URL 必然被弹回 `tel_session` 当前指的那一趟，100% 确定性发生，不是概率性的。修法：新增 `app/api/account/auto-switch-trip/[tripId]/route.ts`，`TripLayout` 判定 mismatch 时先查这个账号在目标行程有没有合法 participant，有就地铸新 session 再跳回目标行程，没有才真弹回首页；访客身份（无 Layer 2 账号）维持原有限制不受影响。另一条线索"点行程名偶尔跳 404"样本量太小没能找到确定性根因，如实标注置信度低，只做了"把 `router.push+router.refresh` 换成 `window.location.href` 硬导航"这个保守加固（消掉整一类客户端路由缓存/软导航时序问题，不是"已证实修复了404"）。新增 3 条测试（有权限自动切换成功/无权限不种cookie/无账号不种cookie），mutation 验证过。
+
+**验证情况（如实记录，不能全部打勾）**：
+- 单元测试+mutation：4 个分支各自验证过，合并到 main 后我又重新跑过一次全量 `npx tsc --noEmit`（0 错误）+ `npx vitest run`（46 文件 314 条全过），确认合并后互相之间没有引入新的类型/测试冲突。
+- D1 生产迁移：`0013_amazing_moondragon.sql` 已走 `scripts/migrate-remote.sh` 正式关卡应用到生产库（迁移前备份 `backups/2026-09-26-round72-split-filter-migration/expense_list_filter_preference_before.json` + bookmark `00000213-00000000-000050f2-19d70d2b5e31e09702a416bab76f4a54`），迁移后回读确认 `split_filter` 列存在、默认值 `'ALL'`，原有 1 条记录未受影响。
+- 部署：`./deploy.sh` 五道关卡全过，Version ID `b740d944-f054-4a31-ab97-d8b7621f52f7`，`/api/health` 回读 200，`kongsi-trip.pages.dev` 主域名回读也是 200。
+- **ui-auditor 真机走查：这次没能跑成**。连续 4 次调用 `ui-auditor` subagent 都被系统拦截返回"Subagent nesting limit reached (depth 3 of 3)"——这是结构性的子 agent 嵌套深度限制（lifeos-pm→trip-expense-ledger-pm→ui-auditor 正好碰到深度上限），不是我漏调用，也不是运气问题（4 次全部同样报错，中间隔了实际等待时间）。退而求其次做了静态构建产物核对（本地 `.next/static/chunks/` grep）：确认"请选择"已出现在编译产物里、"不指定"已彻底从全部 chunk 里消失、"计分摊"出现在行程主页+结算页 chunk、`bottom-full` 出现在共享布局 chunk——这些能证明代码改动确实被编译进了刚部署的这份 build，但**不能替代真机可视化走查**（没有截图、没有验证真实交互效果、没有验证 console 有没有报错、没有用真实香港行程账号点过一遍）。**这一批严格来说还不满足项目"没有 ui-auditor 报告不允许说已完成"这条硬性要求，需要 lifeos-pm 或下一个 session 在能正常调用 ui-auditor 的深度下补一次真机走查，之前不应该视为完全验收通过。**
+
+**B 组 3 项对照稿（只出稿不动代码）**：
+- `DESIGN-BRIEF-round72-fx-compare-algorithm.html`（比价卡"该付什么币种"算法改版，用真实庙街小食 HK$212.00 消费+6个真实支付方式示例）
+- `DESIGN-BRIEF-round72-offline-plan.html`（离线支持两期：①离线能看 ②离线记账队列，含分期理由+风险）
+- `DESIGN-BRIEF-round72-desktop-layout.html`（桌面宽屏正式布局：行程主页双栏+表单居中定宽侧栏）
+三份都已产出，但**跟并行批次各自独立出的 `DESIGN-BRIEF-round72-fx-compare.html`/`-offline.html`/`-desktop.html` 内容重叠**（同一批入库 commit `312e5cf` 一并说明了这个情况），需要 lifeos-pm/Remy 挑一份或者合并，不是我漏查重复产出。
+
+**C 组 6 条问题，情况**：
+1. 命名 A/B 方案——**已被并行批次拍板定案**（claim `2026-09-26_093321_740e4edf`：`excludeFromSplit`全站显示文字改叫"业务成本"，"不计分摊"专指split维度，两个筛选独立不合并），我不重复推导，但见上面 A 组第③项遗留提醒，这次的实现还没跟上这个新定案。
+2. USDT 钱包校正——**已被并行批次执行落库**（`-860500`→`-110510`，Remy 最终确认值比我在 B2 草稿推导的 `-110500` 多保留 10 分，已用只读回读+备份+bookmark 的正式流程完成，我这边不重复操作）。
+3. 33 笔历史 `excludeFromSplit` 标记——**已被并行批次实现**（`fix/exclude-split-preserve-round72b`，commit `bf13452`，"编辑消费时保留历史手动标记，不再被分类派生静默覆盖"，即选了"选项B：保留"）。
+4. round71 三件自定实现细节——**已被并行批次记录 Remy 确认认可**（比价结论文案/新记账默认排最后/排序模式同步三条）。
+5. htoo CNY ¥104.27——**我独立查证的结论跟并行批次记录的一致**：同一天（2026-09-22）另有两笔"袜子"消费共¥88.61 全部记在 htoo 名下，跟¥104.27 接近但不完全相等（差¥15.66），数据库没有字段能建立精确的 1:1 对应关系，无法 100% 断言就是这两笔，这是目前能查到最相关的线索，需要 Remy 自己回忆确认。
+6. trip-expense-ledger 加裸推 deny 锁——**建议加**：这个项目历史上已经出现过至少一次"未授权部署"事故（`audit-diffs/incident-2026-09-19-ui-auditor-unauthorized-deploy/` 这个文件夹本身就是证据），deploy.sh 已经有完整的五道关卡+`deploy_lock_acquire` 锁机制，裸推会绕开全部关卡，建议参照另外 8 个项目的先例把这个项目的裸 `wrangler deploy` 也加进 `~/.claude/settings.json` 的 `permissions.deny`——**这只是建议，我没有自己去改这个文件**。
+
+---
+
 ## 【2026-09-26，第七十二轮第三批拍板，任务①：USDT 钱包 `7b9a57d5` 校正落库（trip-expense-ledger-pm，claim `2026-09-26_092646_d761a3ee`）】
 
 背景：B2 节（见下面"USDT 钱包 `7b9a57d5` 校正数字"那一节）推导出的校正值是 `-110500`（-US$1,105.00），当时留了一个疑点没确认——反推出来的"原始起初余额"US$0.10 这个数字本身有点奇怪，需要 Remy 自己核实。这次 Remy 拍板确认的最终校正值是 **`-110510`（-US$1,105.10）**，比 B2 草稿多 10 分——说明她核实过那笔 US$0.10 的起初余额是真实存在的，采纳的是"保留这 10 分"的版本，不是 B2 草稿那个把它抹掉的版本。这轮只按 Remy 最终确认的数字执行，不重新推导。
