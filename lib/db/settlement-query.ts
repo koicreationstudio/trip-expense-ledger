@@ -1,7 +1,133 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { Db } from './client';
-import { expenses, expenseSplits, settlementConfirmations } from './schema';
+import { expenses, expenseSplits, loanRepayments, loans, participants, settlementConfirmations } from './schema';
 import type { SettlementExpenseInput, SettlementExpenseInputWithCurrency } from '../domain/settlement';
+import {
+  loanRepaymentToSettlementInput,
+  loanRepaymentToSettlementInputWithCurrency,
+  loanToSettlementInput,
+  loanToSettlementInputWithCurrency,
+} from '../domain/settlement';
+
+/**
+ * round74 新增：loan/loan_repayment 接入结算净额计算的查询层——按 tripId 批量拉
+ * 两张表，翻译成跟 expense 同形状的净额输入（见 settlement.ts 顶部大段注释）。
+ * 跟上面 loadSettlementInput(ForTrips) 同一条纪律：只查算法需要的字段。
+ */
+async function loadLoanSettlementInputForTrips(
+  db: Db,
+  tripIds: string[]
+): Promise<Map<string, SettlementExpenseInput[]>> {
+  if (tripIds.length === 0) return new Map();
+
+  const loanRows = await db
+    .select({
+      tripId: loans.tripId,
+      lenderParticipantId: loans.lenderParticipantId,
+      borrowerParticipantId: loans.borrowerParticipantId,
+      amountBaseCurrency: loans.amountBaseCurrency,
+      currency: loans.currency,
+      amount: loans.amount,
+    })
+    .from(loans)
+    .where(inArray(loans.tripId, tripIds));
+
+  const repaymentRows = await db
+    .select({
+      tripId: loans.tripId,
+      fromParticipantId: loanRepayments.fromParticipantId,
+      toParticipantId: loanRepayments.toParticipantId,
+      amountBaseCurrency: loanRepayments.amountBaseCurrency,
+      currency: loanRepayments.currency,
+      amount: loanRepayments.amount,
+    })
+    .from(loanRepayments)
+    .innerJoin(loans, eq(loanRepayments.loanId, loans.id))
+    .where(inArray(loans.tripId, tripIds));
+
+  // 不挂具体 loan 的还款（loanId IS NULL）没法靠 join loan 拿到 tripId，另外
+  // 单独查——目前 loan_repayment 没有自己的 tripId 列（故意不加，避免跟通过
+  // loanId 反查出来的 tripId 产生两份可能对不上的真相源；这条查询靠
+  // fromParticipantId/toParticipantId 反查 participant.tripId）。
+  const detachedRows = await db
+    .select({
+      tripId: participants.tripId,
+      fromParticipantId: loanRepayments.fromParticipantId,
+      toParticipantId: loanRepayments.toParticipantId,
+      amountBaseCurrency: loanRepayments.amountBaseCurrency,
+      currency: loanRepayments.currency,
+      amount: loanRepayments.amount,
+    })
+    .from(loanRepayments)
+    .innerJoin(participants, eq(loanRepayments.fromParticipantId, participants.id))
+    .where(and(inArray(participants.tripId, tripIds), isNull(loanRepayments.loanId)));
+
+  const byTripId = new Map<string, SettlementExpenseInput[]>();
+  const push = (tripId: string, input: SettlementExpenseInput) => {
+    const list = byTripId.get(tripId) ?? [];
+    list.push(input);
+    byTripId.set(tripId, list);
+  };
+
+  for (const row of loanRows) push(row.tripId, loanToSettlementInput(row));
+  for (const row of repaymentRows) push(row.tripId, loanRepaymentToSettlementInput(row));
+  for (const row of detachedRows) push(row.tripId, loanRepaymentToSettlementInput(row));
+
+  return byTripId;
+}
+
+/** 单趟行程版本，同上面单趟 loadSettlementInput 那样套一层薄壳。 */
+async function loadLoanSettlementInput(db: Db, tripId: string): Promise<SettlementExpenseInput[]> {
+  const byTripId = await loadLoanSettlementInputForTrips(db, [tripId]);
+  return byTripId.get(tripId) ?? [];
+}
+
+/** 按币种拆开版本——只服务单趟行程（跟 loadSettlementInputWithCurrency 一致）。 */
+async function loadLoanSettlementInputWithCurrency(
+  db: Db,
+  tripId: string
+): Promise<SettlementExpenseInputWithCurrency[]> {
+  const loanRows = await db
+    .select({
+      lenderParticipantId: loans.lenderParticipantId,
+      borrowerParticipantId: loans.borrowerParticipantId,
+      amountBaseCurrency: loans.amountBaseCurrency,
+      currency: loans.currency,
+      amount: loans.amount,
+    })
+    .from(loans)
+    .where(eq(loans.tripId, tripId));
+
+  const repaymentRows = await db
+    .select({
+      fromParticipantId: loanRepayments.fromParticipantId,
+      toParticipantId: loanRepayments.toParticipantId,
+      amountBaseCurrency: loanRepayments.amountBaseCurrency,
+      currency: loanRepayments.currency,
+      amount: loanRepayments.amount,
+    })
+    .from(loanRepayments)
+    .innerJoin(loans, eq(loanRepayments.loanId, loans.id))
+    .where(eq(loans.tripId, tripId));
+
+  const detachedRows = await db
+    .select({
+      fromParticipantId: loanRepayments.fromParticipantId,
+      toParticipantId: loanRepayments.toParticipantId,
+      amountBaseCurrency: loanRepayments.amountBaseCurrency,
+      currency: loanRepayments.currency,
+      amount: loanRepayments.amount,
+    })
+    .from(loanRepayments)
+    .innerJoin(participants, eq(loanRepayments.fromParticipantId, participants.id))
+    .where(and(eq(participants.tripId, tripId), isNull(loanRepayments.loanId)));
+
+  return [
+    ...loanRows.map(loanToSettlementInputWithCurrency),
+    ...repaymentRows.map(loanRepaymentToSettlementInputWithCurrency),
+    ...detachedRows.map(loanRepaymentToSettlementInputWithCurrency),
+  ];
+}
 
 /**
  * 结算是唯一允许跨参与者读取的查询，这里只查 settlement 算法需要的三个字段
@@ -71,6 +197,17 @@ export async function loadSettlementInputForTrips(
     });
     byTripId.set(row.tripId, list);
   }
+
+  // round74：loan/loan_repayment 接入结算净额计算，见 loadLoanSettlementInputForTrips
+  // 顶部注释——直接追加进同一份 SettlementExpenseInput[] 列表，
+  // computeNetBalances/computeSettlement 原样处理，不用改算法本身。
+  const loanByTripId = await loadLoanSettlementInputForTrips(db, tripIds);
+  for (const [tripId, inputs] of loanByTripId) {
+    const list = byTripId.get(tripId) ?? [];
+    list.push(...inputs);
+    byTripId.set(tripId, list);
+  }
+
   return byTripId;
 }
 
@@ -122,13 +259,18 @@ export async function loadSettlementInputWithCurrency(
     splitsByExpenseId.set(row.expenseId, list);
   }
 
-  return expenseRows.map((row) => ({
-    currency: row.currency,
-    payerParticipantId: row.payerParticipantId,
-    amountBaseCurrency: row.amountBaseCurrency,
-    amountOriginal: row.amount,
-    splits: splitsByExpenseId.get(row.id) ?? [],
-  }));
+  const loanInputs = await loadLoanSettlementInputWithCurrency(db, tripId);
+
+  return [
+    ...expenseRows.map((row) => ({
+      currency: row.currency,
+      payerParticipantId: row.payerParticipantId,
+      amountBaseCurrency: row.amountBaseCurrency,
+      amountOriginal: row.amount,
+      splits: splitsByExpenseId.get(row.id) ?? [],
+    })),
+    ...loanInputs,
+  ];
 }
 
 export interface SettlementDetailEntry {

@@ -164,7 +164,8 @@ export default async function TripPage({ params }: { params: { tripId: string } 
       .from(loanRepayments)
       .where(inArray(loanRepayments.loanId, loanIds))
       .groupBy(loanRepayments.loanId);
-    for (const row of sumRows) loanRepaymentSums.set(row.loanId, Number(row.total));
+    // round74：loanId 改可空后同 loans/route.ts 那处一样加显式判断，见那边注释。
+    for (const row of sumRows) if (row.loanId) loanRepaymentSums.set(row.loanId, Number(row.total));
   }
 
   // fix(2026-09-24 第五十轮，"设置当前余额"覆盖式 bug 修复)：行程主页「我的钱包」

@@ -115,6 +115,7 @@ describe('POST /loans（借出，未锚定钱包直接扣款路径）', () => {
         borrowerParticipantId: htooId,
         amount: 750000,
         currency: 'USD',
+        fxRateUsed: 7.8,
         fromWalletId: walletId,
         date: new Date().toISOString(),
       }),
@@ -138,6 +139,7 @@ describe('POST /loans（借出，未锚定钱包直接扣款路径）', () => {
         borrowerParticipantId: htooId,
         amount: 100000,
         currency: 'USD',
+        fxRateUsed: 7.8,
         date: new Date().toISOString(),
       }),
       { params: { tripId } }
@@ -154,6 +156,7 @@ describe('POST /loans（借出，未锚定钱包直接扣款路径）', () => {
         borrowerParticipantId: ownerId,
         amount: 1000,
         currency: 'USD',
+        fxRateUsed: 7.8,
         date: new Date().toISOString(),
       }),
       { params: { tripId } }
@@ -172,6 +175,7 @@ describe('POST /loans（借出，未锚定钱包直接扣款路径）', () => {
         borrowerParticipantId: ownerId,
         amount: 1000,
         currency: 'USD',
+        fxRateUsed: 7.8,
         fromWalletId: ownerWallet,
         date: new Date().toISOString(),
       }),
@@ -194,6 +198,7 @@ describe('POST /loans/:loanId/repayments（还款，未锚定钱包直接加款�
         borrowerParticipantId: htooId,
         amount: 100000,
         currency: 'USD',
+        fxRateUsed: 7.8,
         fromWalletId: fromWallet,
         date: new Date().toISOString(),
       }),
@@ -204,6 +209,7 @@ describe('POST /loans/:loanId/repayments（还款，未锚定钱包直接加款�
     const repay1 = await repaymentsPostHandler(
       jsonRequest(`http://localhost/api/trips/${tripId}/loans/${loanId}/repayments`, 'POST', aToken, {
         amount: 40000,
+        fxRateUsed: 7.8,
         toWalletId: toWallet,
         date: new Date().toISOString(),
       }),
@@ -213,6 +219,13 @@ describe('POST /loans/:loanId/repayments（还款，未锚定钱包直接加款�
     const repay1Body = (await repay1.json()) as any;
     expect(repay1Body.progress.repaidAmount).toBe(40000);
     expect(repay1Body.progress.status).toBe('partial');
+    // round74：fromParticipantId/toParticipantId 由服务端从 loan 派生（borrower
+    // 还给 lender），不是客户端传的——htoo 是这笔 loan 的 borrower，ownerId 是
+    // lender，方向必须精确对上，接结算净额计算就是靠这两个字段直接读，不 join loan。
+    expect(repay1Body.repayment.fromParticipantId).toBe(htooId);
+    expect(repay1Body.repayment.toParticipantId).toBe(ownerId);
+    expect(repay1Body.repayment.currency).toBe('USD');
+    expect(repay1Body.repayment.amountBaseCurrency).toBe(Math.round(40000 * 7.8));
     expect(await getWalletBalance(tripId, aToken, toWallet)).toBe(40000);
     // 借出钱包不受还款影响，只受借出本身影响。
     expect(await getWalletBalance(tripId, aToken, fromWallet)).toBe(-100000);
@@ -220,6 +233,7 @@ describe('POST /loans/:loanId/repayments（还款，未锚定钱包直接加款�
     const repay2 = await repaymentsPostHandler(
       jsonRequest(`http://localhost/api/trips/${tripId}/loans/${loanId}/repayments`, 'POST', aToken, {
         amount: 60000,
+        fxRateUsed: 7.8,
         toWalletId: toWallet,
         date: new Date().toISOString(),
       }),
@@ -253,6 +267,7 @@ describe('POST /loans/:loanId/repayments（还款，未锚定钱包直接加款�
         borrowerParticipantId: htooId,
         amount: 50000,
         currency: 'USD',
+        fxRateUsed: 7.8,
         fromWalletId: fromWallet,
         date: new Date().toISOString(),
       }),
@@ -263,6 +278,7 @@ describe('POST /loans/:loanId/repayments（还款，未锚定钱包直接加款�
     const repay = await repaymentsPostHandler(
       jsonRequest(`http://localhost/api/trips/${tripId}/loans/${loanId}/repayments`, 'POST', aToken, {
         amount: 20000,
+        fxRateUsed: 7.8,
         date: new Date().toISOString(),
       }),
       { params: { tripId, loanId } }
@@ -280,6 +296,7 @@ describe('POST /loans/:loanId/repayments（还款，未锚定钱包直接加款�
         borrowerParticipantId: htooId,
         amount: 50000,
         currency: 'USD',
+        fxRateUsed: 7.8,
         date: new Date().toISOString(),
       }),
       { params: { tripId } }
@@ -304,6 +321,7 @@ describe('POST /loans/:loanId/repayments（还款，未锚定钱包直接加款�
         borrowerParticipantId: htooId,
         amount: 50000,
         currency: 'USD',
+        fxRateUsed: 7.8,
         date: new Date().toISOString(),
       }),
       { params: { tripId } }
@@ -313,6 +331,7 @@ describe('POST /loans/:loanId/repayments（还款，未锚定钱包直接加款�
     const repay = await repaymentsPostHandler(
       jsonRequest(`http://localhost/api/trips/${tripId}/loans/${loanId}/repayments`, 'POST', htooToken, {
         amount: 20000,
+        fxRateUsed: 7.8,
         date: new Date().toISOString(),
       }),
       { params: { tripId, loanId } }
@@ -336,6 +355,7 @@ describe('GET /loans：私密边界（当事人之一才能看）', () => {
         borrowerParticipantId: htooId,
         amount: 50000,
         currency: 'USD',
+        fxRateUsed: 7.8,
         date: new Date().toISOString(),
       }),
       { params: { tripId } }

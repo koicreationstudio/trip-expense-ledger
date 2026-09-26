@@ -236,19 +236,29 @@ export const createExchangeRecordSchema = z
 // round72b 新增：借钱/还钱功能，跟 expense/expense_split 完全独立的一张新表，
 // 见 lib/db/schema.ts loan/loan_repayment 顶部大段注释。fromWalletId 可为空
 // ——开放问题①"不经过任何钱包的现金往来"，这版允许不选。
+// round74：fxRateUsed 跟 createExpenseSchema 同一套模式——currency !== trip.baseCurrency
+// 时前端必须带上这笔的汇率，路由层拿它算 amountBaseCurrency 固化写库。
 export const createLoanSchema = z.object({
   lenderParticipantId: z.string().min(1),
   borrowerParticipantId: z.string().min(1),
   amount: z.number().int().positive(),
   currency: currencyCode,
+  fxRateUsed: z.number().positive().optional(),
   fromWalletId: z.string().min(1).optional(),
   date: z.string().datetime(),
   note: z.string().trim().max(2000).optional(),
 });
 
-/** loan_repayment 没有单独的 currency 字段，见 schema.ts 顶部注释——币种由 toWalletId 隐式决定。 */
+/**
+ * round74：这个 schema 只服务"挂在某笔具体 loan 名下"的还款接口
+ * （POST /api/trips/[tripId]/loans/[loanId]/repayments）——currency/
+ * fromParticipantId/toParticipantId 由路由从对应的 loan 记录派生，不接受客户端
+ * 传入覆盖（还款方向永远是 loan.borrower 还给 loan.lender，不该让客户端决定）。
+ * fxRateUsed 同 createLoanSchema，currency 跟 loan 不一致时必填。
+ */
 export const createLoanRepaymentSchema = z.object({
   amount: z.number().int().positive(),
+  fxRateUsed: z.number().positive().optional(),
   toWalletId: z.string().min(1).optional(),
   date: z.string().datetime(),
   note: z.string().trim().max(2000).optional(),

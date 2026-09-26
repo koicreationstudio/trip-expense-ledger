@@ -172,3 +172,101 @@ export function computeSettlementByCurrency(
   }
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// loan / loan_repayment 接入结算净额计算（2026-09-27 round74）。
+//
+// 之前（round72b）loan/loan_repayment 完全独立于 expense/结算算法——借出去的钱
+// /还回来的钱只影响钱包余额展示，"谁欠谁多少"这个结算净额完全看不见这两张表。
+// 这一轮把它们接进来：一笔 loan/repayment 在"谁该收钱谁该付钱"这件事上，跟一笔
+// "100% 分给对方的 expense"是完全同构的——不重新发明一套净额算法，只是把
+// loan/repayment 的行形状"翻译"成跟 expense 一样的
+// SettlementExpenseInput(WithCurrency) 形状，交给上面已有的
+// computeNetBalances/computeSettlementByCurrency 原样处理。
+//
+// 方向定案（拿 Remy 真实数据核对过，不是猜的）：
+// - loan：lender 把钱借给 borrower，borrower 因此欠 lender 这笔钱——跟"lender
+//   代垫、100% 分给 borrower"的 expense 效果完全一样：payer=lenderParticipantId，
+//   split 全额记到 borrowerParticipantId。
+// - repayment：还钱的人（fromParticipantId）把钱还给收钱的人
+//   （toParticipantId），效果是收钱人的净值往下走（少收一点）、还钱人的净值往上走
+//   （少欠一点）——跟"fromParticipantId 代垫、100% 分给 toParticipantId"的
+//   expense 效果完全一样：payer=fromParticipantId，split 全额记到
+//   toParticipantId。这跟 loan 的 payer/split 方向正好相反，两者叠加时才会互相
+//   抵消，是设计上故意的对称，不是巧合。
+//
+// 单元测试用真实生产数据核对过两个场景：①lender=Remy/borrower=htoo 借 US$7,500
+// 又原样还清，loan+repayment 叠加后净贡献必须是 0；②htoo 单独还一笔不挂具体
+// loan 的 CNY ¥104.27（fromParticipantId=htoo/toParticipantId=Remy），效果跟
+// 迁移前"htoo 代垫、100% 分给 Remy"的 expense 完全一致（数字不能变）。
+// ---------------------------------------------------------------------------
+
+export interface LoanSettlementInput {
+  lenderParticipantId: string;
+  borrowerParticipantId: string;
+  currency: string;
+  amountBaseCurrency: number;
+  amount: number; // 原始币种金额
+}
+
+export interface LoanRepaymentSettlementInput {
+  fromParticipantId: string;
+  toParticipantId: string;
+  currency: string;
+  amountBaseCurrency: number;
+  amount: number; // 原始币种金额
+}
+
+/** loan → 跟 expense 同形状的净额输入（本位币，不带币种，喂给 computeNetBalances/computeSettlement）。 */
+export function loanToSettlementInput(loan: LoanSettlementInput): SettlementExpenseInput {
+  return {
+    payerParticipantId: loan.lenderParticipantId,
+    amountBaseCurrency: loan.amountBaseCurrency,
+    splits: [{ participantId: loan.borrowerParticipantId, shareAmountBaseCurrency: loan.amountBaseCurrency }],
+  };
+}
+
+/** loan_repayment → 跟 expense 同形状的净额输入，方向跟 loanToSettlementInput 相反（还钱人是 payer）。 */
+export function loanRepaymentToSettlementInput(repayment: LoanRepaymentSettlementInput): SettlementExpenseInput {
+  return {
+    payerParticipantId: repayment.fromParticipantId,
+    amountBaseCurrency: repayment.amountBaseCurrency,
+    splits: [{ participantId: repayment.toParticipantId, shareAmountBaseCurrency: repayment.amountBaseCurrency }],
+  };
+}
+
+/** loan → 按币种拆开视图用的输入形状（多带原始币种金额）。 */
+export function loanToSettlementInputWithCurrency(loan: LoanSettlementInput): SettlementExpenseInputWithCurrency {
+  return {
+    currency: loan.currency,
+    payerParticipantId: loan.lenderParticipantId,
+    amountBaseCurrency: loan.amountBaseCurrency,
+    amountOriginal: loan.amount,
+    splits: [
+      {
+        participantId: loan.borrowerParticipantId,
+        shareAmountBaseCurrency: loan.amountBaseCurrency,
+        shareAmountOriginal: loan.amount,
+      },
+    ],
+  };
+}
+
+/** loan_repayment → 按币种拆开视图用的输入形状（多带原始币种金额）。 */
+export function loanRepaymentToSettlementInputWithCurrency(
+  repayment: LoanRepaymentSettlementInput
+): SettlementExpenseInputWithCurrency {
+  return {
+    currency: repayment.currency,
+    payerParticipantId: repayment.fromParticipantId,
+    amountBaseCurrency: repayment.amountBaseCurrency,
+    amountOriginal: repayment.amount,
+    splits: [
+      {
+        participantId: repayment.toParticipantId,
+        shareAmountBaseCurrency: repayment.amountBaseCurrency,
+        shareAmountOriginal: repayment.amount,
+      },
+    ],
+  };
+}
