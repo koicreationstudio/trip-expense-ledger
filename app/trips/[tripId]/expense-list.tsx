@@ -526,9 +526,13 @@ export function ExpenseList({
   const subtotalNeedsApprox =
     subtotalByCurrency.length > 1 ||
     (subtotalByCurrency.length === 1 && subtotalByCurrency[0]?.currency !== baseCurrency);
-  const subtotalCollapsedText =
-    subtotalByCurrency.map((s) => formatMoney(s.amount, s.currency)).join(' + ') +
-    (subtotalNeedsApprox ? ` ≈ ${formatMoney(subtotalTotalBaseCents, baseCurrency)}` : '');
+  // fix(2026-09-26，ui-auditor 用真实香港行程真机走查抓到的真bug)：这行原本是
+  // 一整段字符串（"N笔 · 明细 ≈ 合计"）塞进一个 `truncate` 的 span——真实行程
+  // 56 笔跨 4 个币种，手机 375px 视口下这一整行装不下，`truncate` 会从右边直接
+  // 裁掉，"≈HKD 合计"这个最该被一眼看到的数字反而是最先被裁掉的部分，违背了
+  // "一进来就看到合计"这条功能本来的目的。改成拆两段：明细（`subtotalBreakdownText`）
+  // 允许被裁，合计（下面渲染处单独一个 `shrink-0` 的 span）永远完整显示不参与裁切。
+  const subtotalBreakdownText = subtotalByCurrency.map((s) => formatMoney(s.amount, s.currency)).join(' + ');
 
   // 「金额」chip 按钮上要显示的文字——没开这个筛选就是纯文字"金额"，开了按当前
   // 模式显示具体数值（跟其它 chip"分类：xxx"这种带当前值的展示习惯一致），用
@@ -834,8 +838,15 @@ export function ExpenseList({
             aria-label="按当前筛选分币种小计"
           >
             <span className="min-w-0 flex-1 truncate font-serif text-[10.5px] tabular-nums text-ink">
-              {visibleExpenses.length} 笔 · {subtotalCollapsedText}
+              {visibleExpenses.length} 笔 · {subtotalBreakdownText}
             </span>
+            {/* fix(2026-09-26)：合计单独一个 shrink-0 span，跟上面明细分开，不会被
+                truncate 裁掉——明细可以被裁（展开态能看到完整版），合计不能。 */}
+            {subtotalNeedsApprox && (
+              <span className="shrink-0 font-serif text-[10.5px] tabular-nums text-ink">
+                ≈ {formatMoney(subtotalTotalBaseCents, baseCurrency)}
+              </span>
+            )}
             <span aria-hidden="true" className="shrink-0 text-[9px] text-muted">
               {subtotalExpanded ? '▴ 收起' : '▾'}
             </span>
