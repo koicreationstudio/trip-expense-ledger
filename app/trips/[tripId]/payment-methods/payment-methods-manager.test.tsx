@@ -5,6 +5,15 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+// round72b：改名交互加了 `router.refresh()`（成功 PATCH 后跟 my-trips.tsx 改行程名
+// 同一套 push/refresh 写法），这个文件之前没用过 useRouter，jsdom 渲染不到真实的
+// Next App Router 会直接抛 "invariant expected app router to be mounted"，跟这个项目
+// 别处（expense-form.test.tsx 等）同款 mock。
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
 import { PaymentMethodsManager } from './payment-methods-manager';
 
 function callArg(spy: ReturnType<typeof vi.fn>, callIndex = 0): any {
@@ -201,5 +210,142 @@ describe('PaymentMethodsManager — 第七十一轮第二版：不再靠人造�
     expect(document.querySelector('div[aria-hidden="true"][style]')).toBeNull();
 
     vi.restoreAllMocks();
+  });
+});
+
+describe('PaymentMethodsManager — round72b：点名字进入编辑态改名', () => {
+  const METHOD_ID = 'pm-rename-1';
+  const ORIGINAL_LABEL = '汇丰信用卡';
+
+  /**
+   * 独立于上面 `mockFetch`（那个固定回空列表，改名要点名字得先有一条真实数据）。
+   * `currentLabel` 是个可变闭包变量：PATCH 成功后更新它，下一次 `loadMethods()`
+   * 重新 GET 时能看到改名后的结果，跟真实后端行为一致（不是测试自己伪造"看起来
+   * 已经改了"）。
+   */
+  function mockFetchForRename(opts: {
+    patchSpy?: (body: any) => void;
+    patchStatus?: number;
+  }) {
+    let currentLabel = ORIGINAL_LABEL;
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = (init?.method ?? 'GET').toUpperCase();
+
+      if (url.endsWith('/wallets') && method === 'GET') {
+        return new Response(JSON.stringify({ wallets: [] }), { status: 200 });
+      }
+      if (url.includes('/payment-methods') && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            paymentMethods: [
+              {
+                id: METHOD_ID,
+                label: currentLabel,
+                kind: 'card',
+                settlementCurrency: 'MYR',
+                fxMarkupPercent: 0,
+                foreignTxnFeePercent: 0,
+                fixedFee: 0,
+                cashbackPercent: 0,
+                isActive: true,
+                sortOrder: 0,
+                enabled: true,
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url === `/api/payment-methods/${METHOD_ID}` && method === 'PATCH') {
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        opts.patchSpy?.(body);
+        const status = opts.patchStatus ?? 200;
+        if (status >= 200 && status < 300) {
+          currentLabel = body.label;
+          return new Response(
+            JSON.stringify({ paymentMethod: { id: METHOD_ID, label: currentLabel } }),
+            { status }
+          );
+        }
+        return new Response(JSON.stringify({ error: 'server_error' }), { status });
+      }
+      throw new Error(`未预期的请求：${method} ${url}`);
+    });
+  }
+
+  async function renderAndOpenEdit() {
+    render(<PaymentMethodsManager tripId={TRIP_ID} />);
+    const editButton = await screen.findByRole('button', { name: `编辑支付方式名称「${ORIGINAL_LABEL}」` });
+    fireEvent.click(editButton);
+    return screen.getByLabelText('支付方式名称') as HTMLInputElement;
+  }
+
+  it('①点击名字进入编辑态，input 预填当前值', async () => {
+    vi.stubGlobal('fetch', mockFetchForRename({}));
+    const input = await renderAndOpenEdit();
+    expect(input.value).toBe(ORIGINAL_LABEL);
+  });
+
+  it('②保存成功后 PATCH body 正确、编辑态退出', async () => {
+    const patchSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetchForRename({ patchSpy }));
+    const input = await renderAndOpenEdit();
+
+    fireEvent.change(input, { target: { value: 'HSBC 万事达卡' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => expect(patchSpy).toHaveBeenCalledTimes(1));
+    expect(callArg(patchSpy)).toEqual({ label: 'HSBC 万事达卡' });
+
+    // 编辑态退出：输入框不再挂载。
+    await waitFor(() => expect(screen.queryByLabelText('支付方式名称')).toBeNull());
+    // loadMethods() 重新拉取后，列表上显示的确实是新名字。
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '编辑支付方式名称「HSBC 万事达卡」' })).toBeTruthy()
+    );
+  });
+
+  it('③取消按钮恢复原值不发请求', async () => {
+    const patchSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetchForRename({ patchSpy }));
+    const input = await renderAndOpenEdit();
+
+    fireEvent.change(input, { target: { value: '改了一半又不想改了' } });
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    expect(patchSpy).not.toHaveBeenCalled();
+    // 编辑态退出，原名字原样显示，没有发生任何请求。
+    expect(screen.queryByLabelText('支付方式名称')).toBeNull();
+    expect(screen.getByRole('button', { name: `编辑支付方式名称「${ORIGINAL_LABEL}」` })).toBeTruthy();
+  });
+
+  it('④保存空字符串（含纯空白）被拦下不发请求，显示错误提示，编辑态不退出', async () => {
+    const patchSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetchForRename({ patchSpy }));
+    const input = await renderAndOpenEdit();
+
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(patchSpy).not.toHaveBeenCalled();
+    expect(await screen.findByText('名称不能空着')).toBeTruthy();
+    // 编辑态没有被打断，输入框还在，人可以直接改了重试。
+    expect(screen.getByLabelText('支付方式名称')).toBeTruthy();
+  });
+
+  it('⑤保存失败（后端非 2xx）显示清楚的错误信息，编辑态不退出、原名字不会看起来"已经改了"', async () => {
+    const patchSpy = vi.fn();
+    vi.stubGlobal('fetch', mockFetchForRename({ patchSpy, patchStatus: 500 }));
+    const input = await renderAndOpenEdit();
+
+    fireEvent.change(input, { target: { value: '新名字但会保存失败' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => expect(patchSpy).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('改名失败，检查一下网络再试一次')).toBeTruthy();
+    // 编辑态还在（不会卡死也不会静默退出假装成功），原名字没有被顶掉。
+    expect(screen.getByLabelText('支付方式名称')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: `编辑支付方式名称「新名字但会保存失败」` })).toBeNull();
   });
 });
