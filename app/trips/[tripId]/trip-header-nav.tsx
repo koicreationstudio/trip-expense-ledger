@@ -84,8 +84,9 @@ export function TripHeaderNav({
         return;
       }
       setOpen(false);
-      router.push(`/trips/${targetTripId}`);
-      router.refresh();
+      // fix(2026-09-26 第七十二轮，round72 A组⑥①)：同 app/my-trips.tsx handleOpen
+      // 那处一样的加固——改成硬导航，理由见那边的大注释，不重复抄一遍。
+      window.location.href = `/trips/${targetTripId}`;
     } finally {
       setSwitchingId(null);
     }

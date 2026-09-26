@@ -46,7 +46,6 @@ const ARCHIVED_LABEL = '已归档';
  * 提示一下就好，不用特殊处理。
  */
 export function MyTrips({ trips }: { trips: MyTripCard[] }) {
-  const router = useRouter();
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,18 +62,15 @@ export function MyTrips({ trips }: { trips: MyTripCard[] }) {
         setError('打开这个行程失败，刷新页面再试一次');
         return;
       }
-      // fix(2026-09-24，第四十二轮，冷启动路径钱包深链间歇性失败排查)：这里是"从行程
-      // 列表进入"这条路径唯一铸新 tel_session 的地方，但之前只有 router.push 没有
-      // router.refresh()——跟这个 app 里另外三处同样"先换 session 再导航"的地方
-      // （trip-header-nav.tsx handleSwitch、logout-button.tsx、provision-gate.tsx）
-      // 不一致，那三处都是 push+refresh 成对出现。router.push 对一个客户端路由缓存
-      // 里还没有记录的 URL 会发一次新请求，理论上不依赖 refresh 也能拿到新数据，但
-      // 这次 ui-auditor 真机复测证实了行程详情页存在"URL 已跳但内容还在渲染上一屏"
-      // 的可感知窗口期（连着测的时候尤其明显），跟别处已经验证有效的这套 push+refresh
-      // 组合拳补齐，让这条路径也显式声明"进这个页面前，缓存别信，一定要拿最新的"，
-      // 不再是这个 app 里唯一一处"换了身份还可能拿到旧缓存"的例外。
-      router.push(`/trips/${tripId}`);
-      router.refresh();
+      // fix(2026-09-26 第七十二轮，round72 A组⑥①，round71 独立 ui-auditor 撞见的
+      // "点行程名偶尔跳 404"这条线索的保守加固)：round42 那版 push+refresh 组合拳
+      // 解决过"URL 已跳但内容还在渲染上一屏"这个感知延迟，但 Next.js App Router
+      // 客户端软导航（router.push）本身还是可能吃到路由缓存/时序噪音（round71
+      // 走查撞见过 1 次没能稳定复现的 404）。切换行程这个动作本身低频，直接改成
+      // 硬导航（整页加载）：这次请求 100% 是全新的、100% 会带上刚设置好的新
+      // tel_session cookie，彻底消掉"客户端路由缓存/软导航时序"这整一类潜在问题，
+      // 代价只是多一次完整页面刷新，可接受。
+      window.location.href = `/trips/${tripId}`;
     } finally {
       setSwitchingId(null);
     }
